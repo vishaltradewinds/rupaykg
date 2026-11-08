@@ -12,21 +12,17 @@ do $$
 declare
   v_super boolean;
   v_bypass boolean;
-  v_member boolean;
 begin
   select r.rolsuper, r.rolbypassrls
     into v_super, v_bypass
     from pg_roles r
    where r.rolname = current_user;
 
-  select pg_has_role(current_user, 'rupaykg_app_runtime', 'member')
-    into v_member;
-
   if v_super or v_bypass then
     raise exception 'TENANT_ISOLATION_ACTIVATION_BLOCKED: current role is SUPERUSER or BYPASSRLS';
   end if;
 
-  if v_member or current_user = 'rupaykg_app_runtime' then
+  if current_user = 'rupaykg_app_runtime' then
     raise exception 'TENANT_ISOLATION_ACTIVATION_BLOCKED: application runtime role cannot perform DDL activation';
   end if;
   if exists (
