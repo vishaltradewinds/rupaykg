@@ -68,6 +68,19 @@ end as runtime_role_is_non_bypassrls;
 select case
   when not exists (
     select 1
+    from pg_class c
+    join pg_roles r on r.oid = c.relowner
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public'
+      and c.relname in ('activities','measurements','evidence','carbon_calculations','epr_obligations')
+      and r.rolname = 'rupaykg_app_runtime'
+  )
+  then 1 else 1/0
+end as runtime_role_does_not_own_protected_tables;
+
+select case
+  when not exists (
+    select 1
     from pg_policies
     where schemaname = 'public'
       and policyname in (
