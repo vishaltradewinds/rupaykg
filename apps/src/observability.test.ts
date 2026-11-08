@@ -87,4 +87,4 @@ test("validates OTEL span identity, timing and sensitive-attribute boundaries", 
 });
 
 
-test("runtime attestation records the executing Node runtime without application payloads", async () => {\n  const { buildRuntimeAttestation } = await import("./observability.js");\n  const attestation = buildRuntimeAttestation();\n  assert.equal(attestation.event, "rupaykg.runtime.attestation");\n  assert.match(attestation.nodeVersion, /^v\\d+\\.\\d+\\.\\d+$/);\n  assert.equal(attestation.runtime, "node");\n  assert.ok(attestation.platform);\n  assert.ok(attestation.arch);\n});\n
+test("runtime attestation records the executing Node runtime without application payloads", async () => {\n  const { assertSupportedNodeRuntime, buildRuntimeAttestation } = await import("./observability.js");\n  assertSupportedNodeRuntime();\n  const attestation = buildRuntimeAttestation();\n  assert.equal(attestation.event, "rupaykg.runtime.attestation");\n  assert.match(attestation.nodeVersion, /^v\\d+\\.\\d+\\.\\d+$/);\n  assert.equal(attestation.runtime, "node");\n  assert.ok(attestation.platform);\n  assert.ok(attestation.arch);\n});\n
