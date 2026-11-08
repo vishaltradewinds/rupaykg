@@ -716,3 +716,12 @@
 - Checkpoint: `b61e4bff09bf6c180c287bea47800ae016e3be19`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Assigned-verifier membership revocation acceptance
+- Extended the verifier DB acceptance fixture to explicitly revoke the verifier's issuer-organization membership and verify that a new tenant context is rejected.
+- Restores the membership afterward so the fixture remains deterministic and cleanup-safe.
+- This closes the gap between static issuer-organization binding and runtime membership revocation behavior.
+- Checkpoint: `1b3f25519131372faaa772afe2005d9a711bd8c4`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
