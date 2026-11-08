@@ -51,7 +51,7 @@ for (const [filename, identity] of protectedMigrationIdentities) {
 const requiredMigrationInvariants = [
   ["explicit protected gate", /RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS/],
   ["legacy numeric migration compatibility", /prefixCounts/],
-  ["duplicate-prefix disambiguation", /filename\.replace\(\/\\\.sql\$\/, ""\)/],
+  ["duplicate-prefix disambiguation", /filename\.replace\(\/\\.sql\$\/, ""\)/],
 ];
 for (const [name, pattern] of requiredMigrationInvariants) {
   if (!pattern.test(migrationRunner)) failures.push(`Migration invariant missing: ${name}`);
