@@ -335,3 +335,13 @@
 - Exact-head GitHub Actions execution remains NOT VERIFIED until a workflow run is observed for the controlled head.
 - Production Neon/RLS/deployment remains READ-ONLY/HOLD; no production hardware or software deployment was performed.
 - Next autonomous action: deepen the hardware-to-measurement software contract (device identity, calibration reference, sequence/replay, raw evidence linkage) while continuing protected-core and multi-party runtime acceptance.
+
+
+### 2026-11-08 — Open-source ecosystem + Shakti Standards control layer
+- Added `docs/standards/SHAKTI_OPEN_SOURCE_ECOSYSTEM_CONTROL.md` as a mandatory lifecycle control for open-source software, open standards, open data, open AI, open hardware and reference ecosystems.
+- The control explicitly incorporates DPGA/DPG Standard, UNIN, FAIR Forward/BMZ, Global DPI Repository, relevant Indian DPI/open-source ecosystems and SHAKTI/RISC-V as reference inputs; these do not override Indian statutory/regulatory requirements and do not make RupayKg a DPG/DPI.
+- Added component provenance, license, security, interoperability, responsible-AI, hardware and evidence-lineage gates.
+- Added `scripts/test-shakti-open-source-ecosystem-contract.mjs` and wired it into CI.
+- Latest controlled CI-head commit: `4c5e7d6b6031915e788afd60e0e79136c2e43ede`.
+- Exact-head GitHub Actions execution remains NOT VERIFIED until a workflow run is observed.
+- Production remains READ-ONLY/HOLD.
