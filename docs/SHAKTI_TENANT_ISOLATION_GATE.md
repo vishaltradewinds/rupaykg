@@ -34,3 +34,9 @@ The gate is complete only when repository code, migration state, deployment conf
 request authentication -> verified membership -> transaction context -> non-BYPASSRLS role -> RLS policy -> tenant-isolated result
 
 A passing unit test alone is insufficient.
+
+## 2026-11-08 engineering update
+
+The canonical repository now contains the Shakti RLS policy foundation in `migrations/20261108_shakti_rls_policy_foundation.sql` and the activation/rollback procedure in `docs/SHAKTI_TENANT_ISOLATION_ACTIVATION_RUNBOOK.md`.
+
+The policy foundation is intentionally not the final production acceptance: RLS enablement remains behind the runtime-role and transaction-context deployment gate. This prevents the current application owner/BYPASSRLS path from being mistaken for tenant-isolated production security.
