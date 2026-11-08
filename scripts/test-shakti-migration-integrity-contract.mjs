@@ -10,6 +10,7 @@ for (const required of [
   "checksum mismatch: applied content has changed",
   "insert into schema_migrations(version, filename, checksum)",
   "100_credential_runtime_update_column_scope",
+  "101_security_definer_schema_boundary",
   "20261108_context_identity_liveness_hardening",
   "20261108_context_identity_liveness_completion",
   "RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS",
