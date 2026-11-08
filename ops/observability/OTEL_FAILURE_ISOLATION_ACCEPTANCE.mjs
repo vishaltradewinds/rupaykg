@@ -24,14 +24,14 @@ if (!traceId || !/^[0-9a-f]{32}$/.test(traceId)) {
   throw new Error("health response did not expose a valid RupayKg trace correlation id");
 }
 
-const id = `otel-failure-isolation-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+const parentSpanId = crypto.randomUUID().replaceAll("-", "").slice(0, 16);
 const integrationResponse = await fetch(baseUrl + "/api/v1/integrations/messages", {
   method: "POST",
   headers: {
     authorization: `Bearer ${token}`,
     "content-type": "application/json",
     "x-rupaykg-organization-id": organizationId,
-    traceparent: `00-${traceId}-0000000000000001-01`,
+    traceparent: `00-${traceId}-${parentSpanId}-01`,
   },
   body: JSON.stringify({
     contractVersion: "1.0",
@@ -49,10 +49,10 @@ const integrationResponse = await fetch(baseUrl + "/api/v1/integrations/messages
   }),
 });
 const integrationBody = await integrationResponse.json();
-if (integrationResponse.status !== 202 || integrationBody.syntheticData !== false || integrationBody.authoritativeMutation !== false) {
+if (![200, 202].includes(integrationResponse.status) || integrationBody.syntheticData !== false || integrationBody.authoritativeMutation !== true || integrationBody.authoritativeEnvironmentalMutation !== false) {
   throw new Error(`integration acceptance transaction failed: HTTP ${integrationResponse.status}`);
 }
-if (integrationBody.traceId !== traceId) {
+if (integrationBody.traceId !== traceId || integrationResponse.headers.get("x-rupaykg-trace-id") !== traceId) {
   throw new Error("integration response trace correlation did not preserve the supplied trace identity");
 }
 
