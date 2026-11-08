@@ -36,8 +36,6 @@ test("Shakti identity context rejects inactive identity and does not establish t
       /Identity is not active/i,
     );
   } finally {
-    if (identityBId) await ownerPool.query("delete from identities where id=$1", [identityBId]);
-    if (identityBId) await ownerPool.query("delete from identities where id=$1", [identityBId]);
     if (identityId) await ownerPool.query("delete from identities where id=$1", [identityId]);
     await runtimePool.end();
     await ownerPool.end();
@@ -130,9 +128,7 @@ test("Shakti tenant context rejects cross-organization context switching", { ski
     });
     assert.equal(reset, organizationA);
   } finally {
-    if (membershipB) await ownerPool.query("delete from organization_memberships where id=$1", [membershipB]);
     if (membershipA) await ownerPool.query("delete from organization_memberships where id=$1", [membershipA]);
-    if (roleB) await ownerPool.query("delete from roles where id=$1", [roleB]);
     if (roleA) await ownerPool.query("delete from roles where id=$1", [roleA]);
     if (identityId) await ownerPool.query("delete from identities where id=$1", [identityId]);
     if (organizationA) await ownerPool.query("delete from organizations where id=$1", [organizationA]);
@@ -960,7 +956,6 @@ test("Shakti RLS field-sync evidence is identity/device/tenant isolated", { skip
     if (deviceA) await ownerPool.query("delete from field_devices where id=$1", [deviceA]);
     if (membershipA) await ownerPool.query("delete from organization_memberships where id=$1", [membershipA]);
     if (roleA) await ownerPool.query("delete from roles where id=$1", [roleA]);
-    if (identityBId) await ownerPool.query("delete from identities where id=$1", [identityBId]);
     if (identityId) await ownerPool.query("delete from identities where id=$1", [identityId]);
     if (organizationA) await ownerPool.query("delete from organizations where id=$1", [organizationA]);
     if (organizationB) await ownerPool.query("delete from organizations where id=$1", [organizationB]);
@@ -1199,8 +1194,6 @@ test("Shakti identity context rejects inactive identity and does not establish t
       /Identity is not active/i,
     );
   } finally {
-    if (identityBId) await ownerPool.query("delete from identities where id=$1", [identityBId]);
-    if (identityBId) await ownerPool.query("delete from identities where id=$1", [identityBId]);
     if (identityId) await ownerPool.query("delete from identities where id=$1", [identityId]);
     await runtimePool.end();
     await ownerPool.end();
@@ -1293,9 +1286,7 @@ test("Shakti tenant context rejects cross-organization context switching", { ski
     });
     assert.equal(reset, organizationA);
   } finally {
-    if (membershipB) await ownerPool.query("delete from organization_memberships where id=$1", [membershipB]);
     if (membershipA) await ownerPool.query("delete from organization_memberships where id=$1", [membershipA]);
-    if (roleB) await ownerPool.query("delete from roles where id=$1", [roleB]);
     if (roleA) await ownerPool.query("delete from roles where id=$1", [roleA]);
     if (identityId) await ownerPool.query("delete from identities where id=$1", [identityId]);
     if (organizationA) await ownerPool.query("delete from organizations where id=$1", [organizationA]);
@@ -2123,7 +2114,6 @@ test("Shakti RLS field-sync evidence is identity/device/tenant isolated", { skip
     if (deviceA) await ownerPool.query("delete from field_devices where id=$1", [deviceA]);
     if (membershipA) await ownerPool.query("delete from organization_memberships where id=$1", [membershipA]);
     if (roleA) await ownerPool.query("delete from roles where id=$1", [roleA]);
-    if (identityBId) await ownerPool.query("delete from identities where id=$1", [identityBId]);
     if (identityId) await ownerPool.query("delete from identities where id=$1", [identityId]);
     if (organizationA) await ownerPool.query("delete from organizations where id=$1", [organizationA]);
     if (organizationB) await ownerPool.query("delete from organizations where id=$1", [organizationB]);
