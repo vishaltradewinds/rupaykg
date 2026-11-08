@@ -43,7 +43,7 @@ A status must not be inferred from legacy/reference repositories.
 | Ecosystem | Reference ecosystem adoption control | Shakti adoption matrix plus repository-to-reference implementation crosswalk now exist; external conformance/field acceptance remains outstanding | AMBER |
 | Security | Production identity | Production identity provisioning controls exist | AMBER |
 | Security | Runtime least privilege | Tenant isolation contract defines non-BYPASSRLS runtime role; field-sync business transactions now establish transaction-local tenant context; production role provisioning/proof remains | OPEN |
-| Operations | Backup/restore | Production gate requires demonstrated backup/restore evidence | OPEN |
+| Operations | Backup/restore | Production backup/restore acceptance contract now defines isolated restore, migration/application acceptance, evidence integrity and credential-safety requirements; actual production backup/restore evidence remains | OPEN |
 | Operations | Monitoring/rollback | Production gate requires demonstrated monitoring/rollback evidence; OTEL-compatible span contract, deterministic span validation, pinned SDK/exporter bootstrap, OTLP exporter conformance test, application-path spans for DB/MRV/calculation/Guardian/Hedera/registry/external integration, and an executable collector-failure isolation test/runtime acceptance workflow now exist, but deployed collector connectivity, real end-to-end trace evidence, controlled production collector-outage evidence, live redaction/runtime evidence and production availability remain | OPEN |
 | TRL | Engineering readiness | Strong repository/CI evidence exists | GREEN |
 | TRL | Field readiness | Physical/site evidence not fully established in repository | AMBER |
