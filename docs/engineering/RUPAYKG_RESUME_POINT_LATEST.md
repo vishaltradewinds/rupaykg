@@ -367,3 +367,13 @@
 - Exact-head GitHub Actions lookup returned no workflow runs; CI remains **NOT VERIFIED**.
 - Production Neon/RLS/deployment remains **READ-ONLY/HOLD**.
 - Next autonomous action: continue the multi-party/protected-core acceptance matrix and use exact-head CI evidence as the execution gate before any production cutover proposal.
+
+
+### 2026-11-08 — Settlement payer-spoofing acceptance
+- Added disposable runtime coverage proving an authenticated payer-side actor cannot create a settlement by changing the request `payerId` to the counterpart organization while retaining the original active tenant context.
+- Expected failure is fail-closed `ORG_CONTEXT_MISMATCH`; the request must not reach settlement creation.
+- Corrected the settlement runtime fixture declarations before extending the behavioral matrix.
+- Latest controlled head: `700f5400fcf869e06557f05421bafe53a1fc3760`.
+- Exact-head GitHub Actions execution remains **NOT VERIFIED**.
+- Production Neon/RLS/deployment remains **READ-ONLY/HOLD**.
+- Next autonomous action: continue multi-party settlement and protected-core behavioral acceptance, including cross-tenant read/write denial and lifecycle transition invariants, then obtain exact-head CI evidence.
