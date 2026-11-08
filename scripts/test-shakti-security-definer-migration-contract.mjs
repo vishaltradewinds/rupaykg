@@ -49,23 +49,21 @@ for (const source of allMigrationSource) {
     const name = starts[i][1];
     const args = starts[i][2].replace(/\s+/g, " ").trim();
     const signature = name + "(" + args + ")";
-    const existing = functionBlocksBySignature.get(signature) ?? [];
-    existing.push(block);
-    functionBlocksBySignature.set(signature, existing);
+    functionBlocksBySignature.set(signature, block);
   }
 }
 
 for (const [displayName, expected] of requiredRuntimeFunctions) {
   const expectedSignature = expected.name + "(" + expected.args + ")";
-  const blocks = [...functionBlocksBySignature.entries()]
+  const block = [...functionBlocksBySignature.entries()]
     .filter(([signature]) => signature.replace(/\s+/g, " ").trim().toLowerCase() === expectedSignature.toLowerCase())
-    .flatMap(([, blocks]) => blocks);
-  if (blocks.length === 0) {
+    .at(-1)?.[1];
+  if (!block) {
     failures.push("required runtime function is not defined in migrations: " + displayName);
     continue;
   }
-  if (!blocks.some((block) => /security\s+definer/i.test(block))) {
-    failures.push("required runtime function is not defined as SECURITY DEFINER in migrations: " + displayName);
+  if (!/security\s+definer/i.test(block)) {
+    failures.push("latest definition of required runtime function is not SECURITY DEFINER: " + displayName);
   }
 }
 
