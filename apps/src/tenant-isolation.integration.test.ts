@@ -1027,21 +1027,24 @@ test("Shakti assigned verifier registry read is scoped to approved active verifi
   const runtimePool = new Pool({ connectionString: process.env.DATABASE_URL });
   const ownerPool = new Pool({ connectionString: process.env.RUPAYKG_TEST_OWNER_DATABASE_URL });
   const suffix = randomBytes(8).toString("hex");
-  let orgA = "", orgB = "", verifierId = "", otherVerifierId = "", roleA = "", roleOther = "", membershipA = "", membershipOther = "";
+  let orgA = "", orgB = "", verifierId = "", otherVerifierId = "", issuerId = "", roleA = "", roleOther = "", roleIssuer = "", membershipA = "", membershipOther = "", membershipIssuer = "";
   let credentialA = "", verificationA = "", eventA = "";
   try {
     orgA = (await ownerPool.query<{ id: string }>("insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id", ["TEST-VERIFIER-A-" + suffix])).rows[0]!.id;
     orgB = (await ownerPool.query<{ id: string }>("insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id", ["TEST-VERIFIER-B-" + suffix])).rows[0]!.id;
     verifierId = (await ownerPool.query<{ id: string }>("insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id", ["verifier:" + suffix, "Verifier " + suffix, "verifier-" + suffix + "@example.invalid"])).rows[0]!.id;
     otherVerifierId = (await ownerPool.query<{ id: string }>("insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id", ["other-verifier:" + suffix, "Other Verifier " + suffix, "other-verifier-" + suffix + "@example.invalid"])).rows[0]!.id;
+    issuerId = (await ownerPool.query<{ id: string }>("insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id", ["issuer:" + suffix, "Issuer " + suffix, "issuer-" + suffix + "@example.invalid"])).rows[0]!.id;
     roleA = (await ownerPool.query<{ id: string }>("insert into roles(organization_id,name,permissions,geography_scope) values($1,'verifier','["verification:approve"]'::jsonb,'[]'::jsonb) returning id", [orgA])).rows[0]!.id;
     roleOther = (await ownerPool.query<{ id: string }>("insert into roles(organization_id,name,permissions,geography_scope) values($1,'verifier','["verification:approve"]'::jsonb,'[]'::jsonb) returning id", [orgB])).rows[0]!.id;
+    roleIssuer = (await ownerPool.query<{ id: string }>("insert into roles(organization_id,name,permissions,geography_scope) values($1,'operator','[]'::jsonb,'[]'::jsonb) returning id", [orgA])).rows[0]!.id;
     membershipA = (await ownerPool.query<{ id: string }>("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED') returning id", [verifierId, orgA, roleA])).rows[0]!.id;
     membershipOther = (await ownerPool.query<{ id: string }>("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED') returning id", [otherVerifierId, orgB, roleOther])).rows[0]!.id;
+    membershipIssuer = (await ownerPool.query<{ id: string }>("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED') returning id", [issuerId, orgA, roleIssuer])).rows[0]!.id;
 
     credentialA = (await ownerPool.query<{ id: string }>("insert into credentials(issuer_organization_id,trust_root_id,status) values($1,$2,'ELIGIBLE') returning id", [orgA, "VERIFIER-TRUST-" + suffix])).rows[0]!.id;
     verificationA = (await ownerPool.query<{ id: string }>("insert into verifications(credential_id,verifier_identity_id,decision) values($1,$2,'APPROVED') returning id", [credentialA, verifierId])).rows[0]!.id;
-    eventA = (await ownerPool.query<{ id: string }>("insert into registry_events(credential_id,event_type,to_owner_id,recorded_by_identity_id,event_hash) values($1,'ISSUED',$2,$3,$4) returning id", [credentialA, orgA, verifierId, "VERIFIER-EVENT-" + suffix])).rows[0]!.id;
+    eventA = (await ownerPool.query<{ id: string }>("insert into registry_events(credential_id,event_type,to_owner_id,recorded_by_identity_id,event_hash) values($1,'ISSUED',$2,$3,$4) returning id", [credentialA, orgA, issuerId, "VERIFIER-EVENT-" + suffix])).rows[0]!.id;
 
     const client = await runtimePool.connect();
     try {
@@ -1092,10 +1095,13 @@ test("Shakti assigned verifier registry read is scoped to approved active verifi
     if (eventA) await ownerPool.query("delete from registry_events where id=$1", [eventA]);
     if (verificationA) await ownerPool.query("delete from verifications where id=$1", [verificationA]);
     if (credentialA) await ownerPool.query("delete from credentials where id=$1", [credentialA]);
+    if (membershipIssuer) await ownerPool.query("delete from organization_memberships where id=$1", [membershipIssuer]);
     if (membershipOther) await ownerPool.query("delete from organization_memberships where id=$1", [membershipOther]);
     if (membershipA) await ownerPool.query("delete from organization_memberships where id=$1", [membershipA]);
+    if (roleIssuer) await ownerPool.query("delete from roles where id=$1", [roleIssuer]);
     if (roleOther) await ownerPool.query("delete from roles where id=$1", [roleOther]);
     if (roleA) await ownerPool.query("delete from roles where id=$1", [roleA]);
+    if (issuerId) await ownerPool.query("delete from identities where id=$1", [issuerId]);
     if (otherVerifierId) await ownerPool.query("delete from identities where id=$1", [otherVerifierId]);
     if (verifierId) await ownerPool.query("delete from identities where id=$1", [verifierId]);
     if (orgB) await ownerPool.query("delete from organizations where id=$1", [orgB]);
