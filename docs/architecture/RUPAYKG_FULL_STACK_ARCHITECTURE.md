@@ -924,3 +924,40 @@ Every external dependency has an integration boundary.
 Every production transition has a gate.
 
 **No layer may be skipped.**
+
+
+## 25. Architecture-to-engineering execution rule
+
+This architecture is now the controlling technical baseline for subsequent repository engineering. New implementation work shall map to the layers and gates above before introducing new infrastructure, databases, authority paths or parallel sources of truth.
+
+### 25.1 Immediate engineering priorities
+
+1. Preserve the single authoritative PostgreSQL business-state boundary.
+2. Complete protected-core tenant/RLS behavioral acceptance, including multi-party transaction paths.
+3. Keep production database and runtime changes READ-ONLY/HOLD until applicable cutover evidence is complete.
+4. Continue field hardware and software integration in parallel, using the canonical measurement envelope and H1-H6 acceptance sequence.
+5. Expand methodology implementations only from source-locked official methodology evidence.
+6. Treat CPCB SWM Rules 2026 and its centralized online portal as external regulatory boundaries; do not claim portal integration until a real integration is implemented and evidenced. The SWM Rules 2026 came into force on 1 April 2026 and establish centralized online tracking/reporting requirements. citeturn707902search0turn707902search5
+7. Maintain explicit separation between CCTS compliance/offset mechanisms and internal carbon calculations. BEE maintains the CCTS methodology and accredited verification ecosystem. citeturn707902search2turn707902search10
+8. Treat EPR as a category-specific regulatory workflow; do not generalize one EPR regime across all waste streams. Government sources identify multiple category-specific EPR frameworks. citeturn707902search3
+9. Every completed engineering increment must update evidence state, tests and the authoritative standards/architecture register where its governance changes.
+
+### 25.2 No architectural drift
+
+The following are prohibited without a controlled architecture decision:
+
+- introducing another authoritative production database;
+- creating a second tenant-authority mechanism;
+- bypassing database authorization for convenience;
+- storing authoritative business state only in external registries;
+- coupling UI state directly to regulatory authority;
+- treating AI output as statutory evidence;
+- treating mock integrations as production integrations;
+- adding hardware without device identity, provenance and acceptance requirements;
+- claiming production, certification, field validation or TRL 9 solely from code completion.
+
+### 25.3 Definition of done
+
+A feature is not architecturally complete merely when code compiles. The minimum definition of done is:
+
+**architecture mapping → implementation → security → deterministic tests → integration evidence → operational/field evidence where applicable → lifecycle-state update → production gate where applicable.**
