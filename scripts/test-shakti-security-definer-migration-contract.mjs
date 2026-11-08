@@ -15,6 +15,17 @@ const requiredBoundaryControls = [
 for (const [name, pattern] of requiredBoundaryControls) {
   if (!pattern.test(boundaryMigration)) failures.push("101_security_definer_schema_boundary.sql: missing " + name);
 }
+const requiredRuntimeExecutes = [
+  "grant execute on function app.current_identity_id() to rupaykg_app_runtime;",
+  "grant execute on function app.current_organization_id() to rupaykg_app_runtime;",
+  "grant execute on function app.set_request_context(uuid,uuid) to rupaykg_app_runtime;",
+  "grant execute on function app.set_identity_context(uuid) to rupaykg_app_runtime;",
+  "grant execute on function app.set_platform_context(uuid) to rupaykg_app_runtime;",
+  "grant execute on function app.set_authority_context(uuid,text,uuid) to rupaykg_app_runtime;",
+];
+for (const grant of requiredRuntimeExecutes) {
+  if (!boundaryMigration.includes(grant)) failures.push("101_security_definer_schema_boundary.sql: missing explicit runtime grant: " + grant);
+}
 
 for (const file of files) {
   const source = await readFile(path.join(dir, file), "utf8");
