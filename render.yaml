@@ -21,6 +21,13 @@ services:
         value: real
       - key: RUPAYKG_SYNTHETIC_DATA
         value: "false"
+      # OTEL remains disabled unless an approved collector endpoint is explicitly provisioned.
+      - key: RUPAYKG_OTEL_ENABLED
+        value: "false"
+      - key: OTEL_SERVICE_NAME
+        value: "rupaykg-api"
+      - key: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+        sync: false
       - key: DATABASE_URL
         sync: false
       - key: DATABASE_CA_CERT
