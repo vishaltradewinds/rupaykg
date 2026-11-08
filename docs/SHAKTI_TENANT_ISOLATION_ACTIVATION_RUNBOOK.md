@@ -69,3 +69,8 @@ Policy definitions alone do not constitute acceptance.
 The repository provides `.github/workflows/tenant-isolation-live-acceptance.yml`.
 
 Configure the GitHub Actions secret `RUPAYKG_RUNTIME_DATABASE_URL` with the exact intended non-BYPASSRLS application runtime connection string. The workflow executes the read-only preflight and the transactional post-RLS negative test against that database. A passing workflow run is deployment evidence; the secret value must never be printed or committed.
+
+
+### Policy coverage evidence
+
+Before the cross-tenant negative test, the live acceptance workflow executes `ops/tenant-isolation/VERIFY_RLS_POLICY_COVERAGE.sql`. The evidence artifact records the protected-table policy inventory and fails closed if any protected table has no RLS policy. This is an evidence-strengthening gate; it does not replace tenant A/B read and mutation isolation testing.
