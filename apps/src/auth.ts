@@ -57,7 +57,7 @@ export async function authenticate(request: FastifyRequest, pool: Pool | null): 
   const bilateralOrganizationScope = requestPath === "/api/v1/settlements"
     || requestPath.startsWith("/api/v1/settlements/");
   return {
-    identityId: rows.rows[0].identity_id,
+    identityId: bootstrap.rows[0].identity_id,
     memberships: memberships.rows,
     ...(activeOrganizationId ? { activeOrganizationId } : {}),
     ...(bilateralOrganizationScope ? { bilateralOrganizationScope: true } : {}),
