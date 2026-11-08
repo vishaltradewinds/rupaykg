@@ -566,3 +566,14 @@
 - Latest checkpoint commit: `e3975ecb2209c7a8c1be575d450c4647b018d780`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Credential runtime least-privilege hardening
+- Added protected migration `100_credential_runtime_update_column_scope.sql`.
+- Runtime role no longer has generic UPDATE on `credentials`; it can update only lifecycle `status`.
+- This matches the actual application mutation surface: ACTIVE, TRANSFERRED, and RETIRED lifecycle changes.
+- Authority/value fields remain protected by the existing immutability trigger and are now additionally blocked at the database privilege layer.
+- Updated protected migration classification and deterministic contract.
+- Latest checkpoint commit: `6ee4c6f506d2fecef339b134d7cd395421e469d0`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
