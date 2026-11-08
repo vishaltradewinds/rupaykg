@@ -143,7 +143,7 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
 
   app.post("/api/v1/bwg/profile", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
-    const body = bodyOf(request as never); const organizationId = str(body, "organizationId"); const jurisdictionId = str(body, "jurisdictionId");
+    const body = bodyOf(request as never); const organizationId = auth.activeOrganizationId; const jurisdictionId = str(body, "jurisdictionId");
     const floorArea = nonNegative(body, "floorAreaSqm"); const water = nonNegative(body, "waterConsumptionLpd"); const waste = nonNegative(body, "wasteGenerationKgDay"); const establishmentType = str(body, "establishmentType");
     if (!organizationId || !jurisdictionId || floorArea === null || water === null || waste === null || !establishmentType) return reply.code(400).send({ error: "organizationId, jurisdictionId, floorAreaSqm, waterConsumptionLpd, wasteGenerationKgDay and establishmentType are required", code: "BWG_PROFILE_REQUIRED" });
     if (!canActForOrganization(auth, organizationId) || auth.activeOrganizationId !== organizationId) return reply.code(403).send({ error: "Organization access denied; select the active organization before writing", code: "ORG_FORBIDDEN" });
@@ -161,7 +161,7 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
 
   app.post("/api/v1/bwg/reporting-periods", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
-    const body = bodyOf(request as never); const organizationId = str(body, "organizationId"); const start = str(body, "periodStart"); const end = str(body, "periodEnd"); const basis = str(body, "reportingBasis");
+    const body = bodyOf(request as never); const organizationId = auth.activeOrganizationId; const start = str(body, "periodStart"); const end = str(body, "periodEnd"); const basis = str(body, "reportingBasis");
     if (!organizationId || !start || !end || !basis || Number.isNaN(Date.parse(start)) || Number.isNaN(Date.parse(end)) || start > end) return reply.code(400).send({ error: "organizationId, valid periodStart, periodEnd and reportingBasis are required", code: "BWG_PERIOD_REQUIRED" });
     if (!canActForOrganization(auth, organizationId) || auth.activeOrganizationId !== organizationId) return reply.code(403).send({ error: "Organization access denied; select the active organization before writing", code: "ORG_FORBIDDEN" });
     try {
