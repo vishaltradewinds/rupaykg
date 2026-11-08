@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import { once } from "node:events";
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-proto";
-import { trace } from "@opentelemetry/api";
+import { context, trace } from "@opentelemetry/api";
 import { buildHttpSpan, validateObservabilitySpan } from "./observability.js";
 
 test("exports a real OTLP trace payload and preserves the application trace identity", async () => {
@@ -57,14 +57,20 @@ test("exports a real OTLP trace payload and preserves the application trace iden
   try {
     sdk.start();
     const tracer = trace.getTracer("rupaykg-otel-conformance");
-    const span = tracer.startSpan("rupaykg.conformance.http", {
+    const parentContext = trace.setSpanContext(context.active(), {
+      traceId: context.traceId,
+      spanId: context.parentId,
+      traceFlags: 1,
+      isRemote: true,
+    });
+    const span = context.with(parentContext, () => tracer.startSpan("rupaykg.conformance.http", {
       attributes: {
         "http.request.method": spanContract.attributes["http.request.method"],
         "http.route": spanContract.attributes["http.route"],
         "http.response.status_code": spanContract.attributes["http.response.status_code"],
         "rupaykg.trace_id": context.traceId,
       },
-    });
+    }));
     span.end();
 
     await sdk.shutdown();
