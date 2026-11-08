@@ -6,7 +6,7 @@ const failures=[];
 for(const [fn,source] of [["app.set_platform_context",hardening],["app.set_authority_context",hardening],["app.set_identity_context",completion]]){
  const start=source.indexOf(`function ${fn}`);
  if(start<0){ failures.push(fn+": function definition not found in expected migration"); continue; }
- const hardeningEnd=source.indexOf("\n$;",start);
+ const hardeningEnd=source.indexOf("\n$$;",start);
  const completionEnd=source.indexOf("\n$shakti$;",start);
  const end=hardeningEnd>=0 ? hardeningEnd : completionEnd;
  if(end<0){ failures.push(fn+": function terminator not found in expected migration"); continue; }
