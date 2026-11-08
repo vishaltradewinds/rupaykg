@@ -65,6 +65,8 @@ begin
   end if;
 end $$;
 
+revoke all on function app.set_request_context(uuid,uuid) from public;
+
 grant usage on schema app to rupaykg_app_runtime;
 grant execute on function app.current_identity_id() to rupaykg_app_runtime;
 grant execute on function app.current_organization_id() to rupaykg_app_runtime;
