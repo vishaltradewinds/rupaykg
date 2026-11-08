@@ -11,7 +11,7 @@ returns boolean
 language sql
 security definer
 stable
-set search_path = public, app, pg_temp
+set search_path = pg_catalog, public, app
 as $$
   select exists (
     select 1
@@ -22,7 +22,7 @@ as $$
        and v.verifier_identity_id = app.current_identity_id()
        and v.decision = 'APPROVED'
        and i.status = 'VERIFIED'
-       and has_verification_permission(v.verifier_identity_id)
+       and public.has_verification_permission(v.verifier_identity_id)
        and exists (
          select 1
            from public.organization_memberships m
