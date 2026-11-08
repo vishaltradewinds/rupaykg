@@ -59,3 +59,14 @@ The application now creates child spans for the major authoritative path boundar
 `HTTP → tenant PostgreSQL transaction → calculation/MRV → Guardian → Hedera HCS → registry credential issuance`, with a separate external-integration acceptance span where that path is used.
 
 This establishes the repository-side span topology required for acceptance. A production acceptance run must still demonstrate that a real trace retains the same trace identity across these boundaries and that the collector receives the resulting spans.
+
+## Executable runtime acceptance probe
+
+The repository now includes `ops/observability/OTEL_RUNTIME_ACCEPTANCE.mjs`. It is an executable probe for a deployed RupayKg environment and requires:
+- `RUPAYKG_BASE_URL`
+- `RUPAYKG_BEARER_TOKEN`
+- `RUPAYKG_ORGANIZATION_ID`
+
+The probe verifies authoritative PostgreSQL-backed health/status, sends a deterministic W3C `traceparent`, exercises the authenticated external-integration mediator, and fails if the acceptance response claims synthetic data or authoritative environmental mutation. It records the supplied trace identity and HTTP outcomes as evidence.
+
+A manual `workflow_dispatch` workflow is provided at `.github/workflows/otel-runtime-acceptance.yml`. It is evidence-producing but is not itself proof that a production collector received the spans. Collector receipt, end-to-end span correlation, redaction under live telemetry, and telemetry-failure acceptance remain separate gates.
