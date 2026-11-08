@@ -882,3 +882,12 @@
 - Checkpoint: `4fcb3cd747459636b5a2c13de3bff7fb714d29dd`.
 - Exact-head CI: **NOT VERIFIED** until GitHub reports a workflow run for this head.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Identity-liveness function boundary correction
+- Re-inspection of the authoritative branch found the identity-liveness contract still contained the delimiter typo `$;`; the hardening migrations actually terminate the two functions with `$$;`.
+- Corrected the executable boundary to support the actual `$$;` hardening delimiter and the `$shakti$;` completion delimiter.
+- This restores function-scoped contract inspection rather than accidental whole-file inspection.
+- Checkpoint: `b758010df6ce72a175789efee2d1b2a6452db8bb`.
+- Exact-head CI: **NOT VERIFIED** (`workflow_runs: []`).
+- Production remains **READ-ONLY/HOLD**.
