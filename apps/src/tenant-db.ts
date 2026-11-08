@@ -56,6 +56,9 @@ export async function withTenantTransaction<T>(
   if (!auth.activeOrganizationId) {
     throw Object.assign(new Error("Active organization is required for tenant-scoped database access"), { code: "TENANT_CONTEXT_REQUIRED" });
   }
+  if (!auth.memberships.some((m) => m.status === "VERIFIED" && m.organization_id === auth.activeOrganizationId)) {
+    throw Object.assign(new Error("Active organization must have verified membership"), { code: "TENANT_MEMBERSHIP_REQUIRED" });
+  }
   const client = await pool.connect();
   try {
     await client.query("begin");
