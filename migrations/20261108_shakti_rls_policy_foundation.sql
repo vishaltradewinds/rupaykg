@@ -28,6 +28,30 @@ $$;
 
 revoke all on function app.is_verified_org_member(uuid) from public;
 grant execute on function app.is_verified_org_member(uuid) to rupaykg_app_runtime;
+grant usage on schema public to rupaykg_app_runtime;
+
+-- RLS is the row-level boundary; the runtime role still needs ordinary table
+-- privileges to reach the protected relations. These grants do not bypass RLS.
+grant select, insert, update, delete on table
+  organizations,
+  roles,
+  activities,
+  obligations,
+  credentials,
+  settlements,
+  audit_events,
+  resource_flows,
+  field_devices,
+  organization_memberships,
+  measurements,
+  evidence,
+  verifications,
+  carbon_calculations,
+  mrv_observations,
+  evidence_verification_requirements,
+  chain_of_custody_links
+to rupaykg_app_runtime;
+
 
 -- Direct organization-scoped tables.
 -- RLS enablement is a deployment gate; do not enable here until the runtime role/context contract is proven.
