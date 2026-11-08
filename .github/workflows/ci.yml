@@ -3,7 +3,7 @@ name: CI
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, cto/20261107-protected-migration-ci]
   pull_request:
     branches: [main]
 
