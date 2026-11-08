@@ -27,6 +27,10 @@ for (const grant of requiredRuntimeExecutes) {
   if (!boundaryMigration.includes(grant)) failures.push("101_security_definer_schema_boundary.sql: missing explicit runtime grant: " + grant);
 }
 
+if (/grant\s+execute\s+on\s+function\s+app\.[^;]+\s+to\s+public/i.test(boundaryMigration)) {
+  failures.push("101_security_definer_schema_boundary.sql: SECURITY DEFINER EXECUTE must not be granted to PUBLIC");
+}
+
 const runtimeGrantLines = boundaryMigration.split(/\r?\n/).map((line) => line.trim()).filter((line) => /^grant execute on function app\./i.test(line));
 const approvedRuntimeGrantSet = new Set(requiredRuntimeExecutes);
 for (const grantLine of runtimeGrantLines) {
