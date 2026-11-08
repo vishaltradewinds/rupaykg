@@ -33,6 +33,10 @@ The gate closes only when restore integrity and application acceptance are demon
 - Never treat application rollback as database rollback.
 - Schema/data compatibility must be assessed before application rollback.
 
+## Machine-readable evidence
+
+`ops/backup-restore/evidence-schema.json` defines the minimum machine-readable evidence shape. It intentionally accepts only redacted/stable identifiers and explicitly records that the restore target is not production.
+
 ## Current status
 
 **OPEN** — repository procedure exists; independently reproducible production backup/restore evidence is not currently present in the repository.
