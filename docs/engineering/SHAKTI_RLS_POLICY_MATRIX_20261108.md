@@ -146,3 +146,16 @@ A request-body organizationId, payerId or payeeId is never sufficient to establi
 **Policy matrix reconciliation: INITIAL CONTROLLED BASELINE COMPLETE.**
 
 This document is a classification and gate artifact, not evidence that RLS is active, that every policy has passed runtime acceptance, or that TRL 9 has been achieved.
+
+
+## 2026-11-08 disposable runtime contract added
+
+A disposable PostgreSQL contract was added at `scripts/test-shakti-rls-policy-runtime-contract.sql` and wired into controlled CI. It verifies, inside the disposable database, that:
+
+- all five protected core tables have RLS enabled;
+- the five expected Shakti tenant policies exist;
+- both USING and WITH CHECK policy expressions bind to `app.current_organization_id()`;
+- the disposable runtime role is login-capable but neither superuser nor BYPASSRLS;
+- the protected policies do not use `current_user` as a substitute for authoritative tenant context.
+
+This remains CI evidence only when the workflow actually executes. The latest controlled branch still has no associated GitHub Actions run, so no runtime pass is claimed.
