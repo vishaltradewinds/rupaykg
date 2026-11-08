@@ -73,6 +73,12 @@ if (!/npm run migrate -w @rupaykg\/api/.test(controlledMigration)
  || !/MIGRATION_MAX_VERSION: "099"/.test(controlledMigration)) {
   failures.push("Controlled production migration must use the repository migration runner with an explicit 099 cutover ceiling.");
 }
+if (!/Verify post-migration ownership boundary remains controlled/.test(controlledMigration)
+ || !/post_migration_ownership_boundary_assertion/.test(controlledMigration)
+ || !/rupaykg_ddl_migration/.test(controlledMigration)
+ || !/rupaykg_app_runtime/.test(controlledMigration)) {
+  failures.push("Controlled production migration must prove the DDL role retains ownership of all 17 protected tables and the application runtime owns none after migration.");
+}
 if (!/Verify Shakti runtime security contract/.test(controlledMigration)
  || !/post_migration_runtime_security_contract_assertion/.test(controlledMigration)
  || !/rolname='rupaykg_app_runtime'/.test(controlledMigration)
