@@ -16,7 +16,7 @@ This profile establishes an interoperability boundary without claiming that Rupa
 
 ## Deployment boundary
 
-The current implementation is transport-neutral and uses Fastify's structured logger. OpenTelemetry SDK/OTLP exporter deployment remains a separate integration step and must be introduced only with an explicit dependency/version/license review.
+The implementation now includes a pinned OpenTelemetry SDK/OTLP exporter bootstrap for opt-in runtime use. It remains a deployment acceptance gate until a concrete collector endpoint, runtime connectivity, end-to-end correlation and retained production evidence are proven.
 
 ## Shakti evidence gate
 
@@ -75,3 +75,10 @@ The pinned SDK/exporter packages are the current 3.x-generation experimental Nod
 `package-lock.json` now contains the declared OTEL dependencies at the exact pinned versions: `@opentelemetry/api` 1.10.0, `@opentelemetry/sdk-node` 0.301.0, `@opentelemetry/exporter-trace-otlp-proto` 0.301.0 and `@opentelemetry/instrumentation-http` 0.301.0, including registry resolution and integrity metadata. The workspace `apps` lock entry also matches the declared dependency set and Node runtime floor.
 
 This closes the repository dependency/lockfile reconciliation gate. It does not establish live collector connectivity or production telemetry acceptance.
+
+
+## OTLP exporter conformance gate
+
+The repository now contains `apps/src/otel-exporter-conformance.test.ts`. The test starts an ephemeral local HTTP collector endpoint, initializes the pinned OTLP protobuf exporter, emits a real OpenTelemetry span under the application trace identity, verifies an OTLP payload is received, and checks that known credential/payload sentinel strings are absent from the emitted payload.
+
+This is a repository-level exporter/conformance test. It does **not** prove production collector availability, production runtime configuration, end-to-end PostgreSQL/calculation/registry correlation, or production acceptance. Those remain open until executed against the deployed environment and retained as evidence.
