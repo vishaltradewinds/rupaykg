@@ -67,7 +67,7 @@ begin
      select 1
        from pg_proc p
        join pg_namespace n on n.oid = p.pronamespace
-      where n.nspname = split_part(required.signature, '(', 1)
+      where n.nspname = 'app'
         and format('%I.%s(%s)', n.nspname, p.proname, pg_get_function_identity_arguments(p.oid)) = required.signature
         and p.prosecdef
         and has_function_privilege('rupaykg_app_runtime', p.oid, 'EXECUTE')
