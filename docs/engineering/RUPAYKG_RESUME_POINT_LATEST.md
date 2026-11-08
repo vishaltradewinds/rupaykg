@@ -52,6 +52,11 @@
 - Re-read migration 101 and confirmed its six explicit runtime grants match the contract allowlist exactly.
 - No production database changes.
 
+## 2026-11-08 — SECURITY DEFINER runtime-function binding
+- Strengthened the migration-101 contract so each of the six approved runtime EXECUTE functions must also be present in the migration set as a `SECURITY DEFINER` function.
+- Corrected and re-read the contract regexes after normalization; no production DB mutation performed.
+- Production remains READ-ONLY/HOLD.
+
 ## Exact current engineering heads
 - PR #331: 50e463df30f18a30e6a192da447a451d1816ea55
 - PR #332: a636a26e81cdaac88c69247e333b88c64a7ececa
