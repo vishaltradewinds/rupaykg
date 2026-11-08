@@ -18,6 +18,9 @@ for (const required of [
   "externalReference",
   "status='EXECUTING'",
   "status='RECONCILING'",
+  "constraint === \"settlements_external_reference_unique_idx\"",
+  "code === \"23505\"",
+  "EXTERNAL_REFERENCE_EXISTS",
 ]) {
   if (!route.includes(required)) failures.push("missing execution route evidence: " + required);
 }
