@@ -145,6 +145,8 @@ jobs:
         run: node scripts/test-shakti-settlement-lifecycle-integrity-contract.mjs
       - name: Run Shakti settlement confirmation-reference contract
         run: node scripts/test-shakti-settlement-confirmation-reference-contract.mjs
+      - name: Run Shakti settlement authorization-reference contract
+        run: node scripts/test-shakti-settlement-authorization-reference-contract.mjs
       - name: Run Shakti context pool isolation contract
         run: node scripts/test-shakti-context-pool-isolation-contract.mjs
       - name: Run Shakti RLS write contract
