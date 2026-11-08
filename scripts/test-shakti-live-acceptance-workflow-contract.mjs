@@ -70,6 +70,9 @@ if (!/npm run migrate -w @rupaykg\/api/.test(controlledMigration)) {
 if (!/Migration complete\. RLS activation remains a separate controlled DDL gate\./.test(controlledMigration)) {
   failures.push("Controlled production migration must not silently activate RLS.");
 }
+if (!/post_migration_rls_remains_controlled_assertion/.test(controlledMigration)) {
+  failures.push("Controlled production migration must fail closed if 097-099 unexpectedly enable RLS.");
+}
 
 for (const fn of ["app.set_request_context", "app.is_verified_org_member", "app.authenticate_bearer_session"]) {
   if (!boundary.includes(fn)) failures.push(`Boundary verification missing function: ${fn}`);
