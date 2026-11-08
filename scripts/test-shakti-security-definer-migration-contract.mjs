@@ -7,13 +7,13 @@ const files = (await readdir(dir)).filter((name) => /^\d+_.+\.sql$/.test(name)).
 const failures = [];
 
 const boundaryMigration = await readFile(path.join(dir, "101_security_definer_schema_boundary.sql"), "utf8");
-if (!/revoke\\s+create\\s+on\\s+schema\\s+public\\s+from\\s+public/i.test(boundaryMigration)) {
+if (!/revoke\s+create\s+on\s+schema\s+public\s+from\s+public/i.test(boundaryMigration)) {
   failures.push("101_security_definer_schema_boundary.sql: public schema CREATE privilege must be revoked from PUBLIC");
 }
-if (!/revoke\\s+create\\s+on\\s+schema\\s+app\\s+from\\s+public/i.test(boundaryMigration)) {
+if (!/revoke\s+create\s+on\s+schema\s+app\s+from\s+public/i.test(boundaryMigration)) {
   failures.push("101_security_definer_schema_boundary.sql: app schema CREATE privilege must be revoked from PUBLIC");
 }
-if (!/revoke\\s+all\\s+on\\s+function\\s+%I\\.%I\\(%s\\)\\s+from\\s+public/i.test(boundaryMigration)) {
+if (!/revoke\s+all\s+on\s+function\s+%I\\.%I\(%s\)\s+from\s+public/i.test(boundaryMigration)) {
   failures.push("101_security_definer_schema_boundary.sql: SECURITY DEFINER EXECUTE privilege must be revoked from PUBLIC");
 }
 
