@@ -662,3 +662,12 @@
 - Latest checkpoint commit: `fcfa4ee6258ce986ceeed5368f0be6d96c25c934`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — CI Shakti gate reconciliation
+- Repaired malformed Shakti contract step declarations in `.github/workflows/ci.yml` so assigned-verifier, registry identity-authority, registry tenant-RLS, and settlement lifecycle contracts are represented as valid workflow steps.
+- Added migration `100_credential_runtime_update_column_scope.sql` to the protected migration gate.
+- This closes a CI governance gap: migration 100 and its credential privilege contract are now part of the same protected-migration execution boundary.
+- Latest checkpoint commit: `74c86e04db2410ca901c54d3fd331d4be18ca8d8`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
