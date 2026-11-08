@@ -97,6 +97,8 @@ jobs:
         run: node scripts/test-shakti-operational-invariants.mjs
       - name: Run Shakti core RLS contract
         run: node scripts/test-shakti-core-rls-contract.mjs
+      - name: Run disposable Shakti RLS policy runtime contract
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/test-shakti-rls-policy-runtime-contract.sql
       - name: Run platform-admin authorization contract
         run: node scripts/test-shakti-platform-admin-authorization-contract.mjs
       - name: Run multi-party authorization contract
