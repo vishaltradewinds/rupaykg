@@ -51,7 +51,7 @@ try {
       continue;
     }
 
-    const protectedMigration = /^20261107_(authority_hierarchy_context|platform_execution_context|runtime_grant_reconciliation|core_tenant_rls_activation_gate)\.sql$/.test(filename);
+    const protectedMigration = /^(?:20261107_(authority_hierarchy_context|platform_execution_context|runtime_grant_reconciliation|core_tenant_rls_activation_gate)|20261108_context_identity_liveness_hardening)\.sql$/.test(filename);
     if (protectedMigration && process.env.RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS !== "1") {
       throw new Error(`Protected Shakti migration ${filename} requires explicit RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS=1`);
     }
