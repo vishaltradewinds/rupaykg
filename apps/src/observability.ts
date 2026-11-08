@@ -28,7 +28,19 @@ export function createTraceContext(request: FastifyRequest): TraceContext {
   };
 }
 
-export type RuntimeAttestation = {\n  event: "rupaykg.runtime.attestation";\n  nodeVersion: string;\n  runtime: string;\n  platform: string;\n  arch: string;\n};\n\nexport function buildRuntimeAttestation(): RuntimeAttestation {\n  return {\n    event: "rupaykg.runtime.attestation",\n    nodeVersion: process.version,\n    runtime: "node",\n    platform: process.platform,\n    arch: process.arch,\n  };\n}\n\nexport function installObservability(app: FastifyInstance): void {
+export type RuntimeAttestation = {\n  event: "rupaykg.runtime.attestation";\n  nodeVersion: string;\n  runtime: string;\n  platform: string;\n  arch: string;\n};\n\nexport function assertSupportedNodeRuntime(): void {
+  const match = /^v(\\d+)\\.(\\d+)\\.(\\d+)/.exec(process.version);
+  if (!match) throw new Error("Unable to determine Node.js runtime version");
+  const major = Number(match[1]);
+  const minor = Number(match[2]);
+  const patch = Number(match[3]);
+  if (major < 22 || (major === 22 && minor < 15)) {
+    throw new Error(`Unsupported Node.js runtime ${process.version}; minimum supported version is v22.15.0`);
+  }
+  void patch;
+}
+
+export function buildRuntimeAttestation(): RuntimeAttestation {\n  return {\n    event: "rupaykg.runtime.attestation",\n    nodeVersion: process.version,\n    runtime: "node",\n    platform: process.platform,\n    arch: process.arch,\n  };\n}\n\nexport function installObservability(app: FastifyInstance): void {
   app.addHook("onRequest", async request => {
     const context = createTraceContext(request);
     request.headers["x-rupaykg-trace-id"] = context.traceId;
