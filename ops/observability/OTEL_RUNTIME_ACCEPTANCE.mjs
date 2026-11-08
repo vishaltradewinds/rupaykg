@@ -35,6 +35,7 @@ const traceparent = `00-${traceId}-${parentSpanId}-01`;
 
 const health = await fetch(baseUrl + "/health");
 assert(health.status === 200, `/health returned ${health.status}`);
+assert(health.headers.get("x-rupaykg-trace-id") === undefined, "health trace header is intentionally absent on uninstrumented fetch");
 const healthBody = await health.json();
 assert(healthBody.syntheticData === false, "health endpoint must declare syntheticData=false");
 
@@ -74,6 +75,7 @@ assert([200, 202].includes(correlation.response.status),
   `integration acceptance probe returned ${correlation.response.status}: ${correlation.text}`);
 assert(correlation.body?.syntheticData === false, "integration response must declare syntheticData=false");
 assert(correlation.body?.traceId === traceId, "integration response must preserve the supplied W3C trace identity");
+assert(correlation.response.headers.get("x-rupaykg-trace-id") === traceId, "HTTP response must preserve the supplied W3C trace identity");
 assert(correlation.body?.authoritativeMutation === false,
   "integration acceptance probe must not mutate authoritative environmental state");
 
