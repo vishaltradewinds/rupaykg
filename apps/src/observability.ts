@@ -28,7 +28,7 @@ export function createTraceContext(request: FastifyRequest): TraceContext {
   };
 }
 
-export function installObservability(app: FastifyInstance): void {
+export type RuntimeAttestation = {\n  event: "rupaykg.runtime.attestation";\n  nodeVersion: string;\n  runtime: string;\n  platform: string;\n  arch: string;\n};\n\nexport function buildRuntimeAttestation(): RuntimeAttestation {\n  return {\n    event: "rupaykg.runtime.attestation",\n    nodeVersion: process.version,\n    runtime: "node",\n    platform: process.platform,\n    arch: process.arch,\n  };\n}\n\nexport function installObservability(app: FastifyInstance): void {
   app.addHook("onRequest", async request => {
     const context = createTraceContext(request);
     request.headers["x-rupaykg-trace-id"] = context.traceId;
