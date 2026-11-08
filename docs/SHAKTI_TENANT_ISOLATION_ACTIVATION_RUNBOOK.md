@@ -19,7 +19,7 @@ All must be true before activation:
 ## Activation sequence
 
 1. Apply all migrations to the target PostgreSQL instance.
-2. Provision two distinct roles: (a) the application runtime login derived from `rupaykg_app_runtime`, and (b) a controlled migration/DDL role that owns the protected tenant tables and is not SUPERUSER or BYPASSRLS.
+2. Provision two distinct roles: (a) the application runtime login derived from `rupaykg_app_runtime`, and (b) a controlled migration/DDL role that owns the protected tenant tables and is not SUPERUSER or BYPASSRLS. For automated negative acceptance, the controlled DDL role must have a tightly governed `SET ROLE` membership to `rupaykg_app_runtime`; this is used only to create rollback-safe fixtures as owner and then execute the isolation assertions as the runtime role.
 3. Run `ops/tenant-isolation/VERIFY_DDL_ROLE_PRE_RLS.sql` using the controlled migration/DDL role and preserve its output. It must prove ownership of all 18 protected tenant tables and fail closed for SUPERUSER, BYPASSRLS, or runtime-role execution.
 4. Run `ops/tenant-isolation/VERIFY_PRE_RLS.sql` using the exact intended application runtime login role and preserve its output as deployment evidence.
 5. Confirm:
@@ -70,7 +70,7 @@ Policy definitions alone do not constitute acceptance.
 
 The repository provides `.github/workflows/tenant-isolation-live-acceptance.yml`.
 
-Configure the GitHub Actions secret `RUPAYKG_RUNTIME_DATABASE_URL` with the exact intended non-BYPASSRLS application runtime connection string. The workflow executes the read-only preflight, policy coverage check and transactional post-RLS negative test against that database. RLS activation itself remains a controlled DDL operation and is intentionally not performed by the runtime acceptance workflow. A passing workflow run is deployment evidence; the secret value must never be printed or committed.
+Configure two GitHub Actions secrets: `RUPAYKG_RUNTIME_DATABASE_URL` with the exact intended non-BYPASSRLS application runtime connection string, and `RUPAYKG_DDL_DATABASE_URL` with the controlled migration/DDL connection string. The workflow verifies the DDL-role preflight, executes runtime preflight/authentication/policy-coverage checks against the runtime login, and executes the transactional post-RLS negative test through the controlled DDL login, which temporarily `SET ROLE`s to `rupaykg_app_runtime` for the actual tenant assertions. RLS activation itself remains a controlled DDL operation and is intentionally not performed by the runtime acceptance workflow. A passing workflow run is deployment evidence; the secret value must never be printed or committed.
 
 
 ### Policy coverage evidence
