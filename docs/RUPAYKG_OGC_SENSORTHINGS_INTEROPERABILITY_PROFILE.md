@@ -52,4 +52,6 @@ The endpoint authenticates the caller, requires an active organization, executes
 
 The endpoint is an interoperability export boundary, not a regulatory or MRV decision endpoint. The source PostgreSQL record remains authoritative.
 
+Repository route-level coverage now exercises authenticated organization-scoped export, cross-organization measurement denial, missing authentication, organization-header rejection, missing-measurement 404 behavior, and the non-synthetic response boundary. These tests use a controlled fake database boundary and therefore do not substitute for live production evidence.
+
 Runtime acceptance remains open until this endpoint is exercised against the target production database and the resulting representation is validated by an actual SensorThings consumer/conformance test suite.
