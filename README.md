@@ -13,6 +13,7 @@ Current validation target: statutory BWG nullability narrowing and type-safe onb
 - [Shakti Standards — External Reference Ecosystem](docs/SHAKTI_STANDARDS_EXTERNAL_REFERENCE_ECOSYSTEM.md)
 - [Shakti Reference Ecosystem Adoption Matrix](docs/SHAKTI_REFERENCE_ECOSYSTEM_ADOPTION_MATRIX.md)
 - [Machine-readable Shakti Reference Register](docs/reference-ecosystem/shakti-reference-register.json)
+- [Machine-readable Reference Implementation Reconciliation](docs/reference-ecosystem/shakti-reference-implementation-reconciliation.json)
 - [Reference → Implementation Crosswalk](docs/RUPAYKG_REFERENCE_TO_IMPLEMENTATION_CROSSWALK.md)
 - [Environmental Operating System Control Matrix](docs/RUPAYKG_ENVIRONMENTAL_OPERATING_SYSTEM_CONTROL_MATRIX.md)
 - [Shakti Production Gate](docs/SHAKTI_PRODUCTION_GATE_RUPAYKG.md)
