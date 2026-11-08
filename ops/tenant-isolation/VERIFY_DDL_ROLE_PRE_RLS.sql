@@ -51,7 +51,7 @@ select 1 / case
          'evidence_verification_requirements','chain_of_custody_links'
        )
        and pg_get_userbyid(c.relowner) = current_user
-   ) = 18
+   ) = 17
   then 1
   else 0
 end as tenant_ddl_role_preflight_assertion;
