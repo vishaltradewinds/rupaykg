@@ -322,3 +322,16 @@
 - Exact-head workflow evidence for the new commit is currently not visible; CI remains NOT VERIFIED.
 - Production Neon/RLS/deployment remains READ-ONLY/HOLD.
 - Next autonomous action: continue the protected-core/multi-party behavioral acceptance matrix and resolve any CI failures once an exact-head workflow execution becomes available.
+
+
+### 2026-11-08 — Parallel software + hardware stack baseline
+- Began parallel hardware/software engineering rather than treating hardware as a later phase.
+- Added `docs/hardware/RUPAYKG_FIELD_EDGE_STACK.md` defining the controlled field-edge architecture, minimum hardware layers, canonical measurement envelope, security baseline, hardware acceptance sequence, and explicit readiness boundaries.
+- Added `scripts/test-shakti-field-hardware-stack-contract.mjs` to assert that the software field-device boundary and hardware baseline remain present together.
+- Wired the contract into `.github/workflows/ci.yml`.
+- Hardware baseline explicitly avoids unsupported claims: exact SKU approval, calibration, EMC/environmental qualification, Indian-manufacturing status, field acceptance and TRL 9 require separate evidence.
+- Software boundary remains tied to the existing field-device enrollment/sync path: active-organization authority, verified identity, tenant transaction, device uniqueness and audit event.
+- Latest software/hardware baseline CI commit: `6caf31493fd9ea70ef4a70b6e2e96b8decbbc0e9`.
+- Exact-head GitHub Actions execution remains NOT VERIFIED until a workflow run is observed for the controlled head.
+- Production Neon/RLS/deployment remains READ-ONLY/HOLD; no production hardware or software deployment was performed.
+- Next autonomous action: deepen the hardware-to-measurement software contract (device identity, calibration reference, sequence/replay, raw evidence linkage) while continuing protected-core and multi-party runtime acceptance.
