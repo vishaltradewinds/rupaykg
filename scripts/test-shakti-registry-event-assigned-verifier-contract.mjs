@@ -4,6 +4,8 @@ const migration = fs.readFileSync("migrations/099_registry_event_assigned_verifi
 const required = [
   "create or replace function app.is_assigned_approved_verifier",
   "security definer",
+  "set search_path = pg_catalog, public, app",
+  "public.has_verification_permission(v.verifier_identity_id)",
   "v.verifier_identity_id = app.current_identity_id()",
   "v.decision = 'APPROVED'",
   "i.status = 'VERIFIED'",
