@@ -56,21 +56,13 @@ to rupaykg_app_runtime;
 -- Direct organization-scoped tables.
 -- RLS enablement is a deployment gate; do not enable here until the runtime role/context contract is proven.
 -- alter table organizations enable row level security;
--- RLS enablement is a deployment gate; do not enable here until the runtime role/context contract is proven.
 -- alter table roles enable row level security;
--- RLS enablement is a deployment gate; do not enable here until the runtime role/context contract is proven.
 -- alter table activities enable row level security;
--- RLS enablement is a deployment gate; do not enable here until the runtime role/context contract is proven.
 -- alter table obligations enable row level security;
--- RLS enablement is a deployment gate; do not enable here until the runtime role/context contract is proven.
 -- alter table credentials enable row level security;
--- RLS enablement is a deployment gate; do not enable here until the runtime role/context contract is proven.
 -- alter table settlements enable row level security;
--- RLS enablement is a deployment gate; do not enable here until the runtime role/context contract is proven.
 -- alter table audit_events enable row level security;
--- RLS enablement is a deployment gate; do not enable here until the runtime role/context contract is proven.
 -- alter table resource_flows enable row level security;
--- RLS enablement is a deployment gate; do not enable here until the runtime role/context contract is proven.
 -- alter table field_devices enable row level security;
 
 create policy organizations_tenant_select on organizations
@@ -150,6 +142,16 @@ create policy field_devices_tenant_modify on field_devices
 -- RLS enablement is a deployment gate; do not enable here until the runtime role/context contract is proven.
 -- alter table organization_memberships enable row level security;
 
+create policy verifications_tenant_select on verifications
+  for select using (
+    exists (
+      select 1 from activities a
+       where a.id = verifications.activity_id
+         and a.organization_id = app.current_organization_id()
+         and app.is_verified_org_member(a.organization_id)
+    )
+  );
+
 create policy organization_memberships_identity_select on organization_memberships
   for select using (
     identity_id = app.current_identity_id()
@@ -157,19 +159,12 @@ create policy organization_memberships_identity_select on organization_membershi
   );
 
 -- Relationship-owned tables inherit tenant scope from their activity/resource.
--- RLS enablement is a deployment gate; do not enable here until the runtime role/context contract is proven.
 -- alter table measurements enable row level security;
--- RLS enablement is a deployment gate; do not enable here until the runtime role/context contract is proven.
 -- alter table evidence enable row level security;
--- RLS enablement is a deployment gate; do not enable here until the runtime role/context contract is proven.
 -- alter table verifications enable row level security;
--- RLS enablement is a deployment gate; do not enable here until the runtime role/context contract is proven.
 -- alter table carbon_calculations enable row level security;
--- RLS enablement is a deployment gate; do not enable here until the runtime role/context contract is proven.
 -- alter table mrv_observations enable row level security;
--- RLS enablement is a deployment gate; do not enable here until the runtime role/context contract is proven.
 -- alter table evidence_verification_requirements enable row level security;
--- RLS enablement is a deployment gate; do not enable here until the runtime role/context contract is proven.
 -- alter table chain_of_custody_links enable row level security;
 
 create policy measurements_tenant_select on measurements
