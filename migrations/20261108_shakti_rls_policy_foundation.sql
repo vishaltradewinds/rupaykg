@@ -142,6 +142,75 @@ create policy field_devices_tenant_modify on field_devices
 -- RLS enablement is a deployment gate; do not enable here until the runtime role/context contract is proven.
 -- alter table organization_memberships enable row level security;
 
+-- Identity memberships are read-scoped to the authenticated identity and active organization.
+-- Administrative membership mutations remain on explicit privileged paths.
+create policy organization_memberships_tenant_select on organization_memberships
+  for select using (
+    identity_id = app.current_identity_id()
+    and organization_id = app.current_organization_id()
+  );
+
+-- Evidence is indirectly tenant-owned through its activity.
+create policy evidence_tenant_select on evidence
+  for select using (
+    exists (
+      select 1 from activities a
+       where a.id = evidence.activity_id
+         and a.organization_id = app.current_organization_id()
+         and app.is_verified_org_member(a.organization_id)
+    )
+  );
+
+create policy evidence_tenant_insert on evidence
+  for insert with check (
+    exists (
+      select 1 from activities a
+       where a.id = evidence.activity_id
+         and a.organization_id = app.current_organization_id()
+         and app.is_verified_org_member(a.organization_id)
+    )
+  );
+
+create policy evidence_tenant_update on evidence
+  for update using (
+    exists (
+      select 1 from activities a
+       where a.id = evidence.activity_id
+         and a.organization_id = app.current_organization_id()
+         and app.is_verified_org_member(a.organization_id)
+    )
+  )
+  with check (
+    exists (
+      select 1 from activities a
+       where a.id = evidence.activity_id
+         and a.organization_id = app.current_organization_id()
+         and app.is_verified_org_member(a.organization_id)
+    )
+  );
+
+-- Verification records are indirectly tenant-owned through their activity.
+-- Verification decisions are append-only; there is intentionally no UPDATE/DELETE policy.
+create policy verifications_tenant_select on verifications
+  for select using (
+    exists (
+      select 1 from activities a
+       where a.id = verifications.activity_id
+         and a.organization_id = app.current_organization_id()
+         and app.is_verified_org_member(a.organization_id)
+    )
+  );
+
+create policy verifications_tenant_insert on verifications
+  for insert with check (
+    exists (
+      select 1 from activities a
+       where a.id = verifications.activity_id
+         and a.organization_id = app.current_organization_id()
+         and app.is_verified_org_member(a.organization_id)
+    )
+  );
+
 create policy carbon_calculations_tenant_select on carbon_calculations
   for select using (
     exists (
