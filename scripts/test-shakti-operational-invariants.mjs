@@ -33,6 +33,7 @@ const protectedMigrationIdentities = [
   ["082_settlement_reference_trigger_insert_safety", "082_settlement_reference_trigger_insert_safety"],
   ["088_field_sync_append_only_integrity", "088_field_sync_append_only_integrity"],
   ["089_settlement_reconciliation_reference_integrity", "089_settlement_reconciliation_reference_integrity"],
+  ["090_runtime_dml_grant_reconciliation_completion", "090_runtime_dml_grant_reconciliation_completion"],
 ];
 for (const [filename, identity] of protectedMigrationIdentities) {
   if (!migrationRunner.includes(identity)) failures.push(`Migration invariant missing: protected migration identity ${filename}`);
