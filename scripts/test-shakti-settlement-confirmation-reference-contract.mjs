@@ -3,8 +3,9 @@ import fs from "node:fs";
 
 const route = fs.readFileSync("apps/src/registry-routes.ts", "utf8");
 const migration = fs.readFileSync("migrations/077_settlement_confirmation_reference_integrity.sql", "utf8");
+const triggerSafetyMigration = fs.readFileSync("migrations/082_settlement_reference_trigger_insert_safety.sql", "utf8");
 const failures = [];
-if (!migration.includes("TG_OP = 'UPDATE'")) failures.push("settlement confirmation trigger must be INSERT-safe");
+if (!triggerSafetyMigration.includes("TG_OP = 'UPDATE'")) failures.push("settlement confirmation trigger must be INSERT-safe");
 
 for (const required of [
   "confirmation_reference=$2,reconciliation_reference=$3",
