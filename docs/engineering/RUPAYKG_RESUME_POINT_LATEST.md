@@ -804,3 +804,10 @@
 - Checkpoint: `3efea00694dfa889ce369bb7d75338e268b1a3ff`.
 - Exact-head CI: **NOT VERIFIED** until GitHub reports a workflow run for this head.
 - Production remains **READ-ONLY/HOLD**.
+
+### 2026-11-08 — SECURITY DEFINER migration contract repaired
+- Found a high-value deterministic-contract defect: the JavaScript regex literals in `test-shakti-security-definer-migration-contract.mjs` were double-escaped, so patterns such as `\\s`, `\\d`, and `\\b` matched literal backslashes instead of SQL/regex syntax.
+- Corrected the regex literals so the contract actually enumerates numbered migrations and audits SECURITY DEFINER functions for fixed search paths and PUBLIC execute grants.
+- Checkpoint: `1822f8708aa44914030f344c4b159b5b2c90b120`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
