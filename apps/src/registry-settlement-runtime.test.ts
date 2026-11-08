@@ -45,6 +45,11 @@ before(async () => {
     await c.query("insert into roles(organization_id,name,permissions) values($1,$2,$3::jsonb)", [destinationOrgId, `SETTLEMENT-PARTY-${suffix}`, JSON.stringify(["settlement:authorize","settlement:settle"])]);
     await c.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED'),($4,$2,$5,'VERIFIED')", [actorId, ownerOrgId, actorRole, verifierId, verifierRole]);
     actorToken = token(); verifierToken = token();
+    payeeOnlyId = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`runtime-payee-only-${suffix}`, "Payee Only Settlement Actor"])).rows[0]!.id;
+    payeeOnlyToken = token();
+    const payeeOnlyRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,$3::jsonb) returning id", [destinationOrgId, `PAYEE-ONLY-${suffix}`, JSON.stringify(["settlement:authorize","settlement:settle"])] )).rows[0]!.id;
+    await c.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [payeeOnlyId, destinationOrgId, payeeOnlyRole]);
+    await c.query("insert into identity_sessions(identity_id,expires_at,token_hash) values($1,now()+interval '1 hour',$2)", [payeeOnlyId, hash(payeeOnlyToken)]);
     await c.query("insert into identity_sessions(identity_id,expires_at,token_hash) values($1,now()+interval '1 hour',$2),($3,now()+interval '1 hour',$4)", [actorId, hash(actorToken), verifierId, hash(verifierToken)]);
     activityId = (await c.query<{ id: string }>("insert into activities(organization_id,actor_identity_id,geography_id,activity_type,status,completed_at) values($1,$2,$3,'COLLECTION','COMPLETED',now()) returning id", [ownerOrgId, actorId, geographyId])).rows[0]!.id;
     const measurementId = (await c.query<{ id: string }>("insert into measurements(activity_id,value,unit,method,source,measured_at,quality_status) values($1,100,'kg','WEIGHBRIDGE','FIELD',now(),'VERIFIED') returning id", [activityId])).rows[0]!.id;
@@ -167,10 +172,16 @@ describe("registry and settlement runtime acceptance", () => {
     await pool.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [actorId, destinationOrgId, destinationRole]);
     const created = await request("/api/v1/settlements", { method: "POST", body: JSON.stringify({ credentialId, payerId: ownerOrgId, payeeId: destinationOrgId, amount: 1250, currency: "INR", externalReference: `payment-${suffix}` }) }, actorToken, ownerOrgId);
     assert.equal(created.status, 201); settlementId = (await body(created)).settlement.id;
+    const payeeOnlyAuthorize = await request(`/api/v1/settlements/${settlementId}/authorize`, { method: "POST", body: JSON.stringify({ authorizationReference: `auth-payee-only-${suffix}` }) }, payeeOnlyToken, destinationOrgId);
+    assert.equal(payeeOnlyAuthorize.status, 403); assert.equal((await body(payeeOnlyAuthorize)).code, "ORG_CONTEXT_MISMATCH");
     const authorized = await request(`/api/v1/settlements/${settlementId}/authorize`, { method: "POST", body: JSON.stringify({ authorizationReference: `auth-${suffix}` }) }, actorToken, ownerOrgId);
     assert.equal(authorized.status, 200); assert.equal((await body(authorized)).settlement.status, "AUTHORIZED");
+    const payeeOnlySettle = await request(`/api/v1/settlements/${settlementId}/settle`, { method: "POST", body: JSON.stringify({ externalReference: `payment-payee-only-${suffix}` }) }, payeeOnlyToken, destinationOrgId);
+    assert.equal(payeeOnlySettle.status, 403); assert.equal((await body(payeeOnlySettle)).code, "ORG_CONTEXT_MISMATCH");
     const settled = await request(`/api/v1/settlements/${settlementId}/settle`, { method: "POST", body: JSON.stringify({ externalReference: `payment-${suffix}` }) }, actorToken, ownerOrgId);
     assert.equal(settled.status, 200); assert.equal((await body(settled)).settlement.status, "RECONCILING");
+    const payeeOnlyConfirm = await request(`/api/v1/settlements/${settlementId}/confirm`, { method: "POST", body: JSON.stringify({ confirmationReference: `bank-confirm-payee-only-${suffix}`, reconciliationReference: `recon-payee-only-${suffix}` }) }, payeeOnlyToken, destinationOrgId);
+    assert.equal(payeeOnlyConfirm.status, 403); assert.equal((await body(payeeOnlyConfirm)).code, "ORG_CONTEXT_MISMATCH");
     const premature = await pool.query("update settlements set status='SETTLED' where id=$1", [settlementId]).then(() => null).catch(error => error); assert.ok(premature instanceof Error);
     const confirmed = await request(`/api/v1/settlements/${settlementId}/confirm`, { method: "POST", body: JSON.stringify({ confirmationReference: `bank-confirm-${suffix}`, reconciliationReference: `recon-${suffix}` }) }, actorToken, ownerOrgId); assert.equal(confirmed.status, 200); const confirmedBody = await body(confirmed); assert.equal(confirmedBody.settlement.status, "SETTLED"); assert.equal(confirmedBody.settlement.external_confirmed_at !== null, true); assert.equal(confirmedBody.settlement.reconciliation_reference, `recon-${suffix}`);
     const immutable = await pool.query("update settlements set external_confirmed_at=null where id=$1", [settlementId]).then(() => null).catch(error => error); assert.ok(immutable instanceof Error);
