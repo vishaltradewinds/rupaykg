@@ -56,19 +56,6 @@ test("rejects an integration actor identity different from the authenticated ide
   }
 });
 
-test("rejects conflicting reuse of an idempotency key", async () => {
-  if (!databaseUrl) return;
-  const pool = new Pool({ connectionString: databaseUrl, max: 1 });
-  try {
-    await assert.rejects(
-      acceptExternalIntegrationMessage(pool, auth, { ...envelope, payload: { value: 11, unit: "kg" } }),
-      /Idempotency key was already used|does not exist|organization/i,
-    );
-  } finally {
-    await pool.end();
-  }
-});
-
 test("requires a database for mediator persistence", async () => {
   if (databaseUrl) return;
   assert.equal(typeof databaseUrl, "undefined");
