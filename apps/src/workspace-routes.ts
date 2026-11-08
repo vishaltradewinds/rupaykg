@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import type { Pool, PoolClient } from "pg";
+import type { Pool, PoolClient, QueryResultRow } from "pg";
 import { withTenantTransaction } from "./tenant-db.js";
 import { authenticate, bearerChallenge, canVerifyEvidence, hasOrganizationPermission, type AuthContext } from "./auth.js";
 
@@ -26,7 +26,7 @@ function requestedOperatingContext(request: { query: unknown }): { context?: Ope
   if (raw === "urban" || raw === "rural") return { context: raw, invalid: false };
   return { invalid: true };
 }
-async function tenantQuery<T>(pool: Pool, auth: AuthContext, sql: string, params?: unknown[]): Promise<{ rows: T[] }> {
+async function tenantQuery<T extends QueryResultRow>(pool: Pool, auth: AuthContext, sql: string, params?: unknown[]): Promise<{ rows: T[] }> {
   return withTenantTransaction(pool, auth, async (client) => client.query<T>(sql, params));
 }
 async function authorizeGeography(pool: Pool, auth: AuthContext, geographyId: string): Promise<boolean> {
