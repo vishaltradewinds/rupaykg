@@ -841,8 +841,14 @@ test("Shakti RLS credential rows are current-owner-readable and owner-mutation-o
       assert.equal(visible.rows.length, 1);
       assert.equal(visible.rows[0]!.issuer_organization_id, organizationA);
 
-      const updated = await client.query<{ id: string; trust_root_id: string }>("update credentials set trust_root_id=$1 where id=$2 returning id,trust_root_id", ["RLS-UPDATED-" + suffix, credentialA]);
+      await assert.rejects(
+        () => client.query("update credentials set trust_root_id=$1 where id=$2", ["RLS-IMMUTABLE-" + suffix, credentialA]),
+        /credential authority fields are immutable/i,
+      );
+
+      const updated = await client.query<{ id: string; status: string }>("update credentials set status='ACTIVE' where id=$1 returning id,status", [credentialA]);
       assert.equal(updated.rows[0]!.id, credentialA);
+      assert.equal(updated.rows[0]!.status, "ACTIVE");
 
       await assert.rejects(
         () => client.query("insert into registry_events(credential_id,event_type,to_owner_id,recorded_by_identity_id,event_hash) values($1,'IDENTITY_MISMATCH',$2,$3,$4)", [credentialA, organizationA, identityBId, "RLS-MISMATCH-" + suffix]),
