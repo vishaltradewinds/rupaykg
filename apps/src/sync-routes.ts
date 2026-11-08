@@ -170,7 +170,14 @@ export async function registerSyncRoutes(app: FastifyInstance, pool: Pool | null
         await client.query("update field_devices set last_seen_at=now() where id=$1 and organization_id=$2", [deviceId, auth.activeOrganizationId]);
         return reply.code(202).send({ source: "postgresql", syntheticData: false, replay: false, authoritativeMutation: false, envelope: insertedRow });
       });
-    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Field sync intake unavailable", syntheticData: false }); }
+    } catch (error) {
+      const dbError = error as { code?: string; constraint?: string };
+      if (dbError.code === "23505" && typeof dbError.constraint === "string" && dbError.constraint.startsWith("field_sync_envelopes_device_id_")) {
+        return reply.code(409).send({ error: "Concurrent field-sync intake conflicted with an existing device envelope", code: "FIELD_SYNC_REPLAY_CONFLICT" });
+      }
+      request.log.error(error);
+      return reply.code(503).send({ error: "Field sync intake unavailable", syntheticData: false });
+    }
   });
 
   app.post("/api/v1/field-sync/envelopes/:envelopeId/apply", async (request, reply) => {
