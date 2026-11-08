@@ -66,8 +66,9 @@ export async function registerSyncRoutes(app: FastifyInstance, pool: Pool | null
   app.post("/api/v1/field-devices/enroll", async (request, reply) => {
     if (!pool) return reply.code(503).send({ error: "Field-device enrollment unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false });
     let auth: AuthContext; try { auth = await authenticate(request, pool); if (!auth) return reply.code(401).send(bearerChallenge()); } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); }
-    const body = bodyOf(request); const organizationId = typeof body.organizationId === "string" ? body.organizationId.trim() : ""; const deviceId = typeof body.deviceId === "string" ? body.deviceId.trim() : ""; const identityId = typeof body.identityId === "string" ? body.identityId.trim() : auth.identityId;
-    if (!isUuid(organizationId) || !deviceId || deviceId.length > 200 || !isUuid(identityId)) return reply.code(400).send({ error: "organizationId and identityId must be UUIDs and deviceId is required", code: "INVALID_DEVICE_ENROLLMENT" });
+    const body = bodyOf(request); const organizationId = typeof body.organizationId === "string" ? body.organizationId.trim() : ""; const deviceId = typeof body.deviceId === "string" ? body.deviceId.trim() : ""; const payloadIdentityId = typeof body.identityId === "string" ? body.identityId.trim() : null; const identityId = auth.identityId;
+    if (!isUuid(organizationId) || !deviceId || deviceId.length > 200 || (payloadIdentityId !== null && !isUuid(payloadIdentityId))) return reply.code(400).send({ error: "organizationId must be a UUID, deviceId is required, and optional identityId must be a UUID", code: "INVALID_DEVICE_ENROLLMENT" });
+    if (payloadIdentityId && payloadIdentityId !== identityId) return reply.code(403).send({ error: "Field-device identity must match the authenticated identity", code: "IDENTITY_CONTEXT_MISMATCH" });
     if (!auth.activeOrganizationId || auth.activeOrganizationId !== organizationId) return reply.code(403).send({ error: "Active organization must match field-device organization", code: "TENANT_CONTEXT_REQUIRED" });
     const tenantAuth: AuthContext = { ...auth, activeOrganizationId: organizationId };
     try {
