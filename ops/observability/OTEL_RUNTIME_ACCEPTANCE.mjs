@@ -76,7 +76,9 @@ assert([200, 202].includes(correlation.response.status),
 assert(correlation.body?.syntheticData === false, "integration response must declare syntheticData=false");
 assert(correlation.body?.traceId === traceId, "integration response must preserve the supplied W3C trace identity");
 assert(correlation.response.headers.get("x-rupaykg-trace-id") === traceId, "HTTP response must preserve the supplied W3C trace identity");
-assert(correlation.body?.authoritativeMutation === false,
+assert(correlation.body?.authoritativeMutation === true,
+  "integration acceptance probe must persist the integration record as authoritative application state");
+assert(correlation.body?.authoritativeEnvironmentalMutation === false,
   "integration acceptance probe must not mutate authoritative environmental state");
 
 console.log(JSON.stringify({
