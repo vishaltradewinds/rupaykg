@@ -31,3 +31,9 @@ A production OpenTelemetry acceptance claim requires:
 7. failure/availability behavior documented.
 
 Until those are evidenced, this control remains **PARTIAL**, not GREEN.
+
+## OTEL-compatible span contract foundation
+
+The repository now exposes a transport-neutral HTTP span contract with W3C trace correlation, parent-span linkage, nanosecond timestamps, standard HTTP attributes and explicit error status mapping. Tests also assert that authorization, request-body and payload fields are not emitted as span attributes.
+
+This remains an interoperability foundation, not an OpenTelemetry SDK/OTLP deployment. SDK/exporter dependency review, collector configuration, runtime propagation, end-to-end service/database/calculation/registry correlation and production availability evidence remain required before production acceptance.
