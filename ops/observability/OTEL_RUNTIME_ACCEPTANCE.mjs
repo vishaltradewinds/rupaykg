@@ -73,6 +73,7 @@ const correlation = await request("/api/v1/integrations/messages", {
 assert([200, 202].includes(correlation.response.status),
   `integration acceptance probe returned ${correlation.response.status}: ${correlation.text}`);
 assert(correlation.body?.syntheticData === false, "integration response must declare syntheticData=false");
+assert(correlation.body?.traceId === traceId, "integration response must preserve the supplied W3C trace identity");
 assert(correlation.body?.authoritativeMutation === false,
   "integration acceptance probe must not mutate authoritative environmental state");
 
@@ -87,5 +88,6 @@ console.log(JSON.stringify({
   integrationStatus: correlation.response.status,
   authoritativeMutation: false,
   syntheticData: false,
+  responseTraceId: correlation.body?.traceId,
   timestamp: new Date().toISOString(),
 }));
