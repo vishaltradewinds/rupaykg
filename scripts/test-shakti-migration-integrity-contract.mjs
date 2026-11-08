@@ -10,7 +10,10 @@ for (const required of [
   "checksum mismatch: applied content has changed",
   "insert into schema_migrations(version, filename, checksum)",
   "100_credential_runtime_update_column_scope",
+  "20261108_context_identity_liveness_hardening",
+  "20261108_context_identity_liveness_completion",
   "RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS",
+  "20261108_context_identity_liveness_(hardening|completion)",
 ]) {
   if (!source.includes(required)) failures.push("missing migration integrity control: " + required);
 }
