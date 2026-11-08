@@ -77,7 +77,7 @@ export function validateObservabilitySpan(span: ObservabilitySpan): void {
   if (span.parentSpanId && (!validHex(span.parentSpanId, 16) || /^0+$/.test(span.parentSpanId))) {
     throw new Error("Invalid OTEL parentSpanId");
   }
-  if (!/^\d+$/.test(span.startTimeUnixNano) || !/^\\d+$/.test(span.endTimeUnixNano)) {
+  if (!/^\d+$/.test(span.startTimeUnixNano) || !/^\d+$/.test(span.endTimeUnixNano)) {
     throw new Error("OTEL span timestamps must be Unix nanoseconds");
   }
   if (BigInt(span.endTimeUnixNano) < BigInt(span.startTimeUnixNano)) {
