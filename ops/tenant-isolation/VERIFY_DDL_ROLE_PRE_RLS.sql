@@ -35,9 +35,14 @@ where n.nspname = 'public'
 order by c.relname;
 
 select 1 / case
-  when coalesce((select rolsuper from pg_roles where rolname = current_user), true) = false
+  when current_user = session_user
+   and current_user = 'rupaykg_ddl_migration'
+   and coalesce((select rolcanlogin from pg_roles where rolname = current_user), false) = true
+   and coalesce((select rolinherit from pg_roles where rolname = current_user), true) = false
+   and coalesce((select rolsuper from pg_roles where rolname = current_user), true) = false
    and coalesce((select rolbypassrls from pg_roles where rolname = current_user), true) = false
    and current_user <> 'rupaykg_app_runtime'
+   and pg_has_role(current_user, 'rupaykg_app_runtime', 'member')
    and (
      select count(*)
      from pg_class c
