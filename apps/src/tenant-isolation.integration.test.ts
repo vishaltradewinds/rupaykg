@@ -788,6 +788,10 @@ test("Shakti RLS settlement rows are bilateral-readable but payer-mutation-only"
         () => client.query("delete from settlements where id=$1", [settlementA]),
         /permission denied|row-level security|policy/i,
       );
+      await assert.rejects(
+        () => client.query("update settlements set status='SETTLED' where id=$1", [settlementA]),
+        /invalid settlement lifecycle transition|check constraint|policy/i,
+      );
       await client.query("rollback");
     } catch (error) {
       try { await client.query("rollback"); } catch {}
