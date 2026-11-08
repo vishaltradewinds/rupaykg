@@ -577,3 +577,13 @@
 - Latest checkpoint commit: `6ee4c6f506d2fecef339b134d7cd395421e469d0`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Credential/registry atomicity strengthened
+- Hardened migration `098_credential_registry_event_atomicity.sql`.
+- The deferred lifecycle gate now requires the matching provenance event to be the **latest registry lifecycle event** for the credential at commit.
+- This closes the prior weakness where an older matching event could satisfy a later credential status mutation without a new corresponding registry event.
+- Updated deterministic contract.
+- Latest checkpoint commit: `26d4e748be0a7806a9787fde6b4807c430b39e0d`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
