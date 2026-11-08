@@ -860,3 +860,10 @@
 - Code checkpoint: `d5dcb315319275142694fdb51d23a07f57bdd92a`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+### 2026-11-08 — Operational invariant regex defect fixed
+- Found a real executable defect in `test-shakti-operational-invariants.mjs`: the duplicate-prefix migration check used an over-escaped regex and could fail to recognize the actual `filename.replace(/\.sql$/, "")` implementation.
+- Corrected the regex so the invariant now validates the real migration-version disambiguation logic.
+- Code checkpoint: `56e53b29699647a0e5bdc009559b5ca5ab459a19`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
