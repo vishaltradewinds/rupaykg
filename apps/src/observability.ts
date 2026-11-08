@@ -50,3 +50,47 @@ export function installObservability(app: FastifyInstance): void {
     });
   });
 }
+
+
+export type ObservabilitySpan = {
+  traceId: string;
+  spanId: string;
+  parentSpanId?: string;
+  name: string;
+  startTimeUnixNano: string;
+  endTimeUnixNano: string;
+  attributes: Record<string, string | number | boolean>;
+  status: "ok" | "error" | "unset";
+};
+
+export function createSpanId(): string {
+  return randomBytes(8).toString("hex");
+}
+
+export function buildHttpSpan(input: {
+  context: TraceContext;
+  spanId?: string;
+  name: string;
+  startTimeUnixNano: string;
+  endTimeUnixNano: string;
+  method: string;
+  route: string;
+  statusCode: number;
+  durationMs: number;
+}): ObservabilitySpan {
+  return {
+    traceId: input.context.traceId,
+    spanId: input.spanId ?? createSpanId(),
+    ...(input.context.parentId ? { parentSpanId: input.context.parentId } : {}),
+    name: input.name,
+    startTimeUnixNano: input.startTimeUnixNano,
+    endTimeUnixNano: input.endTimeUnixNano,
+    attributes: {
+      "http.request.method": input.method,
+      "http.route": input.route,
+      "http.response.status_code": input.statusCode,
+      "http.server.duration_ms": input.durationMs,
+    },
+    status: input.statusCode >= 500 ? "error" : input.statusCode >= 400 ? "error" : "ok",
+  };
+}
