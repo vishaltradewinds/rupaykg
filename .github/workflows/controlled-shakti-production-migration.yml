@@ -105,6 +105,11 @@ jobs:
             | tee shakti-migration-evidence/post-migration-runtime-security-contract.txt
           echo "097-099 runtime security contract verified; RLS activation remains a separate controlled DDL gate."
 
+      - name: Verify post-migration ownership boundary remains controlled
+        run: |
+          set -euo pipefail
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1             -c "select 1 / case when (select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname in ('organizations','roles','activities','obligations','credentials','settlements','audit_events','resource_flows','field_devices','organization_memberships','measurements','evidence','verifications','carbon_calculations','mrv_observations','evidence_verification_requirements','chain_of_custody_links') and pg_get_userbyid(c.relowner)='rupaykg_ddl_migration') = 17 and (select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname in ('organizations','roles','activities','obligations','credentials','settlements','audit_events','resource_flows','field_devices','organization_memberships','measurements','evidence','verifications','carbon_calculations','mrv_observations','evidence_verification_requirements','chain_of_custody_links') and pg_get_userbyid(c.relowner)='rupaykg_app_runtime') = 0 then 1 else 0 end as post_migration_ownership_boundary_assertion;"             | tee shakti-migration-evidence/post-migration-ownership-boundary.txt
+
       - name: Verify RLS remains controlled
         run: |
           set -euo pipefail
