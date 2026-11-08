@@ -30,6 +30,8 @@ const required = [
   "-- No additional write authority is granted by this policy.",
   "-- The helper is read-only by construction: it returns a boolean and grants no table DML.",
 ];
+const failures = [];
+
 const forbidden = [
   "create policy shakti_registry_events_select_assigned_verifier on public.registry_events for insert",
   "create policy shakti_registry_events_select_assigned_verifier on public.registry_events for update",
@@ -45,7 +47,7 @@ for (const item of forbidden) {
   if (migration.includes(item)) failures.push("assigned-verifier migration must not add write authority: " + item);
 }
 
-const failures = required.filter((x) => !migration.includes(x));
+failures.push(...required.filter((x) => !migration.includes(x)));
 if (failures.length) {
   console.error("Shakti assigned-verifier registry read contract FAILED:\n" + failures.map((x) => "- " + x).join("\n"));
   process.exit(1);
