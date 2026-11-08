@@ -17,8 +17,10 @@ import { registerMrvRoutes } from "./mrv-routes.js";
 import { registerEvidenceVaultRoutes } from "./evidence-vault-routes.js";
 import { registerPlatformAdminRoutes } from "./platform-admin-routes.js";
 import { registerExternalIntegrationRoutes } from "./external-integration-routes.js";
+import { installObservability } from "./observability.js";
 
 const app = Fastify({ logger: true });
+installObservability(app);
 const allowedOrigins = process.env.RUPAYKG_ALLOWED_ORIGINS?.split(",").map(origin => origin.trim()).filter(Boolean) ?? [];
 await app.register(cors, { origin: allowedOrigins.length ? allowedOrigins : false });
 const webRoot = resolve(process.cwd(), "apps/web/dist");
