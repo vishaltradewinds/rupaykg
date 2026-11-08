@@ -763,6 +763,14 @@ test("Shakti RLS settlement rows are bilateral-readable but payer-mutation-only"
         () => client.query("update settlement_events set event_type='MUTATED' where id=$1", [eventA]),
         /permission denied|row-level security|policy/i,
       );
+      await assert.rejects(
+        () => client.query("delete from settlement_events where id=$1", [eventA]),
+        /permission denied|row-level security|policy/i,
+      );
+      await assert.rejects(
+        () => client.query("delete from settlements where id=$1", [settlementA]),
+        /permission denied|row-level security|policy/i,
+      );
       await client.query("rollback");
     } catch (error) {
       try { await client.query("rollback"); } catch {}
