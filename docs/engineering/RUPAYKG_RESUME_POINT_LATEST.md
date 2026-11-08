@@ -288,3 +288,18 @@
 - Exact-head GitHub Actions lookup: no workflow run. CI/runtime execution remains **NOT VERIFIED**.
 - Production Neon remains **READ-ONLY/HOLD**. No production DDL/DML/RLS/role/grant/deployment/certification action performed.
 - Next required gate: obtain disposable CI execution evidence, then close remaining auth/onboarding boundary classification and actual multi-party behavioral acceptance before any production cutover proposal.
+
+
+### 2026-11-08 — Active-tenant authority residual closure batch
+- Re-audited the controlled route set for request-body/header organization authority after the registry/EPR hardening batches.
+- Found two concrete residuals:
+  - `apps/src/statutory-routes.ts` EPR mutation still accepted `body.organizationId` as a candidate tenant before equality-checking against the active organization.
+  - `apps/src/sync-routes.ts` field-sync activity/resource-flow mutations derived tenant organization directly from the sync payload, even though the authenticated field-sync transaction already carried an authoritative active organization.
+- Corrected statutory tenant selection to derive only from `auth.activeOrganizationId`; the shared statutory organization helper now also derives only from active auth context.
+- Corrected field-sync activity/resource-flow mutations to derive organization from `auth.activeOrganizationId`; payload `organizationId` is now only a consistency assertion and a mismatched payload fails closed.
+- Added `scripts/test-shakti-active-tenant-authority-contract.mjs` and wired it into `.github/workflows/ci.yml`.
+- This closes a concrete request-body tenant-authority residual without changing production Neon.
+- Latest controlled head after this batch: `3c546ed144e2cdda74cd9d49286ee709586894d0`.
+- Exact-head GitHub Actions execution remains **NOT VERIFIED**; no workflow run exists for the controlled branch head.
+- Production Neon/RLS/deployment remains **READ-ONLY/HOLD**.
+- Next: continue route-wide residual authority review, then deepen disposable runtime behavioral coverage for all five protected core RLS tables before any production activation proposal.
