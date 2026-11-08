@@ -106,3 +106,8 @@ External mediator contract now has a concrete tenant-safe persistence and API in
 
 This closes the prior gap of having only a transport-neutral type without a runtime intake path. It does **not** mean any external government/PSU/registry connector is production accepted; provider-specific authentication, schema conformance, remote-call execution, external-response validation and field/production acceptance remain separate gates.
 
+
+
+### Provider adapter registry
+
+`apps/src/external-integration-adapter-registry.ts` now provides a controlled adapter registry. It fails closed when no provider adapter is registered, rejects duplicate adapter registration, converts adapter exceptions into classified non-authoritative failures, and rejects correlation mismatches. This is an execution boundary only; no provider is represented as production accepted until its authentication, schema conformance, remote acceptance and field/production evidence are independently recorded.
