@@ -734,3 +734,12 @@
 - Checkpoint: `071f4ed086029d7e5a648c3428caa366316016ae`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Verifier helper search-path hardening
+- Hardened the SECURITY DEFINER verifier helper search path from `public, app, pg_temp` to `pg_catalog, public, app`.
+- Explicitly qualified `public.has_verification_permission(...)` to prevent search-path ambiguity.
+- Bound both controls into the deterministic verifier contract.
+- Checkpoint: `71bc42fab6958db3b4dda2ece38bc02cb01b5c9f`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
