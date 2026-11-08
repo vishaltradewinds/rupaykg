@@ -825,3 +825,10 @@
 - Checkpoint: `470f95a726e9738523ae9179a43c7da74bff456a`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+### 2026-11-08 — Identity-context security contract coverage
+- Found a deterministic coverage gap: `test-shakti-context-function-security-contract.mjs` checked the 20261108 liveness hardening migration but omitted the companion `20261108_context_identity_liveness_completion.sql` migration that re-defines the authoritative identity context function.
+- Extended the contract to inspect both liveness migrations and require verified/non-suspended identity validation plus transaction-local identity/execution scope and runtime execute grant.
+- Code checkpoint: `1be04a97533a0974369735879640d54fb00423fb`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
