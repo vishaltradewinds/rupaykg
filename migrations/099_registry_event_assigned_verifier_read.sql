@@ -47,3 +47,4 @@ using (
 );
 
 -- No additional write authority is granted by this policy.
+-- The helper is read-only by construction: it returns a boolean and grants no table DML.
