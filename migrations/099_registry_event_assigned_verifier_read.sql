@@ -30,6 +30,12 @@ as $$
             and m.status = 'VERIFIED'
             and m.organization_id = c.issuer_organization_id
        )
+       and exists (
+         select 1
+           from public.organizations o
+          where o.id = c.issuer_organization_id
+            and o.status = 'VERIFIED'
+       )
   );
 $$;
 
