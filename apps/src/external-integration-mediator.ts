@@ -8,7 +8,7 @@ export async function acceptExternalIntegrationMessage(
   pool: Pool,
   auth: AuthContext,
   envelope: ExternalIntegrationEnvelope,
-): Promise<{ accepted: boolean; duplicate: boolean; messageId: string }> {
+): Promise<{ accepted: boolean; duplicate: boolean; messageId: string; authoritativeMutation: true }> {
   const validation = validateIntegrationEnvelope(envelope);
   if (!validation.ok) throw Object.assign(new Error(validation.error), { code: validation.code });
 
@@ -39,7 +39,7 @@ export async function acceptExternalIntegrationMessage(
       if (!same) {
         throw Object.assign(new Error("Idempotency key was already used with a different integration message"), { code: "INTEGRATION_IDEMPOTENCY_CONFLICT" });
       }
-      return { accepted: true, duplicate: true, messageId: row.id };
+      return { accepted: true, duplicate: true, messageId: row.id, authoritativeMutation: true };
     }
 
     const inserted = await client.query<{ id: string }>(
@@ -64,7 +64,7 @@ export async function acceptExternalIntegrationMessage(
       ],
     );
 
-    return { accepted: true, duplicate: false, messageId: inserted.rows[0]!.id };
+    return { accepted: true, duplicate: false, messageId: inserted.rows[0]!.id, authoritativeMutation: true };
       });
     } catch (error) {
       span.recordException(error instanceof Error ? error : new Error(String(error)));
