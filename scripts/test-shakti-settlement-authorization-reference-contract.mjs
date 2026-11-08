@@ -8,6 +8,7 @@ const failures = [];
 for (const required of [
   "authorization_reference=$1 and id<>$2",
   "AUTHORIZATION_REFERENCE_EXISTS",
+  "settlements_authorization_reference_uq",
 ]) {
   if (!route.includes(required)) failures.push("missing authorization-reference replay control: " + required);
 }
