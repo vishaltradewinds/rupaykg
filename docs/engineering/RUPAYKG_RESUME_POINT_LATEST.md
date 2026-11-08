@@ -397,3 +397,11 @@
 - Protected migration gate and CI RLS assertions now include `settlements` and `settlement_events`.
 - Latest code head: `37109b07d45c2f421c5bfe5b8ff6e66e3ac42d8c`.
 - CI exact-head verification: pending; production remains READ-ONLY/HOLD.
+
+
+### 2026-11-08 — Settlement RLS behavioral fixture correction
+- Corrected the disposable settlement-event hash fixtures so the test supplies the intended suffix parameter rather than a literal placeholder.
+- Settlement tenant RLS migration, deterministic contract, CI wiring, and behavioral coverage remain intact.
+- Latest code head: `18cf22feb66cea2e1dd2a9b0b50d22d59ef84b7c`.
+- Exact-head CI: **NOT VERIFIED**; GitHub reports no workflow run for the checkpoint yet.
+- Production remains **READ-ONLY/HOLD**.
