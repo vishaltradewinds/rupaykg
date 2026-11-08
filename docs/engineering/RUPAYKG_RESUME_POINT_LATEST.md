@@ -839,3 +839,10 @@
 - Code checkpoint: `6aac0d604a45f813e9fad99f583a3a958e1cdbe7`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+### 2026-11-08 — SECURITY DEFINER contract executable defect
+- Found a real deterministic contract defect in `test-shakti-security-definer-migration-contract.mjs`: the migration filename regex used a double-escaped `\\.sql` inside a JavaScript regex literal, so it did not correctly match normal `.sql` filenames.
+- Corrected it to the executable `\.sql` matcher so the contract actually audits migration files.
+- Code checkpoint: `7c3903a954ebcc608f1fe58ad4bb532642c7cbf1`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
