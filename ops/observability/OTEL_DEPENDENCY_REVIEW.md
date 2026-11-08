@@ -44,3 +44,8 @@ OpenTelemetry JavaScript instrumentation guidance: https://opentelemetry.io/docs
 ## Repository runtime gate
 
 `apps/package.json` now declares `engines.node >=22.15.0`, matching the minimum runtime required by OpenTelemetry JavaScript SDK 3.x. This is a repository contract, not proof that the deployed production runtime already satisfies it. Deployment evidence remains required.
+
+
+## Deployment evidence reconciliation
+
+The repository Dockerfile uses `node:22-bookworm-slim` for both build and runtime stages. The root `package.json` now declares `engines.node >=22.15.0`, matching the OpenTelemetry JavaScript SDK 3.x minimum. This establishes repository/deployment configuration intent, but it is not runtime attestation: the deployed service must still emit and retain `node --version` evidence before the OTEL SDK is admitted to production.
