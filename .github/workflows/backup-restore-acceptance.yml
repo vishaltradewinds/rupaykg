@@ -18,7 +18,10 @@ jobs:
         run: |
           set -euo pipefail
           test -s ops/backup-restore/README.md
+          test -s ops/backup-restore/evidence-schema.json
+          node -e 'JSON.parse(require("fs").readFileSync("ops/backup-restore/evidence-schema.json","utf8"))'
           grep -q "isolated, empty PostgreSQL database" ops/backup-restore/README.md
           grep -q "Never restore over production" ops/backup-restore/README.md
           grep -q "database credentials" ops/backup-restore/README.md
+          grep -q ""productionTarget": false" ops/backup-restore/evidence-schema.json
           echo "Backup/restore acceptance contract present and fail-safe."
