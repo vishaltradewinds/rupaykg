@@ -13,14 +13,30 @@ declare
   unsafe_search_path integer;
   default_public_execute integer;
 begin
-  select has_schema_privilege('public', 'public', 'CREATE')
-    into public_create_public;
+  select exists (
+    select 1
+      from aclexplode(coalesce(n.nspacl, acldefault('n', n.nspowner))) x
+     where x.grantee = 0
+       and x.privilege_type = 'CREATE'
+       and x.is_grantable is not null
+  )
+    into public_create_public
+    from pg_namespace n
+   where n.nspname = 'public';
   if public_create_public then
     raise exception 'SECURITY DEFINER boundary failed: PUBLIC retains CREATE on schema public';
   end if;
 
-  select has_schema_privilege('public', 'app', 'CREATE')
-    into public_create_app;
+  select exists (
+    select 1
+      from aclexplode(coalesce(n.nspacl, acldefault('n', n.nspowner))) x
+     where x.grantee = 0
+       and x.privilege_type = 'CREATE'
+       and x.is_grantable is not null
+  )
+    into public_create_app
+    from pg_namespace n
+   where n.nspname = 'app';
   if public_create_app then
     raise exception 'SECURITY DEFINER boundary failed: PUBLIC retains CREATE on schema app';
   end if;
