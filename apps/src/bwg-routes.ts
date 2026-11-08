@@ -15,8 +15,8 @@ export async function registerBwgRoutes(app: FastifyInstance, pool: Pool | null)
   await registerEprReturnRoutes(app, pool);
   app.get("/api/v1/epr/obligations", async (request, reply) => {
     const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
-    const organizationId = typeof request.headers["x-rupaykg-organization-id"] === "string" ? request.headers["x-rupaykg-organization-id"] : auth.activeOrganizationId;
-    if (!organizationId || !auth.memberships.some((membership) => membership.organization_id === organizationId && membership.status === "VERIFIED")) return reply.code(403).send({ error: "Verified organization membership required", code: "ORG_FORBIDDEN" });
+    const organizationId = auth.activeOrganizationId;
+    if (!organizationId || !auth.memberships.some((membership) => membership.organization_id === organizationId && membership.status === "VERIFIED")) return reply.code(403).send({ error: "Select a verified active organization", code: "ORG_FORBIDDEN" });
     const tenantAuth: AuthContext = { ...auth, activeOrganizationId: organizationId };
     try {
       return await withTenantTransaction(pool, tenantAuth, async (client) => {
