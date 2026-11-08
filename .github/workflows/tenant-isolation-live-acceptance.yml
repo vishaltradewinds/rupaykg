@@ -1,0 +1,40 @@
+name: Tenant Isolation Live Acceptance
+
+on:
+  workflow_dispatch:
+
+jobs:
+  tenant-isolation-acceptance:
+    name: PostgreSQL runtime tenant-isolation acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      RUPAYKG_RUNTIME_DATABASE_URL: ${{ secrets.RUPAYKG_RUNTIME_DATABASE_URL }}
+    steps:
+      - name: Checkout authoritative repository
+        uses: actions/checkout@v4
+
+      - name: Validate runtime database secret
+        run: |
+          set -euo pipefail
+          if [ -z "${RUPAYKG_RUNTIME_DATABASE_URL:-}" ]; then
+            echo "RUPAYKG_RUNTIME_DATABASE_URL is required."
+            exit 1
+          fi
+
+      - name: Verify runtime role and pre-RLS contract
+        run: |
+          set -euo pipefail
+          psql "$RUPAYKG_RUNTIME_DATABASE_URL"             -v ON_ERROR_STOP=1             -f ops/tenant-isolation/VERIFY_PRE_RLS.sql
+
+      - name: Verify RLS is active and cross-tenant access is denied
+        run: |
+          set -euo pipefail
+          psql "$RUPAYKG_RUNTIME_DATABASE_URL"             -v ON_ERROR_STOP=1             -f ops/tenant-isolation/VERIFY_RLS_NEGATIVE_TEST.sql
+
+      - name: Acceptance result
+        run: |
+          echo "TENANT ISOLATION LIVE ACCEPTANCE PASSED."
+          echo "Evidence: non-BYPASSRLS runtime role + required privileges + RLS enabled + cross-tenant read/mutate denial."
