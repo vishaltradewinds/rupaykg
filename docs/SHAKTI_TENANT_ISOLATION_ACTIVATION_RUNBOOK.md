@@ -38,12 +38,13 @@ Expected runtime result:
 - `runtime_role_owns_no_protected_tables = true`
 
 6. Run authenticated tenant transactions through the application and verify `app.current_identity_id()` and `app.current_organization_id()`.
-7. Execute the tenant-isolation integration suite with `RUPAYKG_RUN_DB_INTEGRATION_TESTS=1`.
-8. Confirm organization A cannot read or mutate organization B state.
-9. Only after steps 1–8 pass, execute `ops/tenant-isolation/ACTIVATE_RLS.sql` using the controlled migration/DDL role, not the application runtime role. The script is fail-closed and aborts before RLS changes if the executing role is SUPERUSER, BYPASSRLS, the application runtime role, or does not own the protected tenant tables.
-10. Execute `ops/tenant-isolation/VERIFY_RLS_NEGATIVE_TEST.sql` and preserve the PASS output as acceptance evidence. The test must prove tenant A cannot read or mutate tenant B and is transactional/rollback-safe.
-11. Repeat the complete application runtime acceptance suite, including cross-tenant negative tests.
-12. Record database role, migration fingerprint, preflight output, activation output, negative-test output, application test evidence, deployment commit and rollback procedure.
+7. Verify the authentication/bootstrap path is RLS-compatible before activation. The ordinary application runtime must not depend on unrestricted pre-context reads of `organization_memberships`; authentication must use an explicitly authorized bootstrap/security-definer path or a separately governed authentication database role. Do not enable RLS while bearer authentication still requires an unscoped runtime query of the protected membership table.
+8. Execute the tenant-isolation integration suite with `RUPAYKG_RUN_DB_INTEGRATION_TESTS=1`.
+9. Confirm organization A cannot read or mutate organization B state.
+10. Only after steps 1–9 pass, execute `ops/tenant-isolation/ACTIVATE_RLS.sql` using the controlled migration/DDL role, not the application runtime role. The script is fail-closed and aborts before RLS changes if the executing role is SUPERUSER, BYPASSRLS, the application runtime role, or does not own the protected tenant tables.
+11. Execute `ops/tenant-isolation/VERIFY_RLS_NEGATIVE_TEST.sql` and preserve the PASS output as acceptance evidence. The test must prove tenant A cannot read or mutate tenant B and is transactional/rollback-safe.
+12. Repeat the complete application runtime acceptance suite, including cross-tenant negative tests.
+13. Record database role, migration fingerprint, preflight output, activation output, negative-test output, application test evidence, deployment commit and rollback procedure.
 
 ## Rollback
 
