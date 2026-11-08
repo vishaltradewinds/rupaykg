@@ -35,7 +35,7 @@ const traceparent = `00-${traceId}-${parentSpanId}-01`;
 
 const health = await fetch(baseUrl + "/health");
 assert(health.status === 200, `/health returned ${health.status}`);
-assert(typeof health.headers.get("x-rupaykg-trace-id") === "string" && health.headers.get("x-rupaykg-trace-id")?.length === 32, "health response must expose a valid RupayKg trace identity");
+assert(typeof health.headers.get("x-rupaykg-trace-id") === "string" && /^[0-9a-f]{32}$/.test(health.headers.get("x-rupaykg-trace-id") ?? ""), "health response must expose a valid RupayKg trace identity");
 const healthBody = await health.json();
 assert(healthBody.syntheticData === false, "health endpoint must declare syntheticData=false");
 
@@ -58,7 +58,7 @@ const correlation = await request("/api/v1/integrations/messages", {
     idempotencyKey: `otel-runtime-${traceId}`,
     organizationId,
     direction: "INBOUND",
-    kind: "ACCEPTANCE_PROBE",
+    kind: "OBSERVATION",
     occurredAt: new Date().toISOString(),
     sourceSystem: "rupaykg-otel-acceptance",
     targetSystem: "rupaykg",
