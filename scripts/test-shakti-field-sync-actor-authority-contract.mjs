@@ -13,7 +13,8 @@ else {
   const block = source.slice(enrollmentStart, source.indexOf('app.post("/api/v1/field-devices/:deviceId/verify"', enrollmentStart));
   if (!block.includes("auth.activeOrganizationId")) failures.push("field-device enrollment must bind to authenticated active organization");
   if (!block.includes("withTenantTransaction(pool")) failures.push("field-device enrollment must use tenant transaction");
-  if (!block.includes("[auth.identityId, organizationId]")) failures.push("field-device enrollment actor must remain authenticated identity");
+  if (!block.includes("const identityId = auth.identityId")) failures.push("field-device enrollment actor must derive identity from authenticated identity");
+  if (!block.includes("payloadIdentityId") || !block.includes("payloadIdentityId !== identityId")) failures.push("field-device enrollment must treat request identityId only as a consistency check");
   if (!block.includes("manager")) failures.push("field-device enrollment must require management authority");
 }
 
@@ -25,7 +26,7 @@ else {
   if (!applyBlock.includes("applyOperation(client, tenantAuth, row.payload)")) failures.push("field-sync apply must execute operations under authoritative tenant auth");
 }
 
-if (/registered_by_identity_id[^\n]*\[.*identityId\]/.test(source)) {
+if (/registered_by_identity_id[^\n]*(?:text\(body,"identityId"\)|body\.identityId|body\["identityId"\])/.test(source)) {
   failures.push("field-device registration actor must not be sourced from request identityId");
 }
 
