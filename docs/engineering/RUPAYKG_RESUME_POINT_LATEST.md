@@ -427,3 +427,15 @@
 - Latest checkpoint commit: `b4eaf1d2e72411da259f5da3102bbae4775eacdd`.
 - Exact-head CI: **NOT VERIFIED** until a workflow run for this exact SHA is observed.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Bilateral settlement RLS acceptance completed
+- Extended disposable protected-core acceptance with a separately verified payee identity/membership.
+- The payee tenant now proves:
+  - legitimate read access to the bilateral settlement;
+  - no mutation authority over the payer-owned settlement;
+  - legitimate read access to the associated settlement event.
+- This closes the remaining gap between static bilateral policy definition and behavioral proof for the payee side.
+- Latest checkpoint commit: `097ad63f27b0509ba19fb8874fd56f3689789aa7`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
