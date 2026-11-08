@@ -1,11 +1,19 @@
-# RupayKg CTO Resume Point — 2026-11-07
+# RupayKg CTO Resume Point — 2026-11-08
 
 ## Authority
 - Primary working/release repository: vishaltradewinds/rupaykg
-- Authoritative branch: main
+- Authoritative engineering branch: `cto/20261107-protected-migration-ci`
+- Release/production branch remains separately controlled; do not treat `main` as the active engineering head.
 - Secondary evidence repository: rupaykg-aistudio
 - Production Neon remains READ-ONLY / HOLD.
 
+## 2026-11-08 — SECURITY DEFINER boundary hardening
+- Added protected migration `101_security_definer_schema_boundary.sql`.
+- Revokes `CREATE` on `public` and `app` schemas from `PUBLIC` so untrusted callers cannot inject objects into SECURITY DEFINER search paths.
+- Revokes default `PUBLIC` privileges from SECURITY DEFINER functions in `app`; existing explicit `rupaykg_app_runtime` execution grants are retained.
+- Registered migration 101 in the protected migration runner gate, CI protected-migration acceptance list, operational invariants, and SECURITY DEFINER contract.
+- This closes a real privilege/search-path boundary gap identified during contract due diligence; it is code/disposable-CI hardening only and has NOT been applied to production.
+- PostgreSQL official guidance requires SECURITY DEFINER search paths to exclude schemas writable by untrusted users and recommends selective EXECUTE grants rather than relying on PUBLIC defaults.
 ## Exact current engineering heads
 - PR #331: 50e463df30f18a30e6a192da447a451d1816ea55
 - PR #332: a636a26e81cdaac88c69247e333b88c64a7ececa
