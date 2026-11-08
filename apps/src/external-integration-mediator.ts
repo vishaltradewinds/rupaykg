@@ -14,14 +14,26 @@ export async function acceptExternalIntegrationMessage(
   if (!auth.activeOrganizationId || auth.activeOrganizationId !== envelope.organizationId) {
     throw Object.assign(new Error("Integration organization does not match the authenticated active organization"), { code: "ORG_FORBIDDEN" });
   }
+  if (envelope.actorIdentityId && envelope.actorIdentityId !== auth.identityId) {
+    throw Object.assign(new Error("Integration actor identity does not match the authenticated identity"), { code: "ACTOR_FORBIDDEN" });
+  }
 
   return withTenantTransaction(pool, auth, async client => {
-    const existing = await client.query<{ id: string; status: string }>(
-      "select id,status from external_integration_messages where integration_id=$1 and organization_id=$2 and idempotency_key=$3 for update",
+    const existing = await client.query<{ id: string; status: string; payload: unknown; schema: string; kind: string; target_system: string; source_system: string }>(
+      "select id,status,payload,schema,kind,target_system,source_system from external_integration_messages where integration_id=$1 and organization_id=$2 and idempotency_key=$3 for update",
       [envelope.integrationId, envelope.organizationId, envelope.idempotencyKey],
     );
     if (existing.rows[0]) {
-      return { accepted: true, duplicate: true, messageId: existing.rows[0].id };
+      const row = existing.rows[0];
+      const same = JSON.stringify(row.payload) === JSON.stringify(envelope.payload)
+        && row.schema === envelope.schema
+        && row.kind === envelope.kind
+        && row.target_system === envelope.targetSystem
+        && row.source_system === envelope.sourceSystem;
+      if (!same) {
+        throw Object.assign(new Error("Idempotency key was already used with a different integration message"), { code: "INTEGRATION_IDEMPOTENCY_CONFLICT" });
+      }
+      return { accepted: true, duplicate: true, messageId: row.id };
     }
 
     const inserted = await client.query<{ id: string }>(
