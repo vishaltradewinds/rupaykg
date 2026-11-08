@@ -79,6 +79,16 @@ jobs:
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
             -c "select version, filename, applied_at from schema_migrations where version in ('097','098','099') order by version;" \
             | tee shakti-migration-evidence/shakti-migrations-postcheck.txt
+          expected_097="097_shakti_tenant_isolation_runtime_contract.sql"
+          expected_098="098_shakti_authentication_bootstrap.sql"
+          expected_099="099_shakti_rls_policy_foundation.sql"
+          actual_097="$(psql "$DATABASE_URL" -At -v ON_ERROR_STOP=1 -c "select filename from schema_migrations where version='097';")"
+          actual_098="$(psql "$DATABASE_URL" -At -v ON_ERROR_STOP=1 -c "select filename from schema_migrations where version='098';")"
+          actual_099="$(psql "$DATABASE_URL" -At -v ON_ERROR_STOP=1 -c "select filename from schema_migrations where version='099';")"
+          if [ "$actual_097" != "$expected_097" ] || [ "$actual_098" != "$expected_098" ] || [ "$actual_099" != "$expected_099" ]; then
+            echo "Required Shakti migration filename/version mapping does not match the controlled 097-099 cutover."
+            exit 1
+          fi
           for version in 097 098 099; do
             if ! grep -q "^ *${version} *|" shakti-migration-evidence/shakti-migrations-postcheck.txt; then
               echo "Required Shakti migration ${version} is missing after controlled migration."
