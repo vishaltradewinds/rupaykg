@@ -405,3 +405,14 @@
 - Latest code head: `18cf22feb66cea2e1dd2a9b0b50d22d59ef84b7c`.
 - Exact-head CI: **NOT VERIFIED**; GitHub reports no workflow run for the checkpoint yet.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Settlement runtime privilege hardening
+- Strengthened settlement tenant-RLS migration with explicit runtime-role revocation of destructive privileges:
+  - `settlements`: DELETE revoked.
+  - `settlement_events`: UPDATE and DELETE revoked.
+- Strengthened the deterministic Shakti contract to require those explicit revocations.
+- This closes the gap where absence of a GRANT alone would not prove that inherited/default privileges were removed.
+- Latest code head: `81826e42e86922704f9d35d2182c6dbda762e7ca`.
+- Exact-head CI remains **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
