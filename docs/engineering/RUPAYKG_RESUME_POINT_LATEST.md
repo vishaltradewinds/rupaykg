@@ -7,6 +7,15 @@
 - Secondary evidence repository: rupaykg-aistudio
 - Production Neon remains READ-ONLY / HOLD.
 
+## 2026-11-08 — SECURITY DEFINER future-default privilege boundary
+- Identified an additional PostgreSQL boundary gap: revoking PUBLIC EXECUTE from existing SECURITY DEFINER functions does not by itself prevent PostgreSQL's default PUBLIC EXECUTE privilege from returning on functions created later.
+- Strengthened protected migration `101_security_definer_schema_boundary.sql` to revoke default function EXECUTE from PUBLIC for the current migration owner, while retaining the explicit six-function runtime allowlist.
+- Strengthened `test-shakti-security-definer-migration-contract.mjs` to require this future-default privilege control.
+- This is repository/disposable-CI hardening only; production has not been mutated.
+- Engineering checkpoint: `6516edd19bd7268799148771796ca416d49bbe17`.
+- Migration checkpoint: `1fb3966f37f1cf1b664c6acb84f01548f83817f3`.
+- Exact-head CI workflow runs/statuses are not yet verified.
+
 ## 2026-11-08 — SECURITY DEFINER latest-definition binding
 - Strengthened `scripts/test-shakti-security-definer-migration-contract.mjs` again so each approved runtime function is evaluated against its **latest migration definition**, not merely any historical definition with the same signature.
 - This closes a migration-order false-positive class: an older SECURITY DEFINER definition can no longer mask a later definition that accidentally loses SECURITY DEFINER.
