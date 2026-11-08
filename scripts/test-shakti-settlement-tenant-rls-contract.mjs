@@ -39,6 +39,8 @@ if (!migration.includes("payer_id = app.current_organization_id()")) {
 }
 if (!migration.includes("payee_id = app.current_organization_id()")) {
   failures.push("bilateral settlement read boundary missing");
+}
+
 
 if (failures.length) {
   console.error("Shakti settlement tenant RLS contract FAILED:");
