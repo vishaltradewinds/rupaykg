@@ -743,3 +743,11 @@
 - Checkpoint: `71bc42fab6958db3b4dda2ece38bc02cb01b5c9f`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Verifier read fail-closed acceptance
+- Added acceptance coverage proving an already-established verifier tenant transaction loses registry provenance visibility when the issuer organization is subsequently suspended.
+- The test uses separate owner/runtime connections so the suspension occurs after the runtime context is established, validating the helper's live organization-status predicate rather than merely testing context creation.
+- Checkpoint: `0c81fd8d8a4e894ecce19fa04d3e0e1b0fe3fd3d`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
