@@ -16,7 +16,7 @@ let geographyId = "";
 let actorId = "";
 let verifierId = "";
 let actorToken = "";
-let verifierToken = "";
+let verifierToken = "";\nlet payeeOnlyId = "";\nlet payeeOnlyToken = "";
 let activityId = "";
 let evidenceId = "";
 let verificationId = "";
