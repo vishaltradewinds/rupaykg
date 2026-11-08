@@ -1197,6 +1197,21 @@ test("Shakti credential lifecycle cannot commit without matching registry proven
     }
     const final = await ownerPool.query<{ status: string }>("select status from credentials where id=$1", [credentialB]);
     assert.equal(final.rows[0]?.status, "ACTIVE");
+
+    const staleLatestClient = await ownerPool.connect();
+    try {
+      await staleLatestClient.query("begin");
+      await staleLatestClient.query("update credentials set status='TRANSFERRED' where id=$1", [credentialB]);
+      await staleLatestClient.query("insert into registry_events(credential_id,event_type,to_owner_id,recorded_by_identity_id,event_hash) values($1,'TRANSFERRED',$2,$3,$4)", [credentialB, organizationA, identityId, "ATOMICITY-TRANSFERRED-" + suffix]);
+      await staleLatestClient.query("insert into registry_events(credential_id,event_type,to_owner_id,recorded_by_identity_id,event_hash) values($1,'ACTIVATED',$2,$3,$4)", [credentialB, organizationA, identityId, "ATOMICITY-STALE-ACTIVATED-" + suffix]);
+      await assert.rejects(() => staleLatestClient.query("commit"), /credential lifecycle state requires matching latest registry event: TRANSFERRED/i);
+      try { await staleLatestClient.query("rollback"); } catch {}
+    } finally {
+      staleLatestClient.release();
+    }
+
+    const afterStaleLatest = await ownerPool.query<{ status: string }>("select status from credentials where id=$1", [credentialB]);
+    assert.equal(afterStaleLatest.rows[0]?.status, "ACTIVE");
   } finally {
     if (credentialA) await ownerPool.query("delete from credentials where id=$1", [credentialA]);
     if (credentialB) {
