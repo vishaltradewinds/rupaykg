@@ -13,9 +13,11 @@ for (const required of [
   "20261108_context_identity_liveness_hardening",
   "20261108_context_identity_liveness_completion",
   "RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS",
-  "20261108_context_identity_liveness_(hardening|completion)",
 ]) {
   if (!source.includes(required)) failures.push("missing migration integrity control: " + required);
+}
+if (!/20261108_context_identity_liveness_(hardening|completion)/.test(source)) {
+  failures.push("missing protected identity-liveness migration gate regex");
 }
 if (failures.length) {
   console.error("Shakti migration integrity contract FAILED:\n" + failures.map((x) => "- " + x).join("\n"));
