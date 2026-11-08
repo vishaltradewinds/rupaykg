@@ -671,3 +671,11 @@
 - Latest checkpoint commit: `74c86e04db2410ca901c54d3fd331d4be18ca8d8`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Migration integrity gate strengthened
+- Extended the migration integrity deterministic contract to require the protected migration authorization mechanism and explicit registration of migration 100.
+- This keeps credential runtime privilege hardening bound to the same checksum-protected migration execution path.
+- Latest checkpoint commit: `482fafa507b4cec366f6fe39be2d728415a2164f`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
