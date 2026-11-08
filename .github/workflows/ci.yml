@@ -127,6 +127,8 @@ jobs:
         run: node scripts/test-shakti-auth-onboarding-no-body-authority-contract.mjs
       - name: Run Shakti registry active-tenant authority contract
         run: node scripts/test-shakti-registry-active-tenant-authority-contract.mjs
+      - name: Run Shakti settlement active-tenant authority contract
+        run: node scripts/test-shakti-settlement-active-tenant-authority-contract.mjs
       - name: Run Shakti context pool isolation contract
         run: node scripts/test-shakti-context-pool-isolation-contract.mjs
       - name: Run Shakti RLS write contract
