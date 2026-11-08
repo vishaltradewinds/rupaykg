@@ -86,12 +86,28 @@ begin
     (v_role_a,v_org_a,'shakti_rls_test_role_a','["dashboard:read"]'::jsonb,'[]'::jsonb),
     (v_role_b,v_org_b,'shakti_rls_test_role_b','["dashboard:read"]'::jsonb,'[]'::jsonb);
 
-  alter table organization_memberships disable trigger stakeholder_membership_application_guard;
+  if exists (
+    select 1 from pg_trigger t
+     where t.tgrelid = 'public.organization_memberships'::regclass
+       and t.tgname = 'stakeholder_membership_application_guard'
+       and not t.tgisinternal
+  ) then
+    alter table organization_memberships disable trigger stakeholder_membership_application_guard;
+  end if;
+
   insert into organization_memberships(identity_id,organization_id,role_id,status)
   values
     (v_identity_a,v_org_a,v_role_a,'VERIFIED'),
     (v_identity_b,v_org_b,v_role_b,'VERIFIED');
-  alter table organization_memberships enable trigger stakeholder_membership_application_guard;
+
+  if exists (
+    select 1 from pg_trigger t
+     where t.tgrelid = 'public.organization_memberships'::regclass
+       and t.tgname = 'stakeholder_membership_application_guard'
+       and not t.tgisinternal
+  ) then
+    alter table organization_memberships enable trigger stakeholder_membership_application_guard;
+  end if;
 
   execute 'set local role rupaykg_app_runtime';
 
