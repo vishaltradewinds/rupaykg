@@ -39,22 +39,16 @@ select 1 / case
         ('organization_memberships'),('measurements'),('evidence'),('verifications'),
         ('carbon_calculations'),('mrv_observations'),
         ('evidence_verification_requirements'),('chain_of_custody_links')
-    ),
-    coverage as (
-      select
-        p.table_name,
-        bool_or(pol.cmd in ('r','*')) as has_select_policy,
-        bool_or(pol.cmd in ('a','w','d','*')) as has_modify_policy
-      from protected p
-      left join pg_policies pol
-        on pol.schemaname = 'public'
-       and pol.tablename = p.table_name
-      group by p.table_name
     )
     select 1
-      from coverage
-     where not coalesce(has_select_policy, false)
-        or not coalesce(has_modify_policy, false)
+      from protected p
+     where not exists (
+       select 1
+         from pg_policies pol
+        where pol.schemaname = 'public'
+          and pol.tablename = p.table_name
+          and pol.cmd in ('r','*')
+     )
   )
   then 1
   else 0
