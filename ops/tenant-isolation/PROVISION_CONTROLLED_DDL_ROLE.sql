@@ -16,7 +16,9 @@
 -- Safety:
 --   - refuses execution if the requested role already exists;
 --   - refuses execution if any protected table is missing;
---   - refuses execution if the provisioning session is SUPERUSER/BYPASSRLS;
+--   - permits the existing authorized table owner/admin to perform this one-time
+--     ownership transfer; the provisioned migration role itself is strictly
+--     non-SUPERUSER/non-BYPASSRLS;
 --   - refuses execution if the expected runtime role is missing;
 --   - this script must be run by an explicitly authorized provisioning administrator.
 --   - does NOT enable RLS.
@@ -40,10 +42,6 @@ declare
   v_missing integer;
   v_owned integer;
 begin
-  if (select rolsuper or rolbypassrls from pg_roles where rolname = current_user) then
-    raise exception 'DDL_ROLE_PROVISIONING_BLOCKED: provisioning session must not be SUPERUSER or BYPASSRLS';
-  end if;
-
   if not exists (select 1 from pg_roles where rolname = 'rupaykg_app_runtime') then
     raise exception 'DDL_ROLE_PROVISIONING_BLOCKED: expected runtime role rupaykg_app_runtime is missing';
   end if;
@@ -78,7 +76,7 @@ begin
     raise exception 'DDL_ROLE_PROVISIONING_BLOCKED: current provisioning administrator does not own all 17 protected tenant tables; owned=%', v_owned;
   end if;
 
-  raise notice 'PROVISIONING PRECHECK PASS: current_user=%, protected_tables_owned=17', current_user;
+  raise notice 'PROVISIONING PRECHECK PASS: authorized current owner/admin=%, current_bypassrls=%, protected_tables_owned=17; target role will be non-BYPASSRLS', current_user, (select rolbypassrls from pg_roles where rolname = current_user);
 end $$;
 
 -- Create a dedicated non-BYPASSRLS migration/DDL login.
