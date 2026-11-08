@@ -4,10 +4,27 @@
 --
 -- The test is transactional and rolls back all fixtures. It proves both
 -- visibility and mutation isolation for two independent organizations.
+-- Execute with the controlled DDL role that owns the protected tables and
+-- has SET ROLE permission to rupaykg_app_runtime. The fixture setup requires
+-- owner-level trigger control; the actual tenant assertions execute as the
+-- non-BYPASSRLS runtime role.
 
 begin;
 
-do $$
+select 1 / case
+  when pg_has_role(current_user, 'rupaykg_app_runtime', 'member') then 1
+  else 0
+end as runtime_role_membership_assertion;
+
+set local role rupaykg_app_runtime;
+select 1 / case
+  when current_user = 'rupaykg_app_runtime' then 1
+  else 0
+end as runtime_role_switch_assertion;
+
+reset role;
+
+do $
 declare
   v_missing text[] := array[]::text[];
   v_name text;
