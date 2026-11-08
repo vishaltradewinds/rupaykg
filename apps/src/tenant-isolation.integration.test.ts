@@ -36,6 +36,7 @@ test("Shakti identity context rejects inactive identity and does not establish t
       /Identity is not active/i,
     );
   } finally {
+    if (identityBId) await ownerPool.query("delete from identities where id=$1", [identityBId]);
     if (identityId) await ownerPool.query("delete from identities where id=$1", [identityId]);
     await runtimePool.end();
     await ownerPool.end();
@@ -128,7 +129,9 @@ test("Shakti tenant context rejects cross-organization context switching", { ski
     });
     assert.equal(reset, organizationA);
   } finally {
+    if (membershipB) await ownerPool.query("delete from organization_memberships where id=$1", [membershipB]);
     if (membershipA) await ownerPool.query("delete from organization_memberships where id=$1", [membershipA]);
+    if (roleB) await ownerPool.query("delete from roles where id=$1", [roleB]);
     if (roleA) await ownerPool.query("delete from roles where id=$1", [roleA]);
     if (identityId) await ownerPool.query("delete from identities where id=$1", [identityId]);
     if (organizationA) await ownerPool.query("delete from organizations where id=$1", [organizationA]);
@@ -328,6 +331,17 @@ test("Shakti RLS runtime role isolates core tenant rows", { skip: !enabled }, as
         /row-level security|policy/i,
       );
       await client.query("rollback");
+      await client.query("begin");
+      await client.query("set local role rupaykg_app_runtime");
+      await client.query("select app.set_request_context($1,$2)", [identityBId, organizationB]);
+      const payeeVisible = await client.query<{ id: string }>("select id from settlements where id in ($1,$2) order by id", [settlementA, settlementB]);
+      assert.equal(payeeVisible.rows.length, 1);
+      assert.equal(payeeVisible.rows[0]!.id, settlementA);
+      await assert.rejects(() => client.query("update settlements set amount=12 where id=$1", [settlementA]), /row-level security|policy/i);
+      const payeeEvents = await client.query<{ id: string }>("select id from settlement_events where settlement_id=$1", [settlementA]);
+      assert.equal(payeeEvents.rows.length, 1);
+      assert.equal(payeeEvents.rows[0]!.id, eventA);
+      await client.query("rollback");
     } catch (error) {
       try { await client.query("rollback"); } catch {}
       throw error;
@@ -475,6 +489,9 @@ test("Shakti RLS evidence rows are tenant-isolated for insert and read", { skip:
     identityId = (await ownerPool.query<{ id: string }>("insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id", ["rls-evidence:" + suffix, "RLS Evidence " + suffix, "rls-evidence-" + suffix + "@example.invalid"])).rows[0]!.id;
     roleA = (await ownerPool.query<{ id: string }>(`insert into roles(organization_id,name,permissions,geography_scope) values($1,'tenant_test_role','["activity:write"]'::jsonb,'[]'::jsonb) returning id`, [organizationA])).rows[0]!.id;
     membershipA = (await ownerPool.query<{ id: string }>("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED') returning id", [identityId, organizationA, roleA])).rows[0]!.id;
+    identityBId = (await ownerPool.query<{ id: string }>("insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id", ["rls-settlement-payee:" + suffix, "RLS Settlement Payee " + suffix, "rls-settlement-payee-" + suffix + "@example.invalid"])).rows[0]!.id;
+    roleB = (await ownerPool.query<{ id: string }>("insert into roles(organization_id,name,permissions,geography_scope) values($1,'tenant_test_role_payee','[]'::jsonb,'[]'::jsonb) returning id", [organizationB])).rows[0]!.id;
+    membershipB = (await ownerPool.query<{ id: string }>("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED') returning id", [identityBId, organizationB, roleB])).rows[0]!.id;
     activityA = (await ownerPool.query<{ id: string }>("insert into activities(organization_id,activity_type,status,metadata) values($1,'RLS_EVIDENCE','DRAFT','{}'::jsonb) returning id", [organizationA])).rows[0]!.id;
     activityB = (await ownerPool.query<{ id: string }>("insert into activities(organization_id,activity_type,status,metadata) values($1,'RLS_EVIDENCE','DRAFT','{}'::jsonb) returning id", [organizationB])).rows[0]!.id;
 
@@ -708,7 +725,7 @@ test("Shakti RLS settlement rows are bilateral-readable but payer-mutation-only"
   const runtimePool = new Pool({ connectionString: process.env.DATABASE_URL });
   const ownerPool = new Pool({ connectionString: process.env.RUPAYKG_TEST_OWNER_DATABASE_URL });
   const suffix = randomBytes(8).toString("hex");
-  let identityId = "", organizationA = "", organizationB = "", organizationC = "", roleA = "", membershipA = "", settlementA = "", settlementB = "", eventA = "";
+  let identityId = "", identityBId = "", organizationA = "", organizationB = "", organizationC = "", roleA = "", roleB = "", membershipA = "", membershipB = "", settlementA = "", settlementB = "", eventA = "";
   try {
     organizationA = (await ownerPool.query<{ id: string }>("insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id", ["TEST-RLS-SETTLEMENT-A-" + suffix])).rows[0]!.id;
     organizationB = (await ownerPool.query<{ id: string }>("insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id", ["TEST-RLS-SETTLEMENT-B-" + suffix])).rows[0]!.id;
