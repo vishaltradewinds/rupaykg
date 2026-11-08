@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "1.0",
+  "gate": "RUPAYKG_BACKUP_RESTORE_ACCEPTANCE",
+  "result": "PASS|FAIL",
+  "sourceDatabase": {"identifier": "redacted-stable-id"},
+  "backupArtifact": {"sha256": "64-lowercase-hex", "createdAtUtc": "RFC3339"},
+  "restoreTarget": {"identifier": "isolated-redacted-stable-id", "productionTarget": false},
+  "restore": {"completedAtUtc": "RFC3339", "integrityCheck": "PASS|FAIL"},
+  "migrationState": {"status": "PASS|FAIL", "version": "redacted-version"},
+  "applicationAcceptance": {"status": "PASS|FAIL"},
+  "credentialSafety": {"credentialsPresent": false, "sensitivePayloadsPresent": false},
+  "evidence": {"externalLocation": "redacted-controlled-location", "immutableReference": "redacted-reference"}
+}
