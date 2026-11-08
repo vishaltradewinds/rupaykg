@@ -38,6 +38,39 @@ select
   current_user = 'rupaykg_app_runtime'
   or pg_has_role(current_user, 'rupaykg_app_runtime', 'member') as runtime_role_membership;
 
+-- A runtime login that owns a protected table can bypass RLS unless the table
+-- is explicitly forced into RLS. The intended application role must therefore
+-- not own any protected table.
+select
+  c.relname as table_name,
+  pg_get_userbyid(c.relowner) as table_owner,
+  (pg_get_userbyid(c.relowner) = current_user) as runtime_role_is_table_owner
+from pg_class c
+join pg_namespace n on n.oid = c.relnamespace
+where n.nspname = 'public'
+  and c.relname in (
+    'organizations','roles','activities','obligations','credentials',
+    'settlements','audit_events','resource_flows','field_devices',
+    'organization_memberships','measurements','evidence','verifications',
+    'carbon_calculations','mrv_observations',
+    'evidence_verification_requirements','chain_of_custody_links'
+  )
+order by c.relname;
+
+select
+  count(*) = 0 as runtime_role_owns_no_protected_tables
+from pg_class c
+join pg_namespace n on n.oid = c.relnamespace
+where n.nspname = 'public'
+  and c.relname in (
+    'organizations','roles','activities','obligations','credentials',
+    'settlements','audit_events','resource_flows','field_devices',
+    'organization_memberships','measurements','evidence','verifications',
+    'carbon_calculations','mrv_observations',
+    'evidence_verification_requirements','chain_of_custody_links'
+  )
+  and pg_get_userbyid(c.relowner) = current_user;
+
 
 select
   table_name,
