@@ -23,6 +23,13 @@ as $$
        and v.decision = 'APPROVED'
        and i.status = 'VERIFIED'
        and has_verification_permission(v.verifier_identity_id)
+       and exists (
+         select 1
+           from public.organization_memberships m
+          where m.identity_id = v.verifier_identity_id
+            and m.status = 'VERIFIED'
+            and m.organization_id = c.issuer_organization_id
+       )
   );
 $$;
 
