@@ -1,5 +1,15 @@
 # RupayKg CTO Resume Point — 2026-11-08
 
+## 2026-11-08 — SECURITY DEFINER runtime acceptance executable defect fixed
+- Re-inspected the disposable PostgreSQL SECURITY DEFINER boundary acceptance after the previous runtime-hardening checkpoint.
+- Found a real executable defect in `scripts/test-shakti-security-definer-boundary-runtime.sql`: the unexpected-runtime-EXECUTE failure branch contained a `%` placeholder without supplying the `unexpected_runtime_execute` value to `RAISE EXCEPTION`.
+- Corrected the branch to pass the counted value, so the acceptance now fails deterministically with the intended diagnostic instead of failing because of malformed `RAISE` parameters.
+- Code checkpoint: `d80dcfdf41c7843265a46e95b88828c7ff7203e8`.
+- Exact-head GitHub Actions evidence for this checkpoint: **NOT VERIFIED** (`workflow_runs: []`, `statuses: []`).
+- Production remains **READ-ONLY/HOLD**.
+
+# RupayKg CTO Resume Point — 2026-11-08
+
 ## 2026-11-08 — SECURITY DEFINER runtime boundary acceptance added
 - Added disposable PostgreSQL acceptance coverage for migration 101's actual runtime privilege state.
 - The acceptance now checks:
