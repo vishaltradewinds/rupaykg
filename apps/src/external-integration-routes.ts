@@ -27,6 +27,7 @@ export async function registerExternalIntegrationRoutes(app: FastifyInstance, po
       const result = await acceptExternalIntegrationMessage(pool, auth, request.body as any);
       return reply.code(result.duplicate ? 200 : 202).send({
         source: "postgresql",
+        traceId: (request as any).rupaykgTrace?.traceId,
         syntheticData: false,
         authoritativeMutation: false,
         ...result,
