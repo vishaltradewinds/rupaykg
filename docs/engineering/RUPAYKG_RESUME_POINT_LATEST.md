@@ -783,3 +783,10 @@
 - Checkpoint: `6a12789edfb18d8a3513c9dc4c5ed82f97d8c44c`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+### 2026-11-08 — Verifier fixture lifecycle reconciliation
+- Reconciled the assigned-verifier runtime fixture with credential lifecycle atomicity: the fixture now creates the credential as `ELIGIBLE`, records the `ISSUED` registry event, then transitions the credential to `ISSUED` so migration 098's latest-event requirement is actually exercised.
+- Strengthened the deterministic verifier contract to bind the helper to the credential's recorded verifier identity.
+- Checkpoint: `857f58f8c5f6a014e298449de08b0d2ce94c2ac6`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
