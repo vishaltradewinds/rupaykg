@@ -110,7 +110,7 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
 
   app.get("/api/v1/statutory/applicability", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
-    const organizationId = await organizationFor(auth, pool, request as never, reply); if (!organizationId) return;
+    const organizationId = await organizationFor(auth, reply); if (!organizationId) return;
     try {
       if (!await hasOrganizationPermission(pool, auth, organizationId, ["swm:read", "epr:read", "reports:read"])) return reply.code(403).send({ error: "Statutory applicability read permission required", code: "STATUTORY_PERMISSION_REQUIRED" });
       const [profiles, bwg, epr] = await Promise.all([
