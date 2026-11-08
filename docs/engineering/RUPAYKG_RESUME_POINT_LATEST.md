@@ -605,3 +605,11 @@
 - Latest checkpoint commit: `5c147a3242bd9d2c247bd9659184c941717cb14a`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Credential runtime privilege contract tightened
+- Extended the credential authority immutability deterministic contract to assert the complete intended runtime privilege baseline alongside the column-scoped UPDATE grant.
+- This prevents the least-privilege migration from being validated only for the revoke/grant delta while silently losing required SELECT/INSERT/UPDATE runtime access.
+- Latest checkpoint commit: `cc5bf45280623678cd29589e40f467b3cb1dea56`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
