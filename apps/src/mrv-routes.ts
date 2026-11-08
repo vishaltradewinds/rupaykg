@@ -146,12 +146,6 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       return reply.code(anchor.status === "CONSENSUS_CONFIRMED" ? 201 : 503).send({ source: "postgresql+guardian+hedera", syntheticData: false, guardian, hedera: anchor, provenance: persisted.rows[0], eligibleForRegistry: false });
       });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authoritative MRV submission unavailable", code: "MRV_UNAVAILABLE", syntheticData: false }); }
-    finally {
-      if (lockClient) {
-        if (lockAcquired) await lockClient.query("select pg_advisory_unlock(hashtext($1))", [idempotencyLockKey]).catch(() => undefined);
-        lockClient.release();
-      }
-    }
   });
 
   app.get("/api/v1/mrv/provenance/:activityId", async (request, reply) => {
