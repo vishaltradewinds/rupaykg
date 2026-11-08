@@ -7,6 +7,14 @@
 - Secondary evidence repository: rupaykg-aistudio
 - Production Neon remains READ-ONLY / HOLD.
 
+## 2026-11-08 — SECURITY DEFINER search-path reconciliation
+- Re-inspected all authoritative SECURITY DEFINER definitions relevant to the protected runtime boundary.
+- Found a contract inconsistency: the generic contract required only `public, app`, while the assigned-verifier helper in migration 099 intentionally uses the stricter `pg_catalog, public, app` path.
+- Reconciled the contract to an explicit allowlist and bound each required runtime function to its exact approved search path; the verifier helper remains bound to `pg_catalog, public, app`.
+- This preserves the security boundary without weakening the verifier helper's stronger catalog qualification.
+- Engineering checkpoint: `0dc9687811b59f3b742ea553879bd9d3657e5760`.
+- Exact-head CI remains **NOT VERIFIED**; production remains **READ-ONLY/HOLD**.
+
 ## 2026-11-08 — SECURITY DEFINER future-default privilege boundary
 - Identified an additional PostgreSQL boundary gap: revoking PUBLIC EXECUTE from existing SECURITY DEFINER functions does not by itself prevent PostgreSQL's default PUBLIC EXECUTE privilege from returning on functions created later.
 - Strengthened protected migration `101_security_definer_schema_boundary.sql` to revoke default function EXECUTE from PUBLIC for the current migration owner, while retaining the explicit six-function runtime allowlist.
