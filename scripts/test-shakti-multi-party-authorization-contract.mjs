@@ -46,6 +46,7 @@ requirePattern("settlement authorization checks both organizations", settlementR
 requirePattern("settlement execution checks both organizations", settlementRoutes.execute, /canActForOrganization\(auth, r\.rows\[0\]\.payer_id\).*canActForOrganization\(auth, r\.rows\[0\]\.payee_id\)/);
 requirePattern("settlement confirmation checks both organizations", settlementRoutes.confirm, /canActForOrganization\(auth, r\.rows\[0\]\.payer_id\).*canActForOrganization\(auth, r\.rows\[0\]\.payee_id\)/);
 requirePattern("credential transfer requires verified destination organization", credentialRoutes.transfer, /select id from organizations where id=\$1 and status='VERIFIED'/);
+requirePattern("credential issuance selects latest provenance deterministically", credentialRoutes.issue, /order by m\.created_at desc,id desc limit 1/);
 
 requirePattern("settlement authorization state gate", settlementRoutes.authorize, /status !== "CREATED"/);
 requirePattern("settlement execution state gate", settlementRoutes.execute, /status !== "AUTHORIZED"/);
