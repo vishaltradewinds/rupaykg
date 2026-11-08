@@ -27,18 +27,42 @@ jobs:
       - name: Verify runtime role and pre-RLS contract
         run: |
           set -euo pipefail
+          mkdir -p tenant-isolation-evidence
           psql "$RUPAYKG_RUNTIME_DATABASE_URL" \
             -v ON_ERROR_STOP=1 \
-            -f ops/tenant-isolation/VERIFY_PRE_RLS.sql
+            -f ops/tenant-isolation/VERIFY_PRE_RLS.sql \
+            2>&1 | tee tenant-isolation-evidence/pre-rls.txt
 
       - name: Verify RLS is active and cross-tenant access is denied
         run: |
           set -euo pipefail
           psql "$RUPAYKG_RUNTIME_DATABASE_URL" \
             -v ON_ERROR_STOP=1 \
-            -f ops/tenant-isolation/VERIFY_RLS_NEGATIVE_TEST.sql
+            -f ops/tenant-isolation/VERIFY_RLS_NEGATIVE_TEST.sql \
+            2>&1 | tee tenant-isolation-evidence/rls-negative-test.txt
+
+      - name: Record acceptance metadata
+        run: |
+          set -euo pipefail
+          {
+            echo "repository=vishaltradewinds/rupaykg"
+            echo "commit=$GITHUB_SHA"
+            echo "workflow_run=$GITHUB_RUN_ID"
+            echo "workflow_attempt=$GITHUB_RUN_ATTEMPT"
+            echo "captured_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > tenant-isolation-evidence/acceptance-metadata.txt
+
+      - name: Upload tenant isolation acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tenant-isolation-live-acceptance-${{ github.run_id }}
+          path: tenant-isolation-evidence/
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Acceptance result
         run: |
           echo "TENANT ISOLATION LIVE ACCEPTANCE PASSED."
           echo "Evidence: non-BYPASSRLS runtime role + required privileges + RLS enabled + cross-tenant read/mutate denial."
+          echo "Evidence artifact: tenant-isolation-live-acceptance-${GITHUB_RUN_ID}"
