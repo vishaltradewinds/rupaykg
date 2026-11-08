@@ -12,6 +12,7 @@ const required = [
   "public.has_verification_permission(v.verifier_identity_id)",
   "v.verifier_identity_id = app.current_identity_id()",
   "v.decision = 'APPROVED'",
+  "v.verifier_identity_id = c.verifier_identity_id",
   "i.status = 'VERIFIED'",
   "from public.organization_memberships m",
   "m.identity_id = v.verifier_identity_id",
