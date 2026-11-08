@@ -93,6 +93,5 @@ test("authenticate scopes a single verified organization without trusting reques
     identityId: "identity-a",
     memberships: [{ organization_id: "org-a", role_id: "role-a", status: "VERIFIED" }],
     activeOrganizationId: "org-a",
-    bilateralOrganizationScope: undefined,
   });
 });
