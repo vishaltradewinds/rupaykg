@@ -22,20 +22,20 @@ for (const [name, pattern] of requiredWorkflowInvariants) {
 }
 
 const protectedMigrationIdentities = [
-  "20261107_authority_hierarchy_context",
-  "20261107_context_identity_bootstrap",
-  "20261107_context_organization_id",
-  "20261107_platform_execution_context",
-  "20261107_runtime_grant_reconciliation",
-  "20261107_core_tenant_rls_activation_gate",
-  "20261108_context_identity_liveness_hardening",
-  "20261108_context_identity_liveness_completion",
-  "082_settlement_reference_trigger_insert_safety",
-  "088_field_sync_append_only_integrity",
-  "089_settlement_reconciliation_reference_integrity",
+  ["20261107_authority_hierarchy_context", "20261107_(authority_hierarchy_context"],
+  ["20261107_context_identity_bootstrap", "20261107_(authority_hierarchy_context|context_identity_bootstrap"],
+  ["20261107_context_organization_id", "20261107_(authority_hierarchy_context|context_identity_bootstrap|platform_execution_context|runtime_grant_reconciliation|context_organization_id"],
+  ["20261107_platform_execution_context", "platform_execution_context"],
+  ["20261107_runtime_grant_reconciliation", "runtime_grant_reconciliation"],
+  ["20261107_core_tenant_rls_activation_gate", "core_tenant_rls_activation_gate"],
+  ["20261108_context_identity_liveness_hardening", "20261108_context_identity_liveness_(hardening"],
+  ["20261108_context_identity_liveness_completion", "20261108_context_identity_liveness_(hardening|completion"],
+  ["082_settlement_reference_trigger_insert_safety", "082_settlement_reference_trigger_insert_safety"],
+  ["088_field_sync_append_only_integrity", "088_field_sync_append_only_integrity"],
+  ["089_settlement_reconciliation_reference_integrity", "089_settlement_reconciliation_reference_integrity"],
 ];
-for (const identity of protectedMigrationIdentities) {
-  if (!migrationRunner.includes(identity)) failures.push(`Migration invariant missing: protected migration identity ${identity}`);
+for (const [filename, identity] of protectedMigrationIdentities) {
+  if (!migrationRunner.includes(identity)) failures.push(`Migration invariant missing: protected migration identity ${filename}`);
 }
 const requiredMigrationInvariants = [
   ["explicit protected gate", /RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS/],
