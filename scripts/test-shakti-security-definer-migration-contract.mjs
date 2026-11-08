@@ -24,8 +24,8 @@ for (const file of files) {
     const end = functionStarts[i + 1] ?? source.length;
     const block = source.slice(start, end);
     if (!/security\s+definer/i.test(block)) continue;
-    if (!/set\s+search_path\s*=\s*[^;]+/i.test(block)) {
-      failures.push(file + ": SECURITY DEFINER function lacks a fixed search_path");
+    if (!/set\s+search_path\s*=\s*public,\s*app\b/i.test(block)) {
+      failures.push(file + ": SECURITY DEFINER function must use fixed search_path = public, app");
     }
     if (/grant\s+execute\s+on\s+function\s+[^;]+\s+to\s+public/i.test(block)) {
       failures.push(file + ": SECURITY DEFINER function must not grant EXECUTE to PUBLIC");
