@@ -194,7 +194,7 @@ test("Shakti authority context rejects out-of-scope geography", { skip: !enabled
     geographyId = (await ownerPool.query<{ id: string }>(
       "select id from geography where kind='STATE_UT' order by id limit 1",
     )).rows[0]?.id ?? "";
-    if (!geographyId) return;
+    assert.ok(geographyId, "disposable runtime schema must provide a STATE_UT geography fixture");
 
     const client = await runtimePool.connect();
     try {
@@ -208,6 +208,64 @@ test("Shakti authority context rejects out-of-scope geography", { skip: !enabled
       try { await client.query("rollback"); } catch {}
       throw error;
     } finally {
+      client.release();
+    }
+  } finally {
+    if (membershipId) await ownerPool.query("delete from organization_memberships where id=$1", [membershipId]);
+    if (roleId) await ownerPool.query("delete from roles where id=$1", [roleId]);
+    if (identityId) await ownerPool.query("delete from identities where id=$1", [identityId]);
+    if (organizationId) await ownerPool.query("delete from organizations where id=$1", [organizationId]);
+    await runtimePool.end();
+    await ownerPool.end();
+  }
+});
+
+
+test("Shakti transaction-local context does not leak across pooled transactions", { skip: !enabled }, async () => {
+  const runtimePool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const ownerPool = new Pool({ connectionString: process.env.RUPAYKG_TEST_OWNER_DATABASE_URL });
+  const suffix = randomBytes(8).toString("hex");
+  let identityId = "";
+  let organizationId = "";
+  let roleId = "";
+  let membershipId = "";
+
+  try {
+    identityId = (await ownerPool.query<{ id: string }>(
+      "insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id",
+      ["context-leak:" + suffix, "Context Leak " + suffix, "context-leak-" + suffix + "@example.invalid"],
+    )).rows[0]!.id;
+    organizationId = (await ownerPool.query<{ id: string }>(
+      "insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id",
+      ["TEST-CONTEXT-LEAK-" + suffix],
+    )).rows[0]!.id;
+    roleId = (await ownerPool.query<{ id: string }>(
+      "insert into roles(organization_id,name,permissions,geography_scope) values($1,'runtime_test_role','[]'::jsonb,'[]'::jsonb) returning id",
+      [organizationId],
+    )).rows[0]!.id;
+    membershipId = (await ownerPool.query<{ id: string }>(
+      "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED') returning id",
+      [identityId, organizationId, roleId],
+    )).rows[0]!.id;
+
+    const client = await runtimePool.connect();
+    try {
+      await client.query("begin");
+      await client.query("select app.set_request_context($1,$2)", [identityId, organizationId]);
+      const scoped = (await client.query<{ identity_id: string; organization_id: string }>(
+        "select app.current_identity_id() identity_id, app.current_organization_id() organization_id",
+      )).rows[0]!;
+      assert.equal(scoped.identity_id, identityId);
+      assert.equal(scoped.organization_id, organizationId);
+      await client.query("commit");
+
+      const afterCommit = (await client.query<{ identity_id: string | null; organization_id: string | null }>(
+        "select app.current_identity_id() identity_id, app.current_organization_id() organization_id",
+      )).rows[0]!;
+      assert.equal(afterCommit.identity_id, null, "identity context must not survive transaction commit");
+      assert.equal(afterCommit.organization_id, null, "tenant context must not survive transaction commit");
+    } finally {
+      try { await client.query("rollback"); } catch {}
       client.release();
     }
   } finally {
