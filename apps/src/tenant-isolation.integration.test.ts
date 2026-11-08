@@ -103,6 +103,54 @@ test("Shakti tenant context rejects cross-organization context switching", { ski
   }
 });
 
+test("Shakti tenant transaction rejects stale verified membership after authoritative revocation", { skip: !enabled }, async () => {
+  const runtimePool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const ownerPool = new Pool({ connectionString: process.env.RUPAYKG_TEST_OWNER_DATABASE_URL });
+  const suffix = randomBytes(8).toString("hex");
+  let identityId = "";
+  let organizationId = "";
+  let roleId = "";
+  let membershipId = "";
+  try {
+    organizationId = (await ownerPool.query<{ id: string }>(
+      "insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id",
+      ["TEST-STALE-MEMBERSHIP-" + suffix],
+    )).rows[0]!.id;
+    identityId = (await ownerPool.query<{ id: string }>(
+      "insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id",
+      ["stale-membership:" + suffix, "Stale Membership " + suffix, "stale-membership-" + suffix + "@example.invalid"],
+    )).rows[0]!.id;
+    roleId = (await ownerPool.query<{ id: string }>(
+      "insert into roles(organization_id,name,permissions,geography_scope) values($1,'tenant_test_role','[\"dashboard:read\"]'::jsonb,'[]'::jsonb) returning id",
+      [organizationId],
+    )).rows[0]!.id;
+    membershipId = (await ownerPool.query<{ id: string }>(
+      "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED') returning id",
+      [identityId, organizationId, roleId],
+    )).rows[0]!.id;
+
+    const staleAuth: AuthContext = {
+      identityId,
+      memberships: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }],
+      activeOrganizationId: organizationId,
+    };
+
+    await ownerPool.query("update organization_memberships set status='REVOKED' where id=$1", [membershipId]);
+
+    await assert.rejects(
+      () => withTenantTransaction(runtimePool, staleAuth, async () => "must-not-run"),
+      /authoritative database/i,
+    );
+  } finally {
+    if (membershipId) await ownerPool.query("delete from organization_memberships where id=$1", [membershipId]);
+    if (roleId) await ownerPool.query("delete from roles where id=$1", [roleId]);
+    if (identityId) await ownerPool.query("delete from identities where id=$1", [identityId]);
+    if (organizationId) await ownerPool.query("delete from organizations where id=$1", [organizationId]);
+    await runtimePool.end();
+    await ownerPool.end();
+  }
+});
+
 test("Shakti business-route contract rejects a cross-tenant organization context", { skip: !enabled }, async () => {
   const runtimePool = new Pool({ connectionString: process.env.DATABASE_URL });
   const ownerPool = new Pool({ connectionString: process.env.RUPAYKG_TEST_OWNER_DATABASE_URL });
