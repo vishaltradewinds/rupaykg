@@ -1089,6 +1089,23 @@ test("Shakti assigned verifier registry read is scoped to approved active verifi
       revokedMembershipClient.release();
     }
     await ownerPool.query("update organization_memberships set status='VERIFIED' where id=$1", [membershipA]);
+    await ownerPool.query("update organizations set status='SUSPENDED' where id=$1", [orgA]);
+    const suspendedOrgClient = await runtimePool.connect();
+    try {
+      await suspendedOrgClient.query("begin");
+      await suspendedOrgClient.query("set local role rupaykg_app_runtime");
+      await assert.rejects(
+        () => suspendedOrgClient.query("select app.set_request_context($1,$2)", [verifierId, orgA]),
+        /organization|not.*verified|active/i,
+      );
+      await suspendedOrgClient.query("rollback");
+    } catch (error) {
+      try { await suspendedOrgClient.query("rollback"); } catch {}
+      throw error;
+    } finally {
+      suspendedOrgClient.release();
+    }
+    await ownerPool.query("update organizations set status='VERIFIED' where id=$1", [orgA]);
     const otherClient = await runtimePool.connect();
     try {
       await otherClient.query("begin");
