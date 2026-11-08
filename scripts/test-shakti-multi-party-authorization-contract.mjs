@@ -10,7 +10,7 @@ function routeBlock(route) {
   const start = source.indexOf(marker);
   if (start < 0) return null;
   const next = source.indexOf("\n  app.", start + marker.length);
-  return source.slice(start, next < 0 ? source.length : next).replace(/\s+/g, " ").trim();
+  return source.slice(start, next < 0 ? source.length : next).replace(/\s+/g, " ").replace(/,\s*/g, ", ").trim();
 }
 
 function requirePattern(name, block, pattern) {
