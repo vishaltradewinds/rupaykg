@@ -25,24 +25,24 @@ export async function authenticate(request: FastifyRequest, pool: Pool | null): 
   if (!header?.startsWith("Bearer ")) return null;
   const token = header.slice("Bearer ".length).trim();
   if (!token) return null;
-  const rows = await pool.query<{ identity_id: string }>(
-    `select s.identity_id
-       from identity_sessions s
-       join identities i on i.id = s.identity_id
-      where s.token_hash = $1
-        and s.revoked_at is null
-        and s.expires_at > now()
-        and i.status = 'VERIFIED'
-        and i.suspended_at is null`,
+  // Authentication runs before tenant context exists. Do not query
+  // organization_memberships directly from the ordinary runtime role: that
+  // pre-context read would be incompatible with RLS. The SECURITY DEFINER
+  // bootstrap function is the explicit, narrowly scoped authentication
+  // boundary and returns only verified memberships attached to this bearer
+  // session.
+  const bootstrap = await pool.query<{
+    identity_id: string;
+    organization_id: string;
+    role_id: string;
+    status: string;
+  }>(
+    `select identity_id, organization_id, role_id, status
+       from app.authenticate_bearer_session($1)`,
     [hashToken(token)],
   );
-  if (!rows.rows[0]) return null;
-  const memberships = await pool.query<{ organization_id: string; role_id: string; status: string }>(
-    `select organization_id, role_id, status
-       from organization_memberships
-      where identity_id = $1 and status = 'VERIFIED'`,
-    [rows.rows[0].identity_id],
-  );
+  if (!bootstrap.rows[0]) return null;
+  const memberships = bootstrap;
   const requested = request.headers["x-rupaykg-organization-id"];
   const requestedOrganizationId = typeof requested === "string" && requested.trim() ? requested.trim() : undefined;
   if (requestedOrganizationId && !UUID_RE.test(requestedOrganizationId)) return null;
