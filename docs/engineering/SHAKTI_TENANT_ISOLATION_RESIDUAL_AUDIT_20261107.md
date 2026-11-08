@@ -75,3 +75,30 @@ Every changed table must be reconciled against the authoritative policy matrix b
 Registry mutation routes are classified as mixed tenant and multi-party authority surfaces. Credential issuance/activation/retirement are anchored to the authoritative issuer/current owner transaction context. Credential transfer and settlement lifecycle operations are multi-party: the transaction context is anchored to the current owner/payer while explicit authorization remains required for each participating organization. Request-body organization IDs do not replace the authoritative active tenant context.
 
 A disposable CI contract is now embedded in the controlled workflow to assert registry mutation transaction binding and bilateral settlement authorization. Registry RLS remains HOLD until the master policy matrix is reconciled and non-BYPASSRLS negative counterparty tests pass.
+
+
+## 2026-11-08 RLS policy matrix reconciliation
+
+The controlled branch now contains `docs/engineering/SHAKTI_RLS_POLICY_MATRIX_20261108.md`.
+
+The matrix classifies the reviewed application tables into tenant, tenant-derived, identity, platform/authority, global/reference, and multi-party registry/settlement scopes. It confirms that only the five deterministic core tables currently have an explicit RLS activation-gate migration:
+
+- `activities`
+- `measurements`
+- `evidence`
+- `carbon_calculations`
+- `epr_obligations`
+
+The matrix deliberately keeps identity, platform, regulatory-reference, and multi-party surfaces out of ordinary tenant RLS until their distinct authority semantics are validated.
+
+This is a controlled policy baseline, not runtime evidence. Production Neon, production RLS activation, production DDL/DML/role/grant changes, and FORCE RLS remain HOLD.
+
+### Next execution gate
+
+1. Controlled CI execution against the latest branch head.
+2. Disposable non-BYPASSRLS positive/negative core-RLS acceptance.
+3. Disposable negative counterparty acceptance for registry/settlement.
+4. Runtime-grant reconciliation against the policy matrix.
+5. Only after those pass, prepare a production RLS deployment gate.
+
+TRL 9 remains NOT CLAIMED.
