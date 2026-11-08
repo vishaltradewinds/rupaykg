@@ -7,6 +7,14 @@
 - Secondary evidence repository: rupaykg-aistudio
 - Production Neon remains READ-ONLY / HOLD.
 
+## 2026-11-08 — SECURITY DEFINER latest-definition binding
+- Strengthened `scripts/test-shakti-security-definer-migration-contract.mjs` again so each approved runtime function is evaluated against its **latest migration definition**, not merely any historical definition with the same signature.
+- This closes a migration-order false-positive class: an older SECURITY DEFINER definition can no longer mask a later definition that accidentally loses SECURITY DEFINER.
+- Re-read the resulting executable contract and confirmed the six expected runtime signatures are resolved against the latest definition in the ordered migration set.
+- Code checkpoint: `966299ffce5f085f7ad711545bc893e225369d82`.
+- Exact-head GitHub Actions workflow runs: `[]`; combined statuses: `[]`. CI is **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**; no production DDL/DML, role/grant, RLS activation, deployment, or certification performed.
+
 ## 2026-11-08 — SECURITY DEFINER runtime-function contract scoping
 - Reworked `scripts/test-shakti-security-definer-migration-contract.mjs` so the six approved runtime SECURITY DEFINER functions are matched by their actual function signature and scoped function block, rather than a broad migration-wide regex.
 - This removes a false-positive class where a function name could appear before a different function's `SECURITY DEFINER` clause and still satisfy the contract.
