@@ -61,3 +61,10 @@ If activation fails:
 **RLS enabled + non-BYPASSRLS runtime + transaction-local tenant context + passing cross-tenant negative tests = tenant-isolation acceptance.**
 
 Policy definitions alone do not constitute acceptance.
+
+
+## Automated live acceptance
+
+The repository provides `.github/workflows/tenant-isolation-live-acceptance.yml`.
+
+Configure the GitHub Actions secret `RUPAYKG_RUNTIME_DATABASE_URL` with the exact intended non-BYPASSRLS application runtime connection string. The workflow executes the read-only preflight and the transactional post-RLS negative test against that database. A passing workflow run is deployment evidence; the secret value must never be printed or committed.
