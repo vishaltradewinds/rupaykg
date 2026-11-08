@@ -159,3 +159,15 @@ A disposable PostgreSQL contract was added at `scripts/test-shakti-rls-policy-ru
 - the protected policies do not use `current_user` as a substitute for authoritative tenant context.
 
 This remains CI evidence only when the workflow actually executes. The latest controlled branch still has no associated GitHub Actions run, so no runtime pass is claimed.
+
+
+## 2026-11-08 execution-context grant reconciliation
+
+The runtime grant reconciliation migration now explicitly includes all Shakti execution-context functions used by the controlled application boundary:
+
+- `app.set_request_context(uuid,uuid)`
+- `app.set_identity_context(uuid)`
+- `app.set_platform_context(uuid)`
+- `app.set_authority_context(uuid,text,uuid)`
+
+A disposable static contract at `scripts/test-shakti-execution-context-grants-contract.mjs` verifies the complete grant set and rejects accidental grants on `schema_migrations`. This is a release-safety contract only until CI executes.
