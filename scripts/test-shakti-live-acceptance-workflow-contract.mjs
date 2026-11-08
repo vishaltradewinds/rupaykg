@@ -42,6 +42,13 @@ if (!/Verify controlled DDL role owns protected tenant tables/.test(controlledMi
  || !/\)=17 then 1 else 0 end/.test(controlledMigration)) {
   failures.push("Controlled production migration must fail closed unless the executing DDL role owns all 17 protected tenant tables.");
 }
+const provisioning = fs.readFileSync("ops/tenant-isolation/PROVISION_CONTROLLED_DDL_ROLE.sql", "utf8");
+if (!/must not be SUPERUSER or BYPASSRLS/.test(provisioning)
+ || !/expected runtime role rupaykg_app_runtime is missing/.test(provisioning)
+ || !/alter table organizations owner to rupaykg_ddl_migration/.test(provisioning)) {
+  failures.push("Controlled DDL-role provisioning must fail closed on unsafe provisioning sessions, require the runtime role, and explicitly transfer protected-table ownership.");
+}
+
 if (!fs.existsSync("ops/tenant-isolation/PROVISION_CONTROLLED_DDL_ROLE.sql")) {
   failures.push("Approval-gated controlled DDL-role provisioning plan is missing.");
 }
