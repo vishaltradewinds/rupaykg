@@ -105,7 +105,6 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
       return { source: "postgresql", syntheticData: false, authoritativeMutation: true, eprReturn: updated.rows[0], externalSubmission: "NOT_SUBMITTED" };
       });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "EPR return submission unavailable", syntheticData: false }); }
-    });
   });
 
   app.post("/api/v1/epr/returns/:returnId/external-reference", async (request, reply) => {
