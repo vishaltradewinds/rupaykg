@@ -853,3 +853,10 @@
 - Code checkpoint: `25742a31a767aba25ddc20de4c08e2a5a785ddab`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+### 2026-11-08 — Migration integrity contract executable defect fixed
+- Found a real deterministic-contract defect in `test-shakti-migration-integrity-contract.mjs`: the protected identity-liveness gate was being checked with `String.includes()` even though the required value contained regex alternation `(hardening|completion)`; this could never match the actual migration-runner regex.
+- Replaced that literal-substring check with an executable regex assertion while retaining explicit checks for both migration identities.
+- Code checkpoint: `d5dcb315319275142694fdb51d23a07f57bdd92a`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
