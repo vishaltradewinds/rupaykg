@@ -660,6 +660,12 @@ test("Shakti RLS EPR obligations are tenant-isolated for insert, read and update
       assert.equal(updated.rows[0]!.id, eprObligationA);
       assert.equal(updated.rows[0]!.fulfilled_quantity, "3");
 
+      const sameTenantInserted = await client.query<{ id: string; obligated_organization_id: string }>(
+        "insert into epr_obligations(obligation_id,scheme_id,obligated_organization_id,category_code,target_quantity,fulfilled_quantity,status) values($1,$2,$3,'RLS_SAME',5,0,'OPEN') returning id, obligated_organization_id",
+        [obligationA, schemeId, organizationA],
+      );
+      assert.equal(sameTenantInserted.rows[0]!.obligated_organization_id, organizationA);
+
       await assert.rejects(
         () => client.query(
           "insert into epr_obligations(obligation_id,scheme_id,obligated_organization_id,category_code,target_quantity,fulfilled_quantity,status) values($1,$2,$3,'RLS_CROSS',20,0,'OPEN')",
