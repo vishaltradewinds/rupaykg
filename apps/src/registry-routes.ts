@@ -18,6 +18,8 @@ export async function registerRegistryRoutes(app:FastifyInstance,pool:Pool|null)
     const auth=await authFor(request as never,reply,pool);if(!auth||!pool)return;const b=bodyOf(request as never);
     const activityId=str(b,"activityId"),trustRootId=str(b,"trustRootId"),verificationId=str(b,"verificationId"),issuerOrganizationId=str(b,"issuerOrganizationId"),quantity=positive(b,"quantity"),unit=str(b,"unit");
     if(!activityId||!trustRootId||!verificationId||!issuerOrganizationId||quantity===null||!unit)return reply.code(400).send({error:"activityId, trustRootId, verificationId, issuerOrganizationId, positive quantity and unit are required"});
+    if(!auth.activeOrganizationId)return reply.code(400).send({error:"Active organization is required",code:"TENANT_CONTEXT_REQUIRED"});
+    if(auth.activeOrganizationId!==issuerOrganizationId)return reply.code(403).send({error:"Issuer organization must match the authenticated active organization",code:"ORG_CONTEXT_MISMATCH"});
     if(!canActForOrganization(auth,issuerOrganizationId))return reply.code(403).send({error:"Issuer organization access denied",code:"ORG_FORBIDDEN"});
     
     try{return reply.code(201).send({source:"postgresql",syntheticData:false,credential:await withTenantTransaction(pool,{...auth,activeOrganizationId:issuerOrganizationId},async c=>{
