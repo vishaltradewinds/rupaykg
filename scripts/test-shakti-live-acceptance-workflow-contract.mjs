@@ -69,6 +69,13 @@ if (!/npm run migrate -w @rupaykg\/api/.test(controlledMigration)
  || !/MIGRATION_MAX_VERSION: "099"/.test(controlledMigration)) {
   failures.push("Controlled production migration must use the repository migration runner with an explicit 099 cutover ceiling.");
 }
+if (!/Verify Shakti runtime security contract/.test(controlledMigration)
+ || !/post_migration_runtime_security_contract_assertion/.test(controlledMigration)
+ || !/rolname='rupaykg_app_runtime'/.test(controlledMigration)
+ || !/authenticate_bearer_session/.test(controlledMigration)
+ || !/is_verified_org_member/.test(controlledMigration)) {
+  failures.push("Controlled production migration must verify the post-migration non-BYPASSRLS runtime role and all three governed Shakti SECURITY DEFINER functions before RLS activation.");
+}
 if (!/Migration complete\. RLS activation remains a separate controlled DDL gate\./.test(controlledMigration)) {
   failures.push("Controlled production migration must not silently activate RLS.");
 }
