@@ -553,6 +553,13 @@ test("Shakti RLS carbon calculations are tenant-isolated on parent activity scop
       const visible = await client.query<{ id: string; activity_id: string }>("select id,activity_id from carbon_calculations where activity_id in ($1,$2)", [activityA, activityB]);
       assert.equal(visible.rows.length, 1);
       assert.equal(visible.rows[0]!.id, calculationA);
+      const sameTenantUpdate = await client.query<{ id: string; result: string }>(
+        "update carbon_calculations set result='2' where id=$1 returning id,result",
+        [calculationA],
+      );
+      assert.equal(sameTenantUpdate.rows[0]!.id, calculationA);
+      assert.equal(sameTenantUpdate.rows[0]!.result, "2");
+
       await assert.rejects(
         () => client.query(
           "insert into carbon_calculations(activity_id,methodology_version_id,inputs,result,unit,status,calculated_at,baseline_result,uncertainty,dataset_hash,formula_hash,calculation_trace,provenance_version,calculation_hash) values($1,$2,'{}'::jsonb,'1','tCO2e','CALCULATED',now(),0,0,'dataset-cross-$3','formula-cross-$3','[]'::jsonb,'1','calculation-cross-$3')",
