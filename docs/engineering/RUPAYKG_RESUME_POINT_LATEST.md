@@ -303,3 +303,12 @@
 - Exact-head GitHub Actions execution remains **NOT VERIFIED**; no workflow run exists for the controlled branch head.
 - Production Neon/RLS/deployment remains **READ-ONLY/HOLD**.
 - Next: continue route-wide residual authority review, then deepen disposable runtime behavioral coverage for all five protected core RLS tables before any production activation proposal.
+
+
+### 2026-11-08 — Protected-core RLS runtime coverage deepening
+- Expanded `apps/src/tenant-isolation.integration.test.ts` with executable disposable-runtime RLS tests for `evidence` and `carbon_calculations`, including tenant-scoped visibility and cross-tenant insert rejection.
+- Carbon calculation coverage uses an authoritative `methodology_versions` fixture and follows the same parent-activity tenant boundary used by production policy.
+- Strengthened `scripts/test-shakti-rls-write-contract.mjs` so the CI contract explicitly requires the new evidence/carbon runtime tests and EPR obligation mutation coverage.
+- Runtime RLS coverage now has concrete behavioral tests for activities, measurements, evidence, and carbon calculations; EPR obligation mutation remains represented by the production-path contract and grant/policy checks pending a disposable fixture that can create the obligation dependency graph without privileged shortcuts.
+- Production Neon remains READ-ONLY/HOLD. No production migration or RLS activation was performed.
+- Exact-head GitHub Actions execution remains NOT VERIFIED because the controlled branch has not produced a workflow run.
