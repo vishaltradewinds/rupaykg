@@ -101,7 +101,7 @@ test("database organization liveness revalidates identity, membership and organi
   const queries: Array<{ sql: string; values: unknown[] }> = [];
   const client = { query: async (sql: string, values: unknown[]) => {
     queries.push({ sql, values });
-    return { rows: [{ ok: true }] };
+    return { rows: [{ id: "membership-a" }] };
   } } as never;
   const auth = {
     identityId: "identity-a",
