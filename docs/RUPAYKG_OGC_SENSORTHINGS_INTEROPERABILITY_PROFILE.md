@@ -40,3 +40,16 @@ Before claiming production interoperability, RupayKg must still validate:
 This therefore remains **PARTIAL** until an actual SensorThings consumer/server integration is validated.
 
 **Shakti rule:** reuse the existing measurement authority; expose interoperable views; do not build a parallel measurement system.
+
+
+## Runtime integration
+
+A tenant-scoped read-only endpoint now exposes an authoritative measurement through the SensorThings-compatible representation:
+
+`GET /api/v1/interoperability/sensorthings/measurements/:measurementId`
+
+The endpoint authenticates the caller, requires an active organization, executes the source query inside `withTenantTransaction()`, and restricts the measurement to that organization. It reads the existing `measurements` and `activities` records and does not persist a second SensorThings representation.
+
+The endpoint is an interoperability export boundary, not a regulatory or MRV decision endpoint. The source PostgreSQL record remains authoritative.
+
+Runtime acceptance remains open until this endpoint is exercised against the target production database and the resulting representation is validated by an actual SensorThings consumer/conformance test suite.
