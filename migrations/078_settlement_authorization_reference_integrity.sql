@@ -10,7 +10,7 @@ returns trigger
 language plpgsql
 as $$
 begin
-  if TG_OP = 'UPDATE' and old.authorization_reference is not null
+  if old.authorization_reference is not null
      and new.authorization_reference is distinct from old.authorization_reference then
     raise exception 'settlement authorization reference cannot be changed after assignment';
   end if;
