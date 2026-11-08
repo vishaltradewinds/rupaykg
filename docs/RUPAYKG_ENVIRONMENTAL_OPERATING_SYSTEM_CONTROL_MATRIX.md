@@ -25,7 +25,7 @@ A status must not be inferred from legacy/reference repositories.
 | IoT/Measurement | Field-device enrollment | Device enrollment/provenance migrations and runtime tests exist | GREEN |
 | IoT/Measurement | Physical instrumentation | Field-device software exists; physical site acceptance remains external | AMBER |
 | Data | Authoritative PostgreSQL path | Migration validation and DB-backed CI are present | GREEN |
-| Data | Tenant isolation | Runtime contract migration exists; RLS/runtime deployment evidence remains | OPEN |
+| Data | Tenant isolation | Runtime contract migration exists; tenant-scoped field-sync intake/apply now execute through `withTenantTransaction()`; RLS/runtime deployment evidence remains | OPEN |
 | Data | Cross-tenant negative proof | Tenant isolation integration test exists; production evidence remains required | AMBER |
 | AI | Advisory boundary | Intelligence routes and lifecycle tests preserve authoritative state | GREEN |
 | AI | Model provenance/uncertainty | Advisory boundary exists; full model governance evidence requires expansion | AMBER |
@@ -41,7 +41,7 @@ A status must not be inferred from legacy/reference repositories.
 | Ecosystem | External system acceptance | External provider/government interfaces remain separately gated | OPEN |
 | Ecosystem | Reference ecosystem adoption control | Shakti adoption matrix plus repository-to-reference implementation crosswalk now exist; external conformance/field acceptance remains outstanding | AMBER |
 | Security | Production identity | Production identity provisioning controls exist | AMBER |
-| Security | Runtime least privilege | Tenant isolation contract defines non-BYPASSRLS runtime role; deployment proof remains | OPEN |
+| Security | Runtime least privilege | Tenant isolation contract defines non-BYPASSRLS runtime role; field-sync business transactions now establish transaction-local tenant context; production role provisioning/proof remains | OPEN |
 | Operations | Backup/restore | Production gate requires demonstrated backup/restore evidence | OPEN |
 | Operations | Monitoring/rollback | Production gate requires demonstrated monitoring/rollback evidence | OPEN |
 | TRL | Engineering readiness | Strong repository/CI evidence exists | GREEN |
@@ -65,4 +65,4 @@ The release decision is controlled by the highest-severity unresolved applicable
 5. Reconcile methodology source/version and obtain/record required external acceptance.
 6. Repeat end-to-end acceptance after these controls are closed.
 
-| External integration mediator runtime intake | **GREEN/AMBER** | Versioned contract, tenant-safe persistence, idempotency and authenticated API intake implemented. Provider-specific external connector, remote conformance and production acceptance remain open. |
+| External integration mediator runtime intake | **GREEN/AMBER** | Versioned contract, tenant-safe persistence, idempotency and authenticated API intake implemented. Field-sync intake/apply now also bind to the tenant transaction contract. Provider-specific external connector, remote conformance and production acceptance remain open. |
