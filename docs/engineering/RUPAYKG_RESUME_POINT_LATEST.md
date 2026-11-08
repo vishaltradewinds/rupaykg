@@ -481,3 +481,16 @@
 - Latest checkpoint commit: `719f5908d1f9476d9566b8b7711095a433ed7cf6`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Credential + registry provenance behavioral acceptance
+- Extended `apps/src/tenant-isolation.integration.test.ts` with credential RLS acceptance:
+  - current owner can read/update
+  - unrelated organization cannot read
+  - runtime DELETE is denied
+  - registry event with mismatched recorded identity is denied
+  - cross-tenant registry event write is denied
+- This provides behavioral proof for protected migrations 094 and 095 in addition to their deterministic contracts.
+- Latest checkpoint commit: `cc1431f9670e80f58f2b08446c0fe8d5dfc3bd1c`.
+- Exact-head CI: **NOT VERIFIED** until a workflow run is attached to this exact commit.
+- Production remains **READ-ONLY/HOLD**.
