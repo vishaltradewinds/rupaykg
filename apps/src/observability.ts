@@ -63,6 +63,7 @@ export function installObservability(app: FastifyInstance): void {
     const context = createTraceContext(request);
     request.headers["x-rupaykg-trace-id"] = context.traceId;
     (request as FastifyRequest & { rupaykgTrace?: TraceContext }).rupaykgTrace = context;
+    request.raw.res.setHeader("x-rupaykg-trace-id", context.traceId);
   });
 
   app.addHook("onResponse", async request => {
