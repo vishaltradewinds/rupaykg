@@ -832,3 +832,10 @@
 - Code checkpoint: `1be04a97533a0974369735879640d54fb00423fb`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+### 2026-11-08 — Migration integrity contract extended
+- Found another coverage gap: the migration integrity contract verified protected migration 100 but did not explicitly verify the two 20261108 identity-liveness migrations or their protected-gate identity.
+- Extended the contract to require both `20261108_context_identity_liveness_hardening` and `20261108_context_identity_liveness_completion`, plus the protected migration gate pattern.
+- Code checkpoint: `6aac0d604a45f813e9fad99f583a3a958e1cdbe7`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
