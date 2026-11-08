@@ -1,4 +1,4 @@
-import { readProductionConfig } from "./production-config.js";
+import { readProductionConfig } from "./production-config.js";\nimport { buildRuntimeAttestation } from "./observability.js";
 
 const config = readProductionConfig();
 
@@ -12,4 +12,4 @@ process.env.RUPAYKG_ALLOWED_ORIGINS = config.allowedOrigins.join(",");
 process.env.RUPAYKG_AUTH_MODE = config.authMode;
 process.env.RUPAYKG_SYNTHETIC_DATA = String(config.syntheticData);
 
-await import("./server.js");
+console.info(JSON.stringify(buildRuntimeAttestation()));\n\nawait import("./server.js");
