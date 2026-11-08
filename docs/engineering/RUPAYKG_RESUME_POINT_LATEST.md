@@ -377,3 +377,12 @@
 - Exact-head GitHub Actions execution remains **NOT VERIFIED**.
 - Production Neon/RLS/deployment remains **READ-ONLY/HOLD**.
 - Next autonomous action: continue multi-party settlement and protected-core behavioral acceptance, including cross-tenant read/write denial and lifecycle transition invariants, then obtain exact-head CI evidence.
+
+
+### 2026-11-08 — Settlement runtime test integrity correction
+- Corrected escaped newline literals introduced in the settlement runtime acceptance test so the TypeScript source is syntactically normal text rather than containing literal `\\n` sequences.
+- Preserved payer-spoofing and counterpart-side authorization/execution/confirmation denial coverage.
+- Latest controlled head: `bbf51840e0a1823578369394e609be51e2fcefaa`.
+- Exact-head CI remains **NOT VERIFIED** until a GitHub Actions run is observed for this head.
+- Production Neon/RLS/deployment remains **READ-ONLY/HOLD**.
+- Next action: continue protected-core/multi-party behavioral acceptance and verify the resulting exact-head CI evidence before any production-state change.
