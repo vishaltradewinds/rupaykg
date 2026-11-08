@@ -493,6 +493,13 @@ test("Shakti RLS evidence rows are tenant-isolated for insert and read", { skip:
       );
       assert.equal(visible.rows.length, 1);
       assert.equal(visible.rows[0]!.id, evidenceA);
+      const sameTenantUpdate = await client.query<{ id: string; status: string }>(
+        "update evidence set status='VERIFIED' where id=$1 returning id,status",
+        [evidenceA],
+      );
+      assert.equal(sameTenantUpdate.rows[0]!.id, evidenceA);
+      assert.equal(sameTenantUpdate.rows[0]!.status, "VERIFIED");
+
       await assert.rejects(
         () => client.query(
           "insert into evidence(activity_id,evidence_type,status,captured_at,content_uri,content_hash,metadata) values($1,'RLS_TEST','CAPTURED',now(),'db://rls-test/cross-tenant',$2,'{}'::jsonb)",
