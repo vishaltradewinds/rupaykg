@@ -16,7 +16,6 @@ where rolname = current_user;
 
 select
   current_user = 'rupaykg_app_runtime'
-  or pg_has_role(current_user, 'rupaykg_app_runtime', 'member')
   as runtime_role_membership;
 
 select
@@ -39,7 +38,6 @@ select 1 / case
   when coalesce((select rolsuper from pg_roles where rolname = current_user), true) = false
    and coalesce((select rolbypassrls from pg_roles where rolname = current_user), true) = false
    and current_user <> 'rupaykg_app_runtime'
-   and not pg_has_role(current_user, 'rupaykg_app_runtime', 'member')
    and (
      select count(*)
      from pg_class c
