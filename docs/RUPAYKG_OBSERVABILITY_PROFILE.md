@@ -49,3 +49,8 @@ See `ops/observability/OTEL_DEPLOYMENT_CONTRACT.md` for the production dependenc
 ## Dependency compatibility review
 
 The OpenTelemetry dependency review is recorded in `ops/observability/OTEL_DEPENDENCY_REVIEW.md`. Production SDK adoption remains blocked until the deployed Node.js runtime version, pinned SDK/exporter versions, license review, ESM startup ordering, OTLP configuration and runtime evidence are proven.
+
+
+## Runtime attestation foundation
+
+Production startup now emits a structured `rupaykg.runtime.attestation` event containing the executing Node.js version, runtime, platform and architecture before the authoritative server module is loaded. Repository tests validate the attestation shape and Node version format. This provides a machine-readable runtime-evidence hook; retained production log evidence is still required before declaring the live runtime gate closed.
