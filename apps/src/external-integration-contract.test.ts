@@ -45,7 +45,7 @@ test("rejects invalid timestamps", () => {
 });
 
 test("rejects array payloads", () => {
-  const result = validateIntegrationEnvelope({ ...valid, payload: [] });
+  const result = validateIntegrationEnvelope({ ...valid, payload: [] as unknown as Record<string, unknown> });
   assertInvalid(result);
   assert.equal(result.code, "INVALID_PAYLOAD");
 });
