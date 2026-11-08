@@ -42,6 +42,15 @@ declare
   v_missing integer;
   v_owned integer;
 begin
+  if current_user = 'rupaykg_app_runtime' then
+    raise exception 'DDL_ROLE_PROVISIONING_BLOCKED: provisioning administrator cannot be the application runtime role';
+  end if;
+
+  if coalesce((select rolsuper from pg_roles where rolname = current_user), true)
+     or coalesce((select rolbypassrls from pg_roles where rolname = current_user), true) then
+    raise exception 'DDL_ROLE_PROVISIONING_BLOCKED: provisioning administrator must be explicitly governed and non-BYPASSRLS/non-SUPERUSER';
+  end if;
+
   if not exists (select 1 from pg_roles where rolname = 'rupaykg_app_runtime') then
     raise exception 'DDL_ROLE_PROVISIONING_BLOCKED: expected runtime role rupaykg_app_runtime is missing';
   end if;
