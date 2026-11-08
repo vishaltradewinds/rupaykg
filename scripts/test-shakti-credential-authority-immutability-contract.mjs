@@ -23,7 +23,7 @@ if (failures.length) {
 console.log("Shakti credential authority immutability contract PASSED.");
 
 const grants = fs.readFileSync("migrations/100_credential_runtime_update_column_scope.sql", "utf8");\nconst routes = fs.readFileSync("apps/src/registry-routes.ts", "utf8");\nfor (const required of ["update credentials set status='ACTIVE'", "update credentials set status='TRANSFERRED'", "update credentials set status='RETIRED'"]) {\n  if (!routes.includes(required)) {\n    console.error("Shakti credential runtime mutation contract FAILED: missing " + required);\n    process.exit(1);\n  }\n}
-for (const required of ["revoke update on public.credentials from rupaykg_app_runtime", "grant update (status) on public.credentials to rupaykg_app_runtime", "grant select, insert, update on public.credentials to rupaykg_app_runtime"]) {
+for (const required of ["revoke update on public.credentials from rupaykg_app_runtime", "grant update (status) on public.credentials to rupaykg_app_runtime", "grant select, insert, update on public.credentials to rupaykg_app_runtime", "revoke delete on public.credentials from rupaykg_app_runtime"]) {
   if (!grants.includes(required)) {
     console.error("Shakti credential runtime update scope contract FAILED: missing " + required);
     process.exit(1);
