@@ -552,3 +552,17 @@
 - Latest checkpoint commit: `1d7d0d78d4857d411bb4def23f54b196fd5f0bc5`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Active verifier authority hardening
+- Hardened migration `099_registry_event_assigned_verifier_read.sql` again.
+- Assigned-verifier registry read access now requires all of:
+  - current identity matches `verifier_identity_id`
+  - verification decision is `APPROVED`
+  - verifier identity is currently `VERIFIED`
+  - current identity still has the authoritative verification permission
+- This prevents a previously approved verifier from retaining registry read access after identity suspension or verifier authorization removal.
+- Deterministic contract updated.
+- Latest checkpoint commit: `e3975ecb2209c7a8c1be575d450c4647b018d780`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
