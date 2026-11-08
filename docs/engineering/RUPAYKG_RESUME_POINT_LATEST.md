@@ -622,3 +622,12 @@
 - Latest checkpoint commit: `d1f35d90e4d1a69d68dc0443b34429e6c98de026`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Credential runtime delete boundary made explicit
+- Strengthened migration `100_credential_runtime_update_column_scope.sql` with an explicit runtime `DELETE` revoke.
+- Updated the deterministic credential privilege contract to require that delete denial.
+- This makes the credential lifecycle boundary explicit at the DB privilege layer: runtime may mutate lifecycle status only and cannot delete credential authority records.
+- Latest checkpoint commit: `2308eec889568de5c74ee91167a85a9fe89f05c3`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
