@@ -3,6 +3,7 @@ import fs from "node:fs";
 
 const failures = [];
 const workflow = fs.readFileSync(".github/workflows/tenant-isolation-live-acceptance.yml", "utf8");
+const controlledMigration = fs.readFileSync(".github/workflows/controlled-shakti-production-migration.yml", "utf8");
 const boundary = fs.readFileSync("ops/tenant-isolation/VERIFY_SECURITY_DEFINER_BOUNDARIES.sql", "utf8");
 const activation = fs.readFileSync("ops/tenant-isolation/ACTIVATE_RLS.sql", "utf8");
 const ddlPreflight = fs.readFileSync("ops/tenant-isolation/VERIFY_DDL_ROLE_PRE_RLS.sql", "utf8");
@@ -24,6 +25,23 @@ if (!/Verify runtime and DDL target identity match/.test(workflow)
  || !/ddl_fingerprint/.test(workflow)
  || !/Runtime and controlled DDL connections do not target the same PostgreSQL endpoint/.test(workflow)) {
   failures.push("Live acceptance must fail closed when runtime and controlled DDL connections target different PostgreSQL endpoints.");
+}
+
+if (!/environment:\s+\n\s+name: production-db-migration-approval/.test(controlledMigration)) {
+  failures.push("Controlled production migration must require the production-db-migration-approval environment.");
+}
+if (!/DATABASE_URL: \$\{\{ secrets\.RUPAYKG_DDL_DATABASE_URL \}\}/.test(controlledMigration)) {
+  failures.push("Controlled production migration must use the governed RUPAYKG_DDL_DATABASE_URL secret.");
+}
+if (!/Verify required DDL role safety/.test(controlledMigration)
+ || !/rolsuper.*rolbypassrls/.test(controlledMigration)) {
+  failures.push("Controlled production migration must verify the DDL role is not SUPERUSER or BYPASSRLS.");
+}
+if (!/npm run migrate -w @rupaykg\/api/.test(controlledMigration)) {
+  failures.push("Controlled production migration must use the repository migration runner.");
+}
+if (!/Migration complete\. RLS activation remains a separate controlled DDL gate\./.test(controlledMigration)) {
+  failures.push("Controlled production migration must not silently activate RLS.");
 }
 
 for (const fn of ["app.set_request_context", "app.is_verified_org_member", "app.authenticate_bearer_session"]) {
