@@ -448,3 +448,111 @@ test("Shakti RLS child-row scope follows the parent activity tenant", { skip: !e
     await ownerPool.end();
   }
 });
+
+
+test("Shakti RLS evidence rows are tenant-isolated for insert and read", { skip: !enabled }, async () => {
+  const runtimePool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const ownerPool = new Pool({ connectionString: process.env.RUPAYKG_TEST_OWNER_DATABASE_URL });
+  const suffix = randomBytes(8).toString("hex");
+  let identityId = "", organizationA = "", organizationB = "", roleA = "", membershipA = "", activityA = "", activityB = "", evidenceA = "";
+  try {
+    organizationA = (await ownerPool.query<{ id: string }>("insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id", ["TEST-RLS-EVIDENCE-A-" + suffix])).rows[0]!.id;
+    organizationB = (await ownerPool.query<{ id: string }>("insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id", ["TEST-RLS-EVIDENCE-B-" + suffix])).rows[0]!.id;
+    identityId = (await ownerPool.query<{ id: string }>("insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id", ["rls-evidence:" + suffix, "RLS Evidence " + suffix, "rls-evidence-" + suffix + "@example.invalid"])).rows[0]!.id;
+    roleA = (await ownerPool.query<{ id: string }>("insert into roles(organization_id,name,permissions,geography_scope) values($1,'tenant_test_role','["activity:write"]'::jsonb,'[]'::jsonb) returning id", [organizationA])).rows[0]!.id;
+    membershipA = (await ownerPool.query<{ id: string }>("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED') returning id", [identityId, organizationA, roleA])).rows[0]!.id;
+    activityA = (await ownerPool.query<{ id: string }>("insert into activities(organization_id,activity_type,status,metadata) values($1,'RLS_EVIDENCE','DRAFT','{}'::jsonb) returning id", [organizationA])).rows[0]!.id;
+    activityB = (await ownerPool.query<{ id: string }>("insert into activities(organization_id,activity_type,status,metadata) values($1,'RLS_EVIDENCE','DRAFT','{}'::jsonb) returning id", [organizationB])).rows[0]!.id;
+
+    const client = await runtimePool.connect();
+    try {
+      await client.query("begin");
+      await client.query("set local role rupaykg_app_runtime");
+      await client.query("select app.set_request_context($1,$2)", [identityId, organizationA]);
+      evidenceA = (await client.query<{ id: string }>(
+        "insert into evidence(activity_id,evidence_type,status,captured_at,content_uri,content_hash,metadata) values($1,'RLS_TEST','CAPTURED',now(),'db://rls-test/$2',$3,'{}'::jsonb) returning id",
+        [activityA, suffix, "hash-" + suffix],
+      )).rows[0]!.id;
+      const visible = await client.query<{ id: string; activity_id: string }>(
+        "select id,activity_id from evidence where activity_id in ($1,$2)",
+        [activityA, activityB],
+      );
+      assert.equal(visible.rows.length, 1);
+      assert.equal(visible.rows[0]!.id, evidenceA);
+      await assert.rejects(
+        () => client.query(
+          "insert into evidence(activity_id,evidence_type,status,captured_at,content_uri,content_hash,metadata) values($1,'RLS_TEST','CAPTURED',now(),'db://rls-test/cross-tenant',$2,'{}'::jsonb)",
+          [activityB, "cross-" + suffix],
+        ),
+        /row-level security|policy/i,
+      );
+      await client.query("rollback");
+    } catch (error) {
+      try { await client.query("rollback"); } catch {}
+      throw error;
+    } finally { client.release(); }
+  } finally {
+    if (evidenceA) await ownerPool.query("delete from evidence where id=$1", [evidenceA]);
+    if (activityA) await ownerPool.query("delete from activities where id=$1", [activityA]);
+    if (activityB) await ownerPool.query("delete from activities where id=$1", [activityB]);
+    if (membershipA) await ownerPool.query("delete from organization_memberships where id=$1", [membershipA]);
+    if (roleA) await ownerPool.query("delete from roles where id=$1", [roleA]);
+    if (identityId) await ownerPool.query("delete from identities where id=$1", [identityId]);
+    if (organizationA) await ownerPool.query("delete from organizations where id=$1", [organizationA]);
+    if (organizationB) await ownerPool.query("delete from organizations where id=$1", [organizationB]);
+    await runtimePool.end(); await ownerPool.end();
+  }
+});
+
+test("Shakti RLS carbon calculations are tenant-isolated on parent activity scope", { skip: !enabled }, async () => {
+  const runtimePool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const ownerPool = new Pool({ connectionString: process.env.RUPAYKG_TEST_OWNER_DATABASE_URL });
+  const suffix = randomBytes(8).toString("hex");
+  let identityId = "", organizationA = "", organizationB = "", roleA = "", membershipA = "", activityA = "", activityB = "", calculationA = "";
+  try {
+    organizationA = (await ownerPool.query<{ id: string }>("insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id", ["TEST-RLS-CARBON-A-" + suffix])).rows[0]!.id;
+    organizationB = (await ownerPool.query<{ id: string }>("insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id", ["TEST-RLS-CARBON-B-" + suffix])).rows[0]!.id;
+    identityId = (await ownerPool.query<{ id: string }>("insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id", ["rls-carbon:" + suffix, "RLS Carbon " + suffix, "rls-carbon-" + suffix + "@example.invalid"])).rows[0]!.id;
+    roleA = (await ownerPool.query<{ id: string }>("insert into roles(organization_id,name,permissions,geography_scope) values($1,'tenant_test_role','["activity:write"]'::jsonb,'[]'::jsonb) returning id", [organizationA])).rows[0]!.id;
+    membershipA = (await ownerPool.query<{ id: string }>("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED') returning id", [identityId, organizationA, roleA])).rows[0]!.id;
+    activityA = (await ownerPool.query<{ id: string }>("insert into activities(organization_id,activity_type,status,metadata) values($1,'RLS_CARBON','DRAFT','{}'::jsonb) returning id", [organizationA])).rows[0]!.id;
+    activityB = (await ownerPool.query<{ id: string }>("insert into activities(organization_id,activity_type,status,metadata) values($1,'RLS_CARBON','DRAFT','{}'::jsonb) returning id", [organizationB])).rows[0]!.id;
+    const methodology = (await ownerPool.query<{ id: string }>("select id from methodology_versions order by id limit 1")).rows[0];
+    if (!methodology) throw new Error("RLS carbon runtime fixture requires at least one methodology_versions row");
+
+    const client = await runtimePool.connect();
+    try {
+      await client.query("begin");
+      await client.query("set local role rupaykg_app_runtime");
+      await client.query("select app.set_request_context($1,$2)", [identityId, organizationA]);
+      calculationA = (await client.query<{ id: string }>(
+        "insert into carbon_calculations(activity_id,methodology_version_id,inputs,result,unit,status,calculated_at,baseline_result,uncertainty,dataset_hash,formula_hash,calculation_trace,provenance_version,calculation_hash) values($1,$2,'{}'::jsonb,'1','tCO2e','CALCULATED',now(),0,0,'dataset-$3','formula-$3','[]'::jsonb,'1','calculation-$3') returning id",
+        [activityA, methodology.id, suffix],
+      )).rows[0]!.id;
+      const visible = await client.query<{ id: string; activity_id: string }>("select id,activity_id from carbon_calculations where activity_id in ($1,$2)", [activityA, activityB]);
+      assert.equal(visible.rows.length, 1);
+      assert.equal(visible.rows[0]!.id, calculationA);
+      await assert.rejects(
+        () => client.query(
+          "insert into carbon_calculations(activity_id,methodology_version_id,inputs,result,unit,status,calculated_at,baseline_result,uncertainty,dataset_hash,formula_hash,calculation_trace,provenance_version,calculation_hash) values($1,$2,'{}'::jsonb,'1','tCO2e','CALCULATED',now(),0,0,'dataset-cross-$3','formula-cross-$3','[]'::jsonb,'1','calculation-cross-$3')",
+          [activityB, methodology.id, suffix],
+        ),
+        /row-level security|policy/i,
+      );
+      await client.query("rollback");
+    } catch (error) {
+      try { await client.query("rollback"); } catch {}
+      throw error;
+    } finally { client.release(); }
+  } finally {
+    if (calculationA) await ownerPool.query("delete from carbon_calculations where id=$1", [calculationA]);
+    if (activityA) await ownerPool.query("delete from activities where id=$1", [activityA]);
+    if (activityB) await ownerPool.query("delete from activities where id=$1", [activityB]);
+    if (membershipA) await ownerPool.query("delete from organization_memberships where id=$1", [membershipA]);
+    if (roleA) await ownerPool.query("delete from roles where id=$1", [roleA]);
+    if (identityId) await ownerPool.query("delete from identities where id=$1", [identityId]);
+    if (organizationA) await ownerPool.query("delete from organizations where id=$1", [organizationA]);
+    if (organizationB) await ownerPool.query("delete from organizations where id=$1", [organizationB]);
+    await runtimePool.end(); await ownerPool.end();
+  }
+});
