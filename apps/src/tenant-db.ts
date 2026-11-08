@@ -62,6 +62,13 @@ export async function withTenantTransaction<T>(
   const client = await pool.connect();
   try {
     await client.query("begin");
+    const membership = await client.query<{ ok: boolean }>(
+      "select exists (select 1 from organization_memberships where identity_id=$1 and organization_id=$2 and status='VERIFIED') as ok",
+      [auth.identityId, auth.activeOrganizationId],
+    );
+    if (membership.rows[0]?.ok !== true) {
+      throw Object.assign(new Error("Active organization must have verified membership in the authoritative database"), { code: "TENANT_MEMBERSHIP_REVOKED" });
+    }
     await client.query("select app.set_request_context($1,$2)", [auth.identityId, auth.activeOrganizationId]);
     const result = await fn(client);
     await client.query("commit");
