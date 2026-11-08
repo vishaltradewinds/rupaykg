@@ -47,6 +47,15 @@ jobs:
             -f ops/tenant-isolation/VERIFY_AUTH_BOOTSTRAP.sql \
             2>&1 | tee tenant-isolation-evidence/auth-bootstrap.txt
 
+      - name: Verify SECURITY DEFINER tenant boundaries
+        run: |
+          set -euo pipefail
+          mkdir -p tenant-isolation-evidence
+          psql "$RUPAYKG_RUNTIME_DATABASE_URL" \\
+            -v ON_ERROR_STOP=1 \\
+            -f ops/tenant-isolation/VERIFY_SECURITY_DEFINER_BOUNDARIES.sql \\
+            2>&1 | tee tenant-isolation-evidence/security-definer-boundaries.txt
+
       - name: Verify runtime role and pre-RLS contract
         run: |
           set -euo pipefail
