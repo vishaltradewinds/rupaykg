@@ -35,7 +35,7 @@ const traceparent = `00-${traceId}-${parentSpanId}-01`;
 
 const health = await fetch(baseUrl + "/health");
 assert(health.status === 200, `/health returned ${health.status}`);
-assert(health.headers.get("x-rupaykg-trace-id") === undefined, "health trace header is intentionally absent on uninstrumented fetch");
+assert(typeof health.headers.get("x-rupaykg-trace-id") === "string" && health.headers.get("x-rupaykg-trace-id")?.length === 32, "health response must expose a valid RupayKg trace identity");
 const healthBody = await health.json();
 assert(healthBody.syntheticData === false, "health endpoint must declare syntheticData=false");
 
