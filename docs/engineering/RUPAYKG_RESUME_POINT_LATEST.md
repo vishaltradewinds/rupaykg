@@ -504,3 +504,15 @@
 - Latest checkpoint commit: `a78fb438557143f0fce15b47f2a1056650737136`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Field-sync tenant/identity boundary
+- Added protected migration `097_field_sync_tenant_rls.sql`.
+- Field-sync envelopes are scoped to authenticated identity + verified field device + active organization.
+- Field-sync conflicts inherit the same identity/organization boundary.
+- Field-sync cursors are scoped to the authenticated device identity/organization.
+- Runtime DELETE is revoked for envelopes, conflicts and cursors.
+- Added deterministic contract, protected migration CI gate, and behavioral acceptance.
+- Latest checkpoint commit: `4df80ded52f8b95492a9e04be8409586eafb3711`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
