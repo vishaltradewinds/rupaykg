@@ -16,7 +16,7 @@ const expected = [
 const failures = [];
 
 for (const [route, permission] of expected) {
-  const start = source.indexOf(route);
+  const start = source.indexOf(`app.${route.includes("/memberships") && route.includes(":membershipId") ? "patch" : "post"}("${route}"`);
   if (start < 0) {
     failures.push(`missing route: ${route}`);
     continue;
@@ -34,7 +34,7 @@ for (const [route, permission] of expected) {
   }
 }
 
-const decisionStart = source.indexOf("async function decideAccessChange");
+const decisionStart = source.indexOf("const decideAccessChange = async");
 if (decisionStart < 0) {
   failures.push("missing shared access-change decision function");
 } else {
