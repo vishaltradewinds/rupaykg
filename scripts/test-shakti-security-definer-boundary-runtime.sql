@@ -42,16 +42,11 @@ begin
     join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'app'
      and p.prosecdef
-     and coalesce(
-       regexp_replace(
-         regexp_replace(
-           lower(pg_get_functiondef(p.oid)),
-           '\\s+', '', 'g'
-         ),
-         '.*setsearch_path=([^a]+).*', '\\1'
-       ),
-       ''
-     ) not in ('public,app', 'pg_catalog,public,app');
+     and not exists (
+       select 1
+         from unnest(coalesce(p.proconfig, '{}'::text[])) setting
+        where setting in ('search_path=public, app', 'search_path=pg_catalog, public, app')
+     );
   if unsafe_search_path <> 0 then
     raise exception 'SECURITY DEFINER boundary failed: % app SECURITY DEFINER function(s) have an unapproved search_path', unsafe_search_path;
   end if;
