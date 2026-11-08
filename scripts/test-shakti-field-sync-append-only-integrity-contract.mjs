@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import fs from "node:fs";
-const migration=fs.readFileSync("migrations/084_field_sync_append_only_integrity.sql","utf8");
+const migration=fs.readFileSync("migrations/088_field_sync_append_only_integrity.sql","utf8");
 const source=fs.readFileSync("apps/src/sync-routes.ts","utf8");
 const failures=[];
 if(!/prevent_field_sync_envelope_mutation/.test(migration)) failures.push("append-only trigger function missing");
