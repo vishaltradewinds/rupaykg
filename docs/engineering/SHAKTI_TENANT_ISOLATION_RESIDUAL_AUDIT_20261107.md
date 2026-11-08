@@ -102,3 +102,16 @@ This is a controlled policy baseline, not runtime evidence. Production Neon, pro
 5. Only after those pass, prepare a production RLS deployment gate.
 
 TRL 9 remains NOT CLAIMED.
+
+
+## 2026-11-08 auth/onboarding identity-boundary hardening
+
+The authenticated onboarding application route is now explicitly bound to `withIdentityTransaction(pool, auth.identityId, ...)`. Geography validation, duplicate-application checks, organization creation, role creation, pending membership, geography scope, verification evidence, and stakeholder-application creation execute within the same identity transaction boundary.
+
+A disposable static contract was added at `scripts/test-shakti-onboarding-identity-boundary-contract.mjs` and wired into the controlled CI workflow. It asserts that the onboarding application route uses the identity transaction helper, keeps identity-scoped checks and onboarding writes inside that boundary, and does not fall back to direct `pool.query` / `pool.connect` within that route.
+
+This contract has been added to CI but has not yet executed because GitHub Actions reports zero workflow runs for the controlled head. Therefore this change is implementation evidence only, not CI-pass evidence.
+
+Latest controlled head after this hardening: 367f8e2691acfab5819605fde26f95e979f546d8.
+
+Production Neon, production RLS activation, production DDL/DML/role/grant changes, and TRL 9 remain HOLD / NOT CLAIMED.
