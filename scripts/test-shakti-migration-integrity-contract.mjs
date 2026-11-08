@@ -9,6 +9,8 @@ for (const required of [
   'createHash("sha256").update(sql).digest("hex")',
   "checksum mismatch: applied content has changed",
   "insert into schema_migrations(version, filename, checksum)",
+  "100_credential_runtime_update_column_scope",
+  "RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS",
 ]) {
   if (!source.includes(required)) failures.push("missing migration integrity control: " + required);
 }
