@@ -5,7 +5,7 @@ const completion=fs.readFileSync("migrations/20261108_context_identity_liveness_
 const failures=[];
 for(const [fn,source] of [["app.set_platform_context",hardening],["app.set_authority_context",hardening],["app.set_identity_context",completion]]){
  const start=source.indexOf(`function ${fn}`);
- const end=source.indexOf("\n$;",start)>=0 ? source.indexOf("\n$;",start) : source.indexOf("\n$shakti$;",start);
+ const end=source.indexOf("\n$$;",start)>=0 ? source.indexOf("\n$$;",start) : source.indexOf("\n$shakti$;",start);
  const block=source.slice(start,end);
  if(!/status = 'VERIFIED'/.test(block)||!/suspended_at is null/.test(block)) failures.push(fn+": must reject non-verified or suspended identities");
  if(!/security definer/.test(block)) failures.push(fn+": must remain SECURITY DEFINER");
