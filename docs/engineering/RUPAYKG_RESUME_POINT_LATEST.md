@@ -345,3 +345,16 @@
 - Latest controlled CI-head commit: `4c5e7d6b6031915e788afd60e0e79136c2e43ede`.
 - Exact-head GitHub Actions execution remains NOT VERIFIED until a workflow run is observed.
 - Production remains READ-ONLY/HOLD.
+
+
+### 2026-11-08 — Authoritative architecture + multi-party settlement acceptance
+- Established `docs/standards/RUPAYKG_AUTHORITATIVE_STANDARDS.md` as the single authoritative standards/governance index and `docs/architecture/RUPAYKG_FULL_STACK_ARCHITECTURE.md` as the controlling full-stack technical baseline.
+- Architecture now explicitly governs execution across field/edge, connectivity, API, domain, PostgreSQL authority, security/RLS, evidence, MRV, regulatory controls, verification, external trust/registry boundaries, value/settlement, AI, UI, CI/CD and continuous assurance.
+- Updated the full-stack architecture with an explicit no-drift rule and definition-of-done: architecture mapping → implementation → security → deterministic tests → integration evidence → field/operational evidence where applicable → lifecycle-state update → production gate.
+- Added disposable runtime behavioral coverage in `apps/src/registry-settlement-runtime.test.ts` for a payee-only identity attempting settlement authorization, execution and confirmation while the settlement payer remains the authoritative active tenant. Each counterpart attempt must fail closed with `ORG_CONTEXT_MISMATCH`.
+- This strengthens the four settlement mutation paths: create, authorize, execute and confirm, without granting the payee-only actor payer authority.
+- Settlement work remains test-only/disposable. No production Neon mutation, RLS activation, deployment or certification was performed.
+- Latest controlled head: `fc09f0572bd5070d3f822269c268dae73ebba95e`.
+- Exact-head GitHub Actions execution is **NOT VERIFIED** until a workflow run is observed for this controlled head.
+- Production Neon/RLS/deployment remains **READ-ONLY/HOLD**.
+- Next autonomous action: continue the multi-party protected-core acceptance matrix and close any remaining cross-tenant authority gaps, then obtain exact-head CI evidence before proposing any production cutover action.
