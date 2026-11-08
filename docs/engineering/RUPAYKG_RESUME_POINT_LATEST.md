@@ -451,3 +451,13 @@
 - Latest checkpoint commit: `6ce9c1f25241cc3f0422b29b77817b215d164a0d`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Registry provenance tenant boundary
+- Added protected migration `093_registry_event_tenant_rls.sql`.
+- `registry_events` now has tenant-scoped historical SELECT: an organization can read events in which it is the recorded source or destination owner.
+- Runtime INSERT is restricted to an organization represented in the event; runtime UPDATE/DELETE are explicitly revoked, preserving append-only provenance.
+- Added deterministic Shakti registry-event RLS contract and CI protected-migration gate.
+- Latest checkpoint commit: `a3821f7499dee2f56b2a1d10b266d0c6dcad3d8c`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
