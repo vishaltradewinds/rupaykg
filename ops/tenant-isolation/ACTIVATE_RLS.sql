@@ -31,6 +31,22 @@ begin
   end if;
   if (
     select count(*)
+      from pg_policies p
+     where p.schemaname = 'public'
+       and p.tablename in (
+         'organizations','roles','activities','obligations','credentials',
+         'settlements','audit_events','resource_flows','field_devices',
+         'organization_memberships','measurements','evidence','verifications',
+         'carbon_calculations','mrv_observations',
+         'evidence_verification_requirements','chain_of_custody_links'
+       )
+       and p.cmd in ('r','*')
+  ) <> 18 then
+    raise exception 'TENANT_ISOLATION_ACTIVATION_BLOCKED: every protected tenant table must have a SELECT RLS policy before activation';
+  end if;
+
+  if (
+    select count(*)
       from pg_class c
       join pg_namespace n on n.oid = c.relnamespace
      where n.nspname = 'public'
