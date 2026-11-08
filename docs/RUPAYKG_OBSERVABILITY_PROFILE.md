@@ -41,3 +41,6 @@ This remains an interoperability foundation, not an OpenTelemetry SDK/OTLP deplo
 ## Span contract validation gate
 
 The transport-neutral span contract now includes deterministic validation for W3C trace/span identity, Unix-nanosecond timestamp ordering, and forbidden sensitive attribute names. Repository tests cover invalid timing and sensitive-attribute rejection. This strengthens the engineering interoperability gate but does not constitute SDK, OTLP collector, runtime, or production acceptance.
+
+
+See `ops/observability/OTEL_DEPLOYMENT_CONTRACT.md` for the production dependency, collector, correlation, failure-behaviour and acceptance evidence contract.
