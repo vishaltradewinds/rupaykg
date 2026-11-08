@@ -439,3 +439,15 @@
 - Latest checkpoint commit: `097ad63f27b0509ba19fb8874fd56f3689789aa7`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Database settlement lifecycle integrity
+- Added protected migration `092_settlement_lifecycle_transition_integrity.sql`.
+- Settlement status transitions are now guarded at the database boundary:
+  `CREATED → AUTHORIZED → EXECUTING → RECONCILING → SETTLED`, with controlled cancellation from non-final states.
+- Added deterministic Shakti lifecycle contract coverage.
+- Added disposable runtime acceptance proving a direct invalid `CREATED → SETTLED` mutation is rejected.
+- Added migration protection and CI protected-migration gate coverage for migration 092.
+- Latest checkpoint commit: `6ce9c1f25241cc3f0422b29b77817b215d164a0d`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
