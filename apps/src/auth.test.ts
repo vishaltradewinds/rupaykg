@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { authenticate, canActForOrganization, hasOrganizationPermission, canVerifyEvidence } from "./auth.js";
+import { authenticate, canActForOrganization, canActForOrganizationInDatabase, hasOrganizationPermission, canVerifyEvidence } from "./auth.js";
 
 test("authorization fails closed without organization or verified membership context", () => {
   assert.equal(canActForOrganization({ identityId: "i", memberships: [] }, "org"), false);
@@ -94,4 +94,24 @@ test("authenticate scopes a single verified organization without trusting reques
     memberships: [{ organization_id: "org-a", role_id: "role-a", status: "VERIFIED" }],
     activeOrganizationId: "org-a",
   });
+});
+
+
+test("database organization liveness revalidates identity, membership and organization state", async () => {
+  const queries: Array<{ sql: string; values: unknown[] }> = [];
+  const client = { query: async (sql: string, values: unknown[]) => {
+    queries.push({ sql, values });
+    return { rows: [{ ok: true }] };
+  } } as never;
+  const auth = {
+    identityId: "identity-a",
+    activeOrganizationId: "org-a",
+    memberships: [{ organization_id: "org-a", role_id: "role-a", status: "VERIFIED" }],
+  };
+  assert.equal(await canActForOrganizationInDatabase(client, auth, "org-a"), true);
+  assert.match(queries[0]!.sql, /i\.status\s*=\s*'VERIFIED'/);
+  assert.match(queries[0]!.sql, /i\.suspended_at\s+is\s+null/);
+  assert.match(queries[0]!.sql, /om\.status\s*=\s*'VERIFIED'/);
+  assert.match(queries[0]!.sql, /o\.status\s*=\s*'VERIFIED'/);
+  assert.deepEqual(queries[0]!.values, ["identity-a", "org-a"]);
 });
