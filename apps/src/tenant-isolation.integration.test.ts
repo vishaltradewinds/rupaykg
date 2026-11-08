@@ -745,7 +745,7 @@ test("Shakti RLS settlement rows are bilateral-readable but payer-mutation-only"
       );
 
       eventA = (await client.query<{ id: string }>(
-        "insert into settlement_events(settlement_id,event_type,event_hash) values($1,'RLS_TEST','rls-settlement-$2') returning id",
+        "insert into settlement_events(settlement_id,event_type,event_hash) values($1,'RLS_TEST',$2) returning id",
         [settlementA, suffix],
       )).rows[0]!.id;
       const events = await client.query<{ id: string }>(
@@ -756,7 +756,7 @@ test("Shakti RLS settlement rows are bilateral-readable but payer-mutation-only"
       assert.equal(events.rows[0]!.id, eventA);
 
       await assert.rejects(
-        () => client.query("insert into settlement_events(settlement_id,event_type,event_hash) values($1,'RLS_CROSS','rls-cross-$2')", [settlementB, suffix]),
+        () => client.query("insert into settlement_events(settlement_id,event_type,event_hash) values($1,'RLS_CROSS',$2)", [settlementB, suffix]),
         /row-level security|policy/i,
       );
       await assert.rejects(
