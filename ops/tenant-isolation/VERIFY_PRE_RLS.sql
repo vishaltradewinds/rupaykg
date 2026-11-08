@@ -72,6 +72,52 @@ where n.nspname = 'public'
   and pg_get_userbyid(c.relowner) = current_user;
 
 
+do $
+declare
+  v_super boolean;
+  v_bypass boolean;
+  v_runtime_member boolean;
+  v_owned_count integer;
+begin
+  select rolsuper, rolbypassrls
+    into v_super, v_bypass
+    from pg_roles
+   where rolname = current_user;
+
+  select (
+    current_user = 'rupaykg_app_runtime'
+    or pg_has_role(current_user, 'rupaykg_app_runtime', 'member')
+  )
+    into v_runtime_member;
+
+  select count(*)
+    into v_owned_count
+    from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'public'
+     and c.relname in (
+       'organizations','roles','activities','obligations','credentials',
+       'settlements','audit_events','resource_flows','field_devices',
+       'organization_memberships','measurements','evidence','verifications',
+       'carbon_calculations','mrv_observations',
+       'evidence_verification_requirements','chain_of_custody_links'
+     )
+     and pg_get_userbyid(c.relowner) = current_user;
+
+  if v_super or v_bypass then
+    raise exception 'TENANT_ISOLATION_PREFLIGHT_FAILED: runtime role is SUPERUSER or BYPASSRLS';
+  end if;
+  if not v_runtime_member then
+    raise exception 'TENANT_ISOLATION_PREFLIGHT_FAILED: runtime role is not derived from rupaykg_app_runtime';
+  end if;
+  if v_owned_count <> 0 then
+    raise exception 'TENANT_ISOLATION_PREFLIGHT_FAILED: runtime role owns % protected table(s)', v_owned_count;
+  end if;
+
+  raise notice 'TENANT_ISOLATION_PREFLIGHT_PASS: non-BYPASSRLS runtime role with no protected-table ownership';
+end $;
+
+
 select
   table_name,
   has_table_privilege(current_user, table_name, 'SELECT') as can_select,
