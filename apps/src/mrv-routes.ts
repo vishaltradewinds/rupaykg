@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool, PoolClient } from "pg";
+import { trace } from "@opentelemetry/api";
 import { authenticate, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
 import { executeGuardianMrv, guardianStatus } from "./guardian-mrv.js";
 import { hederaStatus, integrityHash, submitHcsAnchor, verifyHcsMessage } from "./hedera-anchor.js";
@@ -172,10 +173,33 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
         });
       }
 
-      const guardian = await executeGuardianMrv({ activityId, verificationId, evidenceId, policyId, methodologyCode, observations: preflight.observations ?? [], evidence: preflight.evidence ?? [], metadata: { evidenceCount: Number(preflight.row.evidence_count), observationCount: Number(preflight.row.observation_count) } });
+      const tracer = trace.getTracer("rupaykg-mrv");
+      const guardian = await tracer.startActiveSpan("rupaykg.mrv.guardian_verification", async span => {
+        span.setAttribute("rupaykg.operation", "guardian_mrv_verification");
+        span.setAttribute("rupaykg.authoritative_mutation", false);
+        try {
+          const result = await executeGuardianMrv({ activityId, verificationId, evidenceId, policyId, methodologyCode, observations: preflight.observations ?? [], evidence: preflight.evidence ?? [], metadata: { evidenceCount: Number(preflight.row.evidence_count), observationCount: Number(preflight.row.observation_count) } });
+          span.setAttribute("rupaykg.guardian.status", result.status);
+          return result;
+        } catch (error) {
+          span.recordException(error instanceof Error ? error : new Error(String(error)));
+          throw error;
+        } finally { span.end(); }
+      });
       if (guardian.status !== "VERIFIED" || !guardian.executionId) return reply.code(503).send({ source: "guardian", syntheticData: false, guardian, eligibleForRegistry: false });
 
-      const anchor = await submitHcsAnchor({ schema: "rupaykg:mrv:v1", activityId, verificationId, evidenceId, guardianPolicyId: policyId, guardianExecutionId: guardian.executionId, mrvStatus: "VERIFIED", methodologyCode, quantity: preflight.quantity, unit: preflight.unit, metadata: { guardianStatus: guardian.status } });
+      const anchor = await tracer.startActiveSpan("rupaykg.mrv.hedera_anchor", async span => {
+        span.setAttribute("rupaykg.operation", "hedera_hcs_anchor");
+        span.setAttribute("rupaykg.authoritative_mutation", false);
+        try {
+          const result = await submitHcsAnchor({ schema: "rupaykg:mrv:v1", activityId, verificationId, evidenceId, guardianPolicyId: policyId, guardianExecutionId: guardian.executionId!, mrvStatus: "VERIFIED", methodologyCode, quantity: preflight.quantity, unit: preflight.unit, metadata: { guardianStatus: guardian.status } });
+          span.setAttribute("rupaykg.hedera.status", result.status);
+          return result;
+        } catch (error) {
+          span.recordException(error instanceof Error ? error : new Error(String(error)));
+          throw error;
+        } finally { span.end(); }
+      });
 
       const persisted = await tenantTransaction(async client => client.query(
         `insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,methodology_code,metadata)
