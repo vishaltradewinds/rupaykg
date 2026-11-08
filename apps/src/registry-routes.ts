@@ -49,7 +49,7 @@ export async function registerRegistryRoutes(app:FastifyInstance,pool:Pool|null)
             and m.hcs_consensus_timestamp is not null and btrim(m.hcs_consensus_timestamp)<>''
             and m.integrity_hash is not null and btrim(m.integrity_hash)<>''
             and m.mirror_node_verified_at is not null
-          order by m.created_at desc limit 1`,
+          order by m.created_at desc,id desc limit 1`,
         [activityId,verificationId,v.rows[0].evidence_id]);
       const proof=provenance.rows[0];
       if(!proof)throw Object.assign(new Error("Guardian, Hedera consensus and persisted Mirror Node verification are required before credential issuance"),{code:"MIRROR_NODE_VERIFICATION_REQUIRED"});
