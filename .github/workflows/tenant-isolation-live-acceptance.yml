@@ -33,6 +33,14 @@ jobs:
             -f ops/tenant-isolation/VERIFY_PRE_RLS.sql \
             2>&1 | tee tenant-isolation-evidence/pre-rls.txt
 
+      - name: Verify RLS policy coverage
+        run: |
+          set -euo pipefail
+          psql "$RUPAYKG_RUNTIME_DATABASE_URL" \
+            -v ON_ERROR_STOP=1 \
+            -f ops/tenant-isolation/VERIFY_RLS_POLICY_COVERAGE.sql \
+            2>&1 | tee tenant-isolation-evidence/rls-policy-coverage.txt
+
       - name: Verify RLS is active and cross-tenant access is denied
         run: |
           set -euo pipefail
