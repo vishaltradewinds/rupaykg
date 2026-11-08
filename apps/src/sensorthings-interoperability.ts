@@ -68,6 +68,44 @@ export type RupayKgSensorThingsDocument = {
   observation: SensorThingsObservation;
 };
 
+export function validateSensorThingsDocument(
+  document: RupayKgSensorThingsDocument,
+): { ok: true } | { ok: false; error: string } {
+  if (!document.thing["@iot.id"] || !document.sensor["@iot.id"]) {
+    return { ok: false, error: "thing and sensor @iot.id are required" };
+  }
+  if (!document.observedProperty["@iot.id"] || !document.observedProperty.name || !document.observedProperty.definition) {
+    return { ok: false, error: "observedProperty identity and definition are required" };
+  }
+  if (
+    !document.datastream["@iot.id"] ||
+    document.datastream.thing["@iot.id"] !== document.thing["@iot.id"] ||
+    document.datastream.sensor["@iot.id"] !== document.sensor["@iot.id"] ||
+    document.datastream.observedProperty["@iot.id"] !== document.observedProperty["@iot.id"]
+  ) {
+    return { ok: false, error: "datastream relationships must resolve to the document entities" };
+  }
+  if (
+    !document.observation["@iot.id"] ||
+    document.observation.datastream["@iot.id"] !== document.datastream["@iot.id"] ||
+    !document.observation.phenomenonTime
+  ) {
+    return { ok: false, error: "observation identity, datastream relationship and phenomenonTime are required" };
+  }
+  if (
+    document.location &&
+    (
+      document.location.encodingType !== "application/vnd.geo+json" ||
+      document.location.location.type !== "Point" ||
+      document.location.location.coordinates.length !== 2 ||
+      document.location.location.coordinates.some(value => !Number.isFinite(value))
+    )
+  ) {
+    return { ok: false, error: "location must be a finite GeoJSON Point" };
+  }
+  return { ok: true };
+}
+
 export type RupayKgMeasurementMappingInput = {
   deviceId: string;
   measurementId: string;
