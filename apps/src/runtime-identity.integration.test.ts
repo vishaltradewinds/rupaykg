@@ -103,3 +103,62 @@ test("Shakti production runtime identity is non-BYPASSRLS and tenant-isolated", 
     await ownerPool.end();
   }
 });
+
+
+test("Shakti privileged context rejects unauthorized identities", { skip: !enabled }, async () => {
+  const runtimePool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const ownerPool = new Pool({ connectionString: process.env.RUPAYKG_TEST_OWNER_DATABASE_URL });
+  const suffix = randomBytes(8).toString("hex");
+  let identityId = "";
+  let organizationId = "";
+  let roleId = "";
+  let membershipId = "";
+
+  try {
+    identityId = (await ownerPool.query<{ id: string }>(
+      "insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id",
+      ["privileged-context:" + suffix, "Privileged Context " + suffix, "privileged-context-" + suffix + "@example.invalid"],
+    )).rows[0]!.id;
+
+    organizationId = (await ownerPool.query<{ id: string }>(
+      "insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id",
+      ["TEST-PRIVILEGED-" + suffix],
+    )).rows[0]!.id;
+
+    roleId = (await ownerPool.query<{ id: string }>(
+      "insert into roles(organization_id,name,permissions,geography_scope) values($1,'runtime_test_role','[]'::jsonb,'[]'::jsonb) returning id",
+      [organizationId],
+    )).rows[0]!.id;
+
+    membershipId = (await ownerPool.query<{ id: string }>(
+      "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED') returning id",
+      [identityId, organizationId, roleId],
+    )).rows[0]!.id;
+
+    const client = await runtimePool.connect();
+    try {
+      await client.query("begin");
+      await assert.rejects(
+        () => client.query("select app.set_platform_context($1)", [identityId]),
+        /not an active Super Admin/i,
+      );
+      await assert.rejects(
+        () => client.query("select app.set_authority_context($1,$2,$3)", [identityId, "PLATFORM", null]),
+        /not authorized for the requested authority context/i,
+      );
+      await client.query("rollback");
+    } catch (error) {
+      try { await client.query("rollback"); } catch {}
+      throw error;
+    } finally {
+      client.release();
+    }
+  } finally {
+    if (membershipId) await ownerPool.query("delete from organization_memberships where id=$1", [membershipId]);
+    if (roleId) await ownerPool.query("delete from roles where id=$1", [roleId]);
+    if (identityId) await ownerPool.query("delete from identities where id=$1", [identityId]);
+    if (organizationId) await ownerPool.query("delete from organizations where id=$1", [organizationId]);
+    await runtimePool.end();
+    await ownerPool.end();
+  }
+});
