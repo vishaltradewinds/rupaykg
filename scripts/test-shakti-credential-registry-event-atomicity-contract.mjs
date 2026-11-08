@@ -8,7 +8,10 @@ const required = [
   "when 'ACTIVE' then 'ACTIVATED'",
   "when 'TRANSFERRED' then 'TRANSFERRED'",
   "when 'RETIRED' then 'RETIRED'",
-  "requires matching registry event",
+  "select re.event_type",
+  "order by re.created_at desc, re.id desc",
+  "latest_event_type is distinct from required_event",
+  "requires matching latest registry event",
 ];
 const failures = required.filter((x) => !migration.includes(x));
 if (failures.length) {
