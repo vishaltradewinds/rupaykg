@@ -19,6 +19,11 @@
 - Found that `scripts/test-shakti-migration-integrity-contract.mjs` did not yet bind migration 101 by identity, despite the migration runner and operational invariant already protecting it.
 - Added `101_security_definer_schema_boundary` to the migration-integrity contract.
 - No production database was touched.
+## 2026-11-08 — SECURITY DEFINER contract fail-closed hardening
+- Reworked the migration 101 SECURITY DEFINER acceptance contract so boundary controls are initialized before evaluation and are explicitly required.
+- Re-read the committed contract after each edit to eliminate an executable initialization-order defect.
+- No production database changes.
+
 ## Exact current engineering heads
 - PR #331: 50e463df30f18a30e6a192da447a451d1816ea55
 - PR #332: a636a26e81cdaac88c69247e333b88c64a7ececa
