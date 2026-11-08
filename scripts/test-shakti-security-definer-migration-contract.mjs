@@ -29,12 +29,13 @@ for (const grant of requiredRuntimeExecutes) {
 }
 
 const requiredRuntimeFunctions = new Map([
-  ["app.current_identity_id()", { name: "app.current_identity_id", args: "" }],
-  ["app.current_organization_id()", { name: "app.current_organization_id", args: "" }],
-  ["app.set_request_context(uuid,uuid)", { name: "app.set_request_context", args: "p_identity_id uuid, p_organization_id uuid" }],
-  ["app.set_identity_context(uuid)", { name: "app.set_identity_context", args: "p_identity_id uuid" }],
-  ["app.set_platform_context(uuid)", { name: "app.set_platform_context", args: "p_identity_id uuid" }],
-  ["app.set_authority_context(uuid,text,uuid)", { name: "app.set_authority_context", args: "p_identity_id uuid, p_authority_level text, p_geography_id uuid" }],
+  ["app.current_identity_id()", { name: "app.current_identity_id", args: "", searchPath: "public, app" }],
+  ["app.current_organization_id()", { name: "app.current_organization_id", args: "", searchPath: "public, app" }],
+  ["app.set_request_context(uuid,uuid)", { name: "app.set_request_context", args: "p_identity_id uuid, p_organization_id uuid", searchPath: "public, app" }],
+  ["app.set_identity_context(uuid)", { name: "app.set_identity_context", args: "p_identity_id uuid", searchPath: "public, app" }],
+  ["app.set_platform_context(uuid)", { name: "app.set_platform_context", args: "p_identity_id uuid", searchPath: "public, app" }],
+  ["app.set_authority_context(uuid,text,uuid)", { name: "app.set_authority_context", args: "p_identity_id uuid, p_authority_level text, p_geography_id uuid", searchPath: "public, app" }],
+  ["app.is_assigned_approved_verifier(uuid)", { name: "app.is_assigned_approved_verifier", args: "p_credential_id uuid", searchPath: "pg_catalog, public, app" }],
 ]);
 
 const allMigrationSource = [];
@@ -66,6 +67,12 @@ for (const [displayName, expected] of requiredRuntimeFunctions) {
   if (!/security\s+definer/i.test(block)) {
     failures.push("latest definition of required runtime function is not SECURITY DEFINER: " + displayName);
   }
+  const expectedSearchPath = expected.searchPath.replace(/\s+/g, "").toLowerCase();
+  const searchPathMatch = block.match(/set\s+search_path\s*=\s*([^\n]+)/i);
+  const actualSearchPath = searchPathMatch?.[1]?.replace(/\s+/g, "").replace(/\s+as\s+\$\$.*$/i, "").replace(/\s+as\s+\$shakti\$.*$/i, "").toLowerCase();
+  if (actualSearchPath !== expectedSearchPath) {
+    failures.push("latest definition of required runtime function has unexpected search_path: " + displayName + " (expected " + expected.searchPath + ")");
+  }
 }
 
 if (/grant\s+execute\s+on\s+function\s+app\.[^;]+\s+to\s+public/i.test(boundaryMigration)) {
@@ -86,8 +93,11 @@ for (const file of files) {
     const end = functionStarts[i + 1] ?? source.length;
     const block = source.slice(start, end);
     if (!/security\s+definer/i.test(block)) continue;
-    if (!/set\s+search_path\s*=\s*public,\s*app\b/i.test(block)) {
-      failures.push(file + ": SECURITY DEFINER function must use fixed search_path = public, app");
+    const searchPathMatch = block.match(/set\s+search_path\s*=\s*([^\n]+)/i);
+    const normalizedSearchPath = searchPathMatch?.[1]?.replace(/\s+/g, "").toLowerCase();
+    const approvedSearchPaths = new Set(["public,app", "pg_catalog,public,app"]);
+    if (!normalizedSearchPath || !approvedSearchPaths.has(normalizedSearchPath)) {
+      failures.push(file + ": SECURITY DEFINER function must use an approved fixed search_path (public, app or pg_catalog, public, app)");
     }
     if (/grant\s+execute\s+on\s+function\s+[^;]+\s+to\s+public/i.test(block)) {
       failures.push(file + ": SECURITY DEFINER function must not grant EXECUTE to PUBLIC");
