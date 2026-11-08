@@ -129,6 +129,8 @@ jobs:
         run: node scripts/test-shakti-registry-active-tenant-authority-contract.mjs
       - name: Run Shakti EPR return active-tenant contract
         run: node scripts/test-shakti-epr-return-active-tenant-contract.mjs
+      - name: Run Shakti field-sync actor authority contract
+        run: node scripts/test-shakti-field-sync-actor-authority-contract.mjs
       - name: Run Shakti active-tenant authority contract
         run: node scripts/test-shakti-active-tenant-authority-contract.mjs
       - name: Shakti registry credential tenant gate
