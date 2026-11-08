@@ -26,7 +26,23 @@ begin
   if not v_member and current_user <> 'rupaykg_app_runtime' then
     raise exception 'TENANT_ISOLATION_ACTIVATION_BLOCKED: current role is not derived from rupaykg_app_runtime';
   end if;
-end $$;
+  if exists (
+    select 1
+      from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace
+     where n.nspname = 'public'
+       and c.relname in (
+         'organizations','roles','activities','obligations','credentials',
+         'settlements','audit_events','resource_flows','field_devices',
+         'organization_memberships','measurements','evidence','verifications',
+         'carbon_calculations','mrv_observations',
+         'evidence_verification_requirements','chain_of_custody_links'
+       )
+       and pg_get_userbyid(c.relowner) = current_user
+  ) then
+    raise exception 'TENANT_ISOLATION_ACTIVATION_BLOCKED: current role owns a protected tenant table';
+  end if;
+end $;
 
 alter table organizations enable row level security;
 alter table roles enable row level security;
