@@ -32,8 +32,8 @@ function canAct(auth: AuthContext, organizationId: string): boolean {
 export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
   app.get("/api/v1/epr/returns", async (request, reply) => {
     const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
-    const organizationId = typeof request.headers["x-rupaykg-organization-id"] === "string" ? request.headers["x-rupaykg-organization-id"] : auth.activeOrganizationId;
-    if (!organizationId || !canAct(auth, organizationId)) return reply.code(403).send({ error: "Verified organization membership required", code: "ORG_FORBIDDEN" });
+    const organizationId = auth.activeOrganizationId;
+    if (!organizationId || !canAct(auth, organizationId)) return reply.code(403).send({ error: "Select a verified active organization", code: "ORG_FORBIDDEN" });
     const tenantAuth: AuthContext = { ...auth, activeOrganizationId: organizationId };
     try {
       return await withTenantTransaction(pool, tenantAuth, async (client) => {
@@ -47,14 +47,14 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
   app.post("/api/v1/epr/returns", async (request, reply) => {
     const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
     const body = bodyOf(request);
-    const organizationId = requiredString(body, "organizationId") ?? auth.activeOrganizationId;
+    const organizationId = auth.activeOrganizationId;
     const schemeId = requiredString(body, "schemeId");
     const obligationId = requiredString(body, "obligationId");
     const periodStart = requiredString(body, "periodStart");
     const periodEnd = requiredString(body, "periodEnd");
     const returnType = requiredString(body, "returnType");
     const reportedQuantity = positiveNumber(body, "reportedQuantity");
-    if (!organizationId || !schemeId || !obligationId || !periodStart || !periodEnd || !returnType || reportedQuantity === null) return reply.code(400).send({ error: "organizationId, schemeId, obligationId, periodStart, periodEnd, returnType and positive reportedQuantity are required", code: "INVALID_EPR_RETURN" });
+    if (!organizationId || !schemeId || !obligationId || !periodStart || !periodEnd || !returnType || reportedQuantity === null) return reply.code(400).send({ error: "An active organization, schemeId, obligationId, periodStart, periodEnd, returnType and positive reportedQuantity are required", code: "INVALID_EPR_RETURN" });
     if (!canAct(auth, organizationId)) return reply.code(403).send({ error: "Verified organization membership required", code: "ORG_FORBIDDEN" });
     const tenantAuth: AuthContext = { ...auth, activeOrganizationId: organizationId };
     if (!await withTenantTransaction(pool, tenantAuth, async (client) => hasOrganizationPermission(client, tenantAuth, organizationId, ["epr:manage"]))) return reply.code(403).send({ error: "EPR management permission required", code: "EPR_RETURN_WRITE_FORBIDDEN" });
