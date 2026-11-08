@@ -144,6 +144,7 @@ jobs:
       - name: Run Shakti settlement lifecycle integrity contract
         run: node scripts/test-shakti-settlement-lifecycle-integrity-contract.mjs
       - node scripts/test-shakti-settlement-verified-party-boundary-contract.mjs
+      - node scripts/test-shakti-verified-organization-transition-lock-contract.mjs
       - name: Run Shakti settlement confirmation-reference contract
         run: node scripts/test-shakti-settlement-confirmation-reference-contract.mjs
       - name: Run Shakti settlement authorization-reference contract
