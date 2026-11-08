@@ -73,6 +73,15 @@ if (!/Migration complete\. RLS activation remains a separate controlled DDL gate
 if (!/post_migration_rls_remains_controlled_assertion/.test(controlledMigration)) {
   failures.push("Controlled production migration must fail closed if 097-099 unexpectedly enable RLS.");
 }
+for (const [version, filename] of [
+  ["097", "097_shakti_tenant_isolation_runtime_contract.sql"],
+  ["098", "098_shakti_authentication_bootstrap.sql"],
+  ["099", "099_shakti_rls_policy_foundation.sql"]
+]) {
+  if (!controlledMigration.includes(filename)) {
+    failures.push(`Controlled production migration must lock version ${version} to the expected Shakti migration filename: ${filename}`);
+  }
+}
 
 for (const fn of ["app.set_request_context", "app.is_verified_org_member", "app.authenticate_bearer_session"]) {
   if (!boundary.includes(fn)) failures.push(`Boundary verification missing function: ${fn}`);
