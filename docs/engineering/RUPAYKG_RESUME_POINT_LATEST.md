@@ -24,6 +24,11 @@
 - Re-read the committed contract after each edit to eliminate an executable initialization-order defect.
 - No production database changes.
 
+## 2026-11-08 — SECURITY DEFINER exact search-path contract
+- Strengthened `scripts/test-shakti-security-definer-migration-contract.mjs` so SECURITY DEFINER functions are required to use the exact approved `search_path = public, app`, rather than any arbitrary fixed search path.
+- Re-read the committed contract after the change.
+- No production database changes.
+
 ## Exact current engineering heads
 - PR #331: 50e463df30f18a30e6a192da447a451d1816ea55
 - PR #332: a636a26e81cdaac88c69247e333b88c64a7ececa
