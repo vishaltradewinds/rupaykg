@@ -157,6 +157,8 @@ jobs:
         run: node scripts/test-shakti-settlement-event-cryptographic-integrity-contract.mjs
       - name: Run Shakti registry event cryptographic integrity contract
         run: node scripts/test-shakti-registry-event-cryptographic-integrity-contract.mjs
+      - name: Run Shakti registry event append-only integrity contract
+        run: node scripts/test-shakti-registry-event-append-only-integrity-contract.mjs
       - name: Run Shakti context pool isolation contract
         run: node scripts/test-shakti-context-pool-isolation-contract.mjs
       - name: Run Shakti RLS write contract
