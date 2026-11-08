@@ -49,3 +49,4 @@ grant execute on function app.set_request_context(uuid,uuid) to rupaykg_app_runt
 grant execute on function app.set_identity_context(uuid) to rupaykg_app_runtime;
 grant execute on function app.set_platform_context(uuid) to rupaykg_app_runtime;
 grant execute on function app.set_authority_context(uuid,text,uuid) to rupaykg_app_runtime;
+grant execute on function app.is_assigned_approved_verifier(uuid) to rupaykg_app_runtime;
