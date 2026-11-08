@@ -206,7 +206,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for migration in 20261107_authority_hierarchy_context.sql 20261107_context_identity_bootstrap.sql 20261107_platform_execution_context.sql 20261107_runtime_grant_reconciliation.sql 20261107_context_organization_id.sql 20261107_core_tenant_rls_activation_gate.sql 20261108_context_identity_liveness_hardening.sql 20261108_context_identity_liveness_completion.sql 088_field_sync_append_only_integrity.sql 082_settlement_reference_trigger_insert_safety.sql 089_settlement_reconciliation_reference_integrity.sql; do
+          for migration in 20261107_authority_hierarchy_context.sql 20261107_context_identity_bootstrap.sql 20261107_platform_execution_context.sql 20261107_runtime_grant_reconciliation.sql 20261107_context_organization_id.sql 20261107_core_tenant_rls_activation_gate.sql 20261108_context_identity_liveness_hardening.sql 20261108_context_identity_liveness_completion.sql 088_field_sync_append_only_integrity.sql 082_settlement_reference_trigger_insert_safety.sql 089_settlement_reconciliation_reference_integrity.sql 090_runtime_dml_grant_reconciliation_completion.sql; do
             grep -Fq "$migration" apps/src/migrate.ts
           done
           grep -Fq 'RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS' apps/src/migrate.ts
