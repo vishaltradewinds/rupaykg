@@ -708,3 +708,11 @@
 - Checkpoint: `cd51e24014a0911e33b335a69cb8498e749b4832`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Verifier helper boundary documentation
+- Normalized the deterministic verifier contract syntax.
+- Explicitly documented and contract-bound the helper's read-only boundary: boolean-only helper, no table DML, and no write authority from the verifier SELECT policy.
+- Checkpoint: `b61e4bff09bf6c180c287bea47800ae016e3be19`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
