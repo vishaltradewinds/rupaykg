@@ -32,7 +32,7 @@ const requiredRuntimeExecutes = [
   "grant execute on function app.set_identity_context(uuid) to rupaykg_app_runtime;",
   "grant execute on function app.set_platform_context(uuid) to rupaykg_app_runtime;",
   "grant execute on function app.set_authority_context(uuid,text,uuid) to rupaykg_app_runtime;",
-  "grant execute on function app.is_assigned_approved_verifier(uuid) to rupaykg_app_runtime",
+  "grant execute on function app.is_assigned_approved_verifier(uuid) to rupaykg_app_runtime;",
 ];
 for (const grant of requiredRuntimeExecutes) {
   if (!boundaryMigration.includes(grant)) failures.push("101_security_definer_schema_boundary.sql: missing explicit runtime grant: " + grant);
