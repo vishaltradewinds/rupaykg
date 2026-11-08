@@ -137,6 +137,8 @@ jobs:
         run: node scripts/test-shakti-rls-write-contract.mjs
       - name: Run Shakti context function security contract
         run: node scripts/test-shakti-context-function-security-contract.mjs
+      - name: Run Shakti context identity liveness contract
+        run: node scripts/test-shakti-context-identity-liveness-contract.mjs
       - name: Run Shakti execution-context grant reconciliation contract
         run: node scripts/test-shakti-execution-context-grants-contract.mjs
       - name: Run tests including disposable PostgreSQL acceptance
