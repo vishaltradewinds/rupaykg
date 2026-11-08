@@ -4,6 +4,7 @@ import { NodeSDK } from "@opentelemetry/sdk-node";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-proto";
 import { trace } from "@opentelemetry/api";
 import { createServer } from "node:http";
+import { setTimeout as delay } from "node:timers/promises";
 
 test("authoritative application operation does not await OTLP collector availability", async () => {
   const server = createServer((_request, response) => {
@@ -39,6 +40,10 @@ test("authoritative application operation does not await OTLP collector availabi
 
     assert.equal(result.committed, true);
     assert.equal(authoritativeOperationCompleted, true);
+
+    // Give the exporter a bounded opportunity to encounter the collector failure.
+    // The authoritative result is already complete and must not depend on export.
+    await delay(25);
   } finally {
     try {
       await sdk.shutdown();
