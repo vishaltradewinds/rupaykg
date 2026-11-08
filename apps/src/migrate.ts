@@ -28,9 +28,15 @@ try {
   const candidates = [path.resolve(here, "../../migrations"), path.resolve(here, "../../../migrations")];
   const migrationDir = candidates.find((candidate) => existsSync(candidate));
   if (!migrationDir) throw new Error(`Migration directory not found. Checked: ${candidates.join(", ")}`);
+  const maxVersion = process.env.MIGRATION_MAX_VERSION;
   const files = (await readdir(migrationDir))
     .filter((name) => /^\d+_.+\.sql$/.test(name))
+    .filter((name) => !maxVersion || Number(name.split("_", 1)[0]) <= Number(maxVersion))
     .sort();
+
+  if (maxVersion && (!/^\d+$/.test(maxVersion) || Number(maxVersion) < 1)) {
+    throw new Error("MIGRATION_MAX_VERSION must be a positive numeric migration version");
+  }
 
   for (const filename of files) {
     const version = filename.split("_", 1)[0];
