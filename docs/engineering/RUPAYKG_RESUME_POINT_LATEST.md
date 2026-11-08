@@ -542,3 +542,13 @@
 - Latest checkpoint commit: `79db7ffd4201f4d68d1b7198babc5f6ebc52e2e9`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Verifier registry RLS recursion hardening
+- Hardened migration `099_registry_event_assigned_verifier_read.sql`.
+- The assigned-verifier lookup now uses a narrowly scoped SECURITY DEFINER boolean helper because the registry-event policy may evaluate a credential that the verifier does not own; direct credential RLS evaluation would otherwise make the intended verifier policy ineffective.
+- Public execution is revoked; only the protected runtime role can execute the helper.
+- Updated the deterministic contract accordingly.
+- Latest checkpoint commit: `1d7d0d78d4857d411bb4def23f54b196fd5f0bc5`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
