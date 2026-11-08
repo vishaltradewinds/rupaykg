@@ -68,3 +68,10 @@ The repository now pins the OpenTelemetry runtime integration to `@opentelemetry
 The pinned SDK/exporter packages are the current 3.x-generation experimental Node integration line; OpenTelemetry documents Node.js >=22.15.0 for the 3.x generation and requires SDK initialization before application modules are loaded. citeturn605696search0turn605696search2
 
 **Production status remains PARTIAL:** dependency/bootstrap implementation is present, but collector connectivity, end-to-end trace evidence, redaction validation under live telemetry, runtime log retention and production acceptance are still required. The repository `package-lock.json` has not been regenerated in this tool session; deployment currently uses `npm install`, which resolves the declared dependencies, but lockfile reconciliation remains a release-integrity gate.
+
+
+## Lockfile integrity gate — CLOSED
+
+`package-lock.json` now contains the declared OTEL dependencies at the exact pinned versions: `@opentelemetry/api` 1.10.0, `@opentelemetry/sdk-node` 0.301.0, `@opentelemetry/exporter-trace-otlp-proto` 0.301.0 and `@opentelemetry/instrumentation-http` 0.301.0, including registry resolution and integrity metadata. The workspace `apps` lock entry also matches the declared dependency set and Node runtime floor.
+
+This closes the repository dependency/lockfile reconciliation gate. It does not establish live collector connectivity or production telemetry acceptance.
