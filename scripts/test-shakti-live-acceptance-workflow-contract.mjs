@@ -17,6 +17,13 @@ if (!/where version in \('097','098','099'\)/.test(workflow)) {
 if (!/Required Shakti migration \$\{version\} is not applied/.test(workflow)) {
   failures.push("Live acceptance must fail closed when a required Shakti migration is missing.");
 }
+if (!/Verify runtime and DDL target identity match/.test(workflow)
+ || !/runtime_fingerprint/.test(workflow)
+ || !/ddl_fingerprint/.test(workflow)
+ || !/Runtime and controlled DDL connections do not target the same PostgreSQL endpoint/.test(workflow)) {
+  failures.push("Live acceptance must fail closed when runtime and controlled DDL connections target different PostgreSQL endpoints.");
+}
+
 for (const fn of ["app.set_request_context", "app.is_verified_org_member", "app.authenticate_bearer_session"]) {
   if (!boundary.includes(fn)) failures.push(`Boundary verification missing function: ${fn}`);
 }
