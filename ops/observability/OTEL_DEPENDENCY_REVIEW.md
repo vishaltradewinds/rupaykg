@@ -6,7 +6,7 @@
 
 ## Decision
 
-**DO NOT ADD the OpenTelemetry SDK to the production runtime yet.** The dependency review establishes the integration direction, but runtime compatibility must be verified before dependency adoption.
+**DO NOT ADD the OpenTelemetry SDK to the production runtime yet.** The dependency review establishes the integration direction, but runtime compatibility must be verified before dependency adoption. OpenTelemetry JavaScript 3.x requires Node.js >=22.15.0, and the current repository does not prove that runtime requirement is met in production.
 
 ## Evidence reviewed
 
