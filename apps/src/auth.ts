@@ -101,6 +101,34 @@ export async function canPerformHighRiskActionInDatabase(client: Pool | PoolClie
   return hasOrganizationPermission(client, auth, organizationId, HIGH_RISK_PERMISSIONS[action]);
 }
 
+/**
+ * Re-check organization membership and organization liveness inside the same
+ * transaction that authorizes a bilateral registry/settlement mutation.
+ * The in-memory authentication projection is intentionally not authoritative
+ * for counterparty membership because membership status can change after login.
+ */
+export async function canActForOrganizationInDatabase(client: Pool | PoolClient, auth: AuthContext, organizationId: string): Promise<boolean> {
+  if (!organizationId || !auth.identityId || !canActForOrganization(auth, organizationId)) return false;
+  const result = await client.query<{ ok: boolean }>(
+    `select exists (
+       select 1
+         from identities i
+         join organization_memberships om
+           on om.identity_id = i.id
+          and om.organization_id = $2
+          and om.status = 'VERIFIED'
+         join organizations o
+           on o.id = om.organization_id
+          and o.status = 'VERIFIED'
+        where i.id = $1
+          and i.status = 'VERIFIED'
+          and i.suspended_at is null
+     ) as ok`,
+    [auth.identityId, organizationId],
+  );
+  return result.rows[0]?.ok === true;
+}
+
 export async function canVerifyEvidence(client: PoolClient, identityId: string, evidenceId: string): Promise<boolean> {
   const result = await client.query<{ ok: boolean }>(
     `select exists (
