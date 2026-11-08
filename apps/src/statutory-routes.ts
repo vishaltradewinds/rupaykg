@@ -57,13 +57,13 @@ async function authFor(request: Request, reply: Reply, pool: Pool | null): Promi
   }
 }
 
-async function organizationFor(auth: AuthContext, pool: Pool, request: Request, reply: Reply): Promise<string | null> {
-  const requested = text(bodyOf(request), "organizationId") || auth.activeOrganizationId || null;
-  if (!auth.activeOrganizationId || requested !== auth.activeOrganizationId || !requested || !canActForOrganization(auth, requested)) {
-    reply.code(403).send({ error: "No verified membership for organization", code: "ORG_FORBIDDEN" });
+async function organizationFor(auth: AuthContext, reply: Reply): Promise<string | null> {
+  const organizationId = auth.activeOrganizationId;
+  if (!organizationId || !canActForOrganization(auth, organizationId)) {
+    reply.code(403).send({ error: "Select a verified active organization", code: "ORG_FORBIDDEN" });
     return null;
   }
-  return requested;
+  return organizationId;
 }
 
 async function tenantQuery<T = Record<string, unknown>>(pool: Pool, auth: AuthContext, text: string, values: unknown[] = []) {
@@ -100,7 +100,7 @@ function bwgStatus(floorArea: number | null | undefined, water: number | null | 
 export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
   app.get("/api/v1/statutory/epr/schemes", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
-    const organizationId = await organizationFor(auth, pool, request as never, reply); if (!organizationId) return;
+    const organizationId = await organizationFor(auth, reply); if (!organizationId) return;
     try {
       if (!await hasOrganizationPermission(pool, auth, organizationId, ["epr:read", "reports:read"])) return reply.code(403).send({ error: "EPR scheme catalog read permission required", code: "STATUTORY_PERMISSION_REQUIRED" });
       const result = await tenantQuery(pool, auth, `select code,name,authority,metadata from epr_schemes where status='VERIFIED' order by name`);
@@ -154,7 +154,7 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
   app.post("/api/v1/statutory/epr", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const body = bodyOf(request as never);
-    const organizationId = text(body, "organizationId") || auth.activeOrganizationId || null;
+    const organizationId = auth.activeOrganizationId;
     if (!auth.activeOrganizationId || organizationId !== auth.activeOrganizationId || !organizationId || !canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Select a verified active organization", code: "ORG_FORBIDDEN" });
     const scheme = text(body, "scheme");
     if (!scheme) return reply.code(400).send({ error: "EPR scheme is required", code: "EPR_SCHEME_REQUIRED" });
