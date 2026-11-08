@@ -790,3 +790,10 @@
 - Checkpoint: `857f58f8c5f6a014e298449de08b0d2ce94c2ac6`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+### 2026-11-08 — Verifier contract executable defect fixed
+- Found and fixed a real deterministic-contract defect: the assigned-verifier contract referenced `failures` before declaration in its negative-authority checks.
+- The contract now initializes the accumulator before both required and forbidden assertions.
+- Checkpoint: `e5ac495493a0bae711a1073e2dfda528ac918e04`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
