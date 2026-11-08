@@ -44,6 +44,10 @@ jobs:
         run: |
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "create role rupaykg_app_runtime nologin nobypassrls"
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "alter role rupaykg_app_runtime login password 'ci-runtime-only-password'"
+      - name: Assert disposable runtime role security posture
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "select case when rolsuper or rolbypassrls or rolcreaterole or rolcreatedb then 1/0 else 1 end from pg_roles where rolname = 'rupaykg_app_runtime'"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "select case when exists (select 1 from pg_roles where rolname = 'rupaykg_app_runtime' and rolcanlogin and not rolsuper and not rolbypassrls) then 1 else 1/0 end"
       - name: Run migrations with explicit protected-Shakti test gate
         env:
           RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS: "1"
