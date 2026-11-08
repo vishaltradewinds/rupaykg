@@ -1040,6 +1040,7 @@ test("Shakti assigned verifier registry read is scoped to approved active verifi
     credentialA = (await ownerPool.query<{ id: string }>("insert into credentials(issuer_organization_id,trust_root_id,status) values($1,$2,'ELIGIBLE') returning id", [orgA, "VERIFIER-TRUST-" + suffix])).rows[0]!.id;
     verificationA = (await ownerPool.query<{ id: string }>("insert into verifications(credential_id,verifier_identity_id,decision) values($1,$2,'APPROVED') returning id", [credentialA, verifierId])).rows[0]!.id;
     eventA = (await ownerPool.query<{ id: string }>("insert into registry_events(credential_id,event_type,to_owner_id,recorded_by_identity_id,event_hash) values($1,'ISSUED',$2,$3,$4) returning id", [credentialA, orgA, issuerId, "VERIFIER-EVENT-" + suffix])).rows[0]!.id;
+    await ownerPool.query("update credentials set status='ISSUED' where id=$1", [credentialA]);
 
     const client = await runtimePool.connect();
     try {
