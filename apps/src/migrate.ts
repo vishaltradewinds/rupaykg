@@ -67,7 +67,7 @@ try {
       continue;
     }
 
-    const protectedMigration = /^(?:20261107_(authority_hierarchy_context|context_identity_bootstrap|platform_execution_context|runtime_grant_reconciliation|context_organization_id|core_tenant_rls_activation_gate)|20261108_context_identity_liveness_(hardening|completion)|088_field_sync_append_only_integrity|082_settlement_reference_trigger_insert_safety|089_settlement_reconciliation_reference_integrity|090_runtime_dml_grant_reconciliation_completion|091_settlement_tenant_rls|092_settlement_lifecycle_transition_integrity|093_registry_event_tenant_rls|094_registry_event_identity_write_authority)\.sql$/.test(filename);
+    const protectedMigration = /^(?:20261107_(authority_hierarchy_context|context_identity_bootstrap|platform_execution_context|runtime_grant_reconciliation|context_organization_id|core_tenant_rls_activation_gate)|20261108_context_identity_liveness_(hardening|completion)|088_field_sync_append_only_integrity|082_settlement_reference_trigger_insert_safety|089_settlement_reconciliation_reference_integrity|090_runtime_dml_grant_reconciliation_completion|091_settlement_tenant_rls|092_settlement_lifecycle_transition_integrity|093_registry_event_tenant_rls|094_registry_event_identity_write_authority|095_credentials_tenant_rls)\.sql$/.test(filename);
     if (protectedMigration && process.env.RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS !== "1") {
       throw new Error(`Protected Shakti migration ${filename} requires explicit RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS=1`);
     }
