@@ -14,6 +14,11 @@
 - Registered migration 101 in the protected migration runner gate, CI protected-migration acceptance list, operational invariants, and SECURITY DEFINER contract.
 - This closes a real privilege/search-path boundary gap identified during contract due diligence; it is code/disposable-CI hardening only and has NOT been applied to production.
 - PostgreSQL official guidance requires SECURITY DEFINER search paths to exclude schemas writable by untrusted users and recommends selective EXECUTE grants rather than relying on PUBLIC defaults.
+## 2026-11-08 — Migration-integrity contract completion
+- Re-read the protected migration wiring after migration 101 was added.
+- Found that `scripts/test-shakti-migration-integrity-contract.mjs` did not yet bind migration 101 by identity, despite the migration runner and operational invariant already protecting it.
+- Added `101_security_definer_schema_boundary` to the migration-integrity contract.
+- No production database was touched.
 ## Exact current engineering heads
 - PR #331: 50e463df30f18a30e6a192da447a451d1816ea55
 - PR #332: a636a26e81cdaac88c69247e333b88c64a7ececa
