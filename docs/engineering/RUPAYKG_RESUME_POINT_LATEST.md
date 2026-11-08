@@ -312,3 +312,13 @@
 - Runtime RLS coverage now has concrete behavioral tests for activities, measurements, evidence, and carbon calculations; EPR obligation mutation remains represented by the production-path contract and grant/policy checks pending a disposable fixture that can create the obligation dependency graph without privileged shortcuts.
 - Production Neon remains READ-ONLY/HOLD. No production migration or RLS activation was performed.
 - Exact-head GitHub Actions execution remains NOT VERIFIED because the controlled branch has not produced a workflow run.
+
+
+### 2026-11-08 — EPR obligation RLS behavioral coverage deepening
+- Added a same-tenant `epr_obligations` INSERT assertion to `apps/src/tenant-isolation.integration.test.ts`.
+- The test now proves the protected runtime role can perform an authorized same-tenant EPR-obligation insert while retaining cross-tenant read/insert/update rejection coverage.
+- Commit: `dd9b62f37669575024b2b2860106cf693b98b95d`.
+- This remains disposable CI validation only; no production Neon mutation or RLS activation was performed.
+- Exact-head workflow evidence for the new commit is currently not visible; CI remains NOT VERIFIED.
+- Production Neon/RLS/deployment remains READ-ONLY/HOLD.
+- Next autonomous action: continue the protected-core/multi-party behavioral acceptance matrix and resolve any CI failures once an exact-head workflow execution becomes available.
