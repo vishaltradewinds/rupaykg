@@ -1,4 +1,5 @@
 import type { Pool, PoolClient } from "pg";
+import { trace } from "@opentelemetry/api";
 import type { AuthContext } from "./auth.js";
 
 export async function withTenantTransaction<T>(
@@ -9,8 +10,12 @@ export async function withTenantTransaction<T>(
   if (!auth.activeOrganizationId) {
     throw Object.assign(new Error("Active organization is required for tenant-scoped database access"), { code: "TENANT_CONTEXT_REQUIRED" });
   }
-  const client = await pool.connect();
-  try {
+  const tracer = trace.getTracer("rupaykg-db");
+  return tracer.startActiveSpan("rupaykg.db.tenant_transaction", async span => {
+    span.setAttribute("db.system", "postgresql");
+    span.setAttribute("rupaykg.db.tenant_scoped", true);
+    const client = await pool.connect();
+    try {
     await client.query("begin");
     await client.query("select app.set_request_context($1,$2)", [auth.identityId, auth.activeOrganizationId]);
     const result = await fn(client);
@@ -21,5 +26,6 @@ export async function withTenantTransaction<T>(
     throw error;
   } finally {
     client.release();
-  }
+    }
+  });
 }
