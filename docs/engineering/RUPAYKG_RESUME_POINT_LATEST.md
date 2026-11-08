@@ -613,3 +613,12 @@
 - Latest checkpoint commit: `cc5bf45280623678cd29589e40f467b3cb1dea56`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Credential privilege scope reconciled with live mutation surface
+- Verified the authoritative `apps/src/registry-routes.ts` mutation surface: credential runtime updates are limited to lifecycle `status` transitions ACTIVE, TRANSFERRED, and RETIRED.
+- Extended the deterministic contract to bind migration `100` least-privilege scope to those actual runtime mutations.
+- No generic authority/value-field UPDATE path was found in the inspected credential route surface.
+- Latest checkpoint commit: `d1f35d90e4d1a69d68dc0443b34429e6c98de026`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
