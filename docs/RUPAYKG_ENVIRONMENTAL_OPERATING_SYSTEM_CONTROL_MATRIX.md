@@ -44,7 +44,7 @@ A status must not be inferred from legacy/reference repositories.
 | Security | Production identity | Production identity provisioning controls exist | AMBER |
 | Security | Runtime least privilege | Tenant isolation contract defines non-BYPASSRLS runtime role; field-sync business transactions now establish transaction-local tenant context; production role provisioning/proof remains | OPEN |
 | Operations | Backup/restore | Production gate requires demonstrated backup/restore evidence | OPEN |
-| Operations | Monitoring/rollback | Production gate requires demonstrated monitoring/rollback evidence; OTEL-compatible span contract foundation now exists, but SDK/exporter, collector, runtime and production availability evidence remain | OPEN |
+| Operations | Monitoring/rollback | Production gate requires demonstrated monitoring/rollback evidence; OTEL-compatible span contract plus deterministic span validation now exists, but SDK/exporter, collector, runtime and production availability evidence remain | OPEN |
 | TRL | Engineering readiness | Strong repository/CI evidence exists | GREEN |
 | TRL | Field readiness | Physical/site evidence not fully established in repository | AMBER |
 | TRL | Operational readiness | Live deployment exists but sustained-operation evidence remains | AMBER |
