@@ -416,3 +416,14 @@
 - Latest code head: `81826e42e86922704f9d35d2182c6dbda762e7ca`.
 - Exact-head CI remains **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Settlement destructive-write acceptance
+- Fixed the settlement tenant-RLS deterministic contract syntax after the privilege-hardening update.
+- Extended disposable RLS behavioral acceptance to prove runtime denial of:
+  - settlement event UPDATE/DELETE;
+  - settlement DELETE.
+- This now tests the intended bilateral-read / payer-mutation / append-only boundary at runtime, not only by static migration inspection.
+- Latest checkpoint commit: `b4eaf1d2e72411da259f5da3102bbae4775eacdd`.
+- Exact-head CI: **NOT VERIFIED** until a workflow run for this exact SHA is observed.
+- Production remains **READ-ONLY/HOLD**.
