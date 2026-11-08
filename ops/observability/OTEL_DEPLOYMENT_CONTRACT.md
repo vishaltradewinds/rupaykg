@@ -52,3 +52,10 @@ Before changing the control matrix to GREEN, retain:
 The repository currently has a transport-neutral OTEL-compatible span contract and deterministic validation. It does **not** yet contain an approved OpenTelemetry SDK/exporter dependency, collector deployment, or production runtime evidence.
 
 Therefore this document is an implementation contract and acceptance gate, not a production deployment claim.
+
+## Application correlation boundaries implemented
+
+The application now creates child spans for the major authoritative path boundaries:
+`HTTP → tenant PostgreSQL transaction → calculation/MRV → Guardian → Hedera HCS → registry credential issuance`, with a separate external-integration acceptance span where that path is used.
+
+This establishes the repository-side span topology required for acceptance. A production acceptance run must still demonstrate that a real trace retains the same trace identity across these boundaries and that the collector receives the resulting spans.
