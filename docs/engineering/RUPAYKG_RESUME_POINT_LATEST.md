@@ -907,3 +907,11 @@
 - Code checkpoint: `dadfede5391c380de2fd9f860b5f586e0d9900e8`.
 - Exact-head CI: **NOT VERIFIED** until GitHub reports a workflow run for this head.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Identity-liveness boundary delimiter corrected after verification
+- Source re-read exposed that the preceding hardening-boundary edit had serialized the PostgreSQL `$$;` delimiter incorrectly as `$;` in the executable contract.
+- Corrected the actual branch file to inspect `$$;` for the hardening migration and `$shakti$;` for the completion migration.
+- Code checkpoint: `b51586007fe2dd3a78ffc8e17f84c1d72a27ead8`.
+- Exact-head CI: **NOT VERIFIED** (`workflow_runs: []`; no combined statuses reported).
+- Production remains **READ-ONLY/HOLD**.
