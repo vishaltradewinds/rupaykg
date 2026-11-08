@@ -6,13 +6,15 @@ Define the production integration boundary for OpenTelemetry without introducing
 
 ## Required deployment inputs
 
-The eventual production deployment must provide:
+The production Render deployment now declares the OTEL controls explicitly; telemetry remains disabled by default until an approved collector endpoint is provisioned. An enabled deployment must provide:
 - an approved OpenTelemetry SDK/exporter package and pinned version;
 - an OTLP endpoint reachable from the RupayKg runtime;
 - explicit transport security configuration;
 - service name and deployment/environment attributes;
 - trace-context propagation using W3C Trace Context;
 - collector/exporter availability monitoring;
+- `RUPAYKG_OTEL_ENABLED=true` only after collector endpoint and outage-response controls are approved;
+- `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` supplied as a deployment secret/configuration value, never embedded in source;
 - deterministic redaction of credentials, authorization headers, cookies, request/response bodies, payloads and secrets.
 
 ## Correlation requirement
@@ -49,7 +51,7 @@ Before changing the control matrix to GREEN, retain:
 
 ## Current state
 
-The repository now contains pinned OpenTelemetry SDK/exporter dependencies, an ESM bootstrap, transport-neutral span validation, application-path span instrumentation, and an executable runtime acceptance probe. It does **not** yet contain production collector connectivity evidence, end-to-end production trace evidence, or telemetry-failure acceptance evidence.
+The repository now contains pinned OpenTelemetry SDK/exporter dependencies, an ESM bootstrap, transport-neutral span validation, application-path span instrumentation, and an executable runtime acceptance probe. It does **not** yet contain production collector connectivity evidence, end-to-end production trace evidence, or controlled production telemetry-failure acceptance evidence.
 
 Therefore this document is an implementation contract and acceptance gate, not a production deployment claim.
 
