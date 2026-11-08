@@ -13,7 +13,7 @@ if (statutory.includes('const requested = text(bodyOf(request), "organizationId"
   fail("Statutory tenant-authority contract FAILED: organizationFor still derives tenant authority from request body.");
 }
 
-const helperMatch = statutory.match(/async function organizationFor[\\s\\S]*?return organizationId;\\s*}/);
+const helperMatch = statutory.match(/async function organizationFor[\s\S]*?return organizationId;\s*}/);
 const helper = helperMatch?.[0] ?? "";
 if (!helper.includes("auth.activeOrganizationId") || helper.includes("bodyOf(request)")) {
   fail("Statutory tenant-authority contract FAILED: organizationFor must derive authority only from auth.activeOrganizationId.");
