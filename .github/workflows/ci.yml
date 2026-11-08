@@ -127,6 +127,8 @@ jobs:
         run: node scripts/test-shakti-authentication-session-liveness-contract.mjs
       - name: Run Shakti high-risk organization liveness contract
         run: node scripts/test-shakti-high-risk-organization-liveness-contract.mjs
+      - name: Run Shakti bilateral organization liveness contract
+        run: node scripts/test-shakti-bilateral-organization-liveness-contract.mjs
       - name: Run Shakti tenant organization liveness contract
         run: node scripts/test-shakti-tenant-organization-liveness-contract.mjs
       - name: Run Shakti auth/onboarding no-body-authority contract
