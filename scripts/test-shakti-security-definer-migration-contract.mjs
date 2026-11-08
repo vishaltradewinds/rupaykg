@@ -40,8 +40,8 @@ const requiredRuntimeFunctions = new Map([
 
 const stripSqlComments = (source) =>
   source
-    .replace(/--[^\\n]*$/gm, "")
-    .replace(/\\/\\*[\\s\\S]*?\\*\\//g, "");
+    .replace(/--[^\n]*$/gm, "")
+    .replace(/\/\*[\s\S]*?\*\//g/g, "");
 
 const allMigrationSource = [];
 for (const file of files) {
@@ -53,12 +53,12 @@ for (const file of files) {
 
 const functionBlocksBySignature = new Map();
 for (const { file, source } of allMigrationSource) {
-  const starts = [...source.matchAll(/create\\s+(?:or\\s+replace\\s+)?function\\s+app\\.([a-z_][a-z0-9_]*)\\s*\\(([^)]*)\\)/gi)];
+  const starts = [...source.matchAll(/create\s+/(?:or\\s+replace\\s+)?function\\s+app\\.([a-z_][a-z0-9_]*)\\s*\\(([^)]*)\\)/gi)];
   for (let i = 0; i < starts.length; i++) {
     const start = starts[i].index ?? 0;
     const end = starts[i + 1]?.index ?? source.length;
     const name = starts[i][1];
-    const args = starts[i][2].replace(/\\s+/g, " ").trim();
+    const args = starts[i][2].replace(/\s+/g, " ").trim();
     const signature = name + "(" + args + ")";
     functionBlocksBySignature.set(signature, { file, block: source.slice(start, end) });
   }
