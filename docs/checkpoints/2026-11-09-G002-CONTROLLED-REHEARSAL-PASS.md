@@ -204,3 +204,18 @@ The preflight enforces:
 - all three governed SECURITY DEFINER functions are executable by the runtime role and not executable by PUBLIC.
 
 This is a deployed staging acceptance result only. Production remains untouched and fail-closed.
+
+## CI acceptance closure — 2026-11-09 08:32Z
+
+CI run **6671** completed successfully on commit `1d68556addc561abcc96043b22b0c1a366b5699e` after the migration-compatibility preflight correction:
+- migration validation: PASS
+- migration application: PASS
+- TypeScript typecheck: PASS
+- production build: PASS
+- browser smoke test: PASS
+- disposable PostgreSQL acceptance: PASS
+- production container build: PASS
+
+The corrected migration-compatibility preflight is therefore CI-validated. It no longer incorrectly requires the post-097 hardened SECURITY DEFINER function to exist before migration 097 itself is applied.
+
+G-002 engineering/CI acceptance remains PASS. Production security migrations, ownership separation, RLS activation, and runtime cutover remain unexecuted pending the controlled production change authorization.
