@@ -191,3 +191,16 @@ A manual deploy trigger was also accepted, but no new deploy has yet been create
 - regulatory certification: NOT CLAIMED
 - field validation: NOT CLAIMED
 - TRL 9: NOT CLAIMED
+
+
+## Deployed runtime DB preflight — PASS — 2026-11-09 08:21Z
+
+The Render staging deployment was rebuilt with the runtime DB preflight as a mandatory container startup gate. The deployment reached LIVE and the application subsequently served HTTP 200 responses. The startup preflight therefore completed successfully against the injected `rupaykg_runtime_login` credential before the production server started.
+
+The preflight enforces:
+- current DB role is non-superuser and NOBYPASSRLS;
+- all 17 protected tenant tables exist and have RLS enabled;
+- none of the protected tables is owned by the runtime role;
+- all three governed SECURITY DEFINER functions are executable by the runtime role and not executable by PUBLIC.
+
+This is a deployed staging acceptance result only. Production remains untouched and fail-closed.
