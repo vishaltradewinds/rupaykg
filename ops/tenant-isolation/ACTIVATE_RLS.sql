@@ -45,7 +45,7 @@ begin
          from pg_policies pol
         where pol.schemaname = 'public'
           and pol.tablename = p.table_name
-          and pol.cmd in ('r','*')
+          and pol.cmd in ('SELECT','*')
      )
   ) then
     raise exception 'TENANT_ISOLATION_ACTIVATION_BLOCKED: every protected tenant table must have a SELECT RLS policy before activation';
