@@ -52,6 +52,12 @@ if (!/current_user = 'rupaykg_ddl_migration'/.test(ddlPreflight)
  || !/pg_has_role\(current_user, 'rupaykg_app_runtime', 'member'\)/.test(ddlPreflight)) {
   failures.push("DDL preflight must pin execution to the dedicated login role and prove governed runtime-role membership for the negative acceptance path.");
 }
+if (!/Fail closed on unexpected pre-migration RLS state/.test(controlledMigration)
+ || !/pre_migration_rls_remains_disabled_assertion/.test(controlledMigration)
+ || !/relrowsecurity/.test(controlledMigration)
+ || !/relforcerowsecurity/.test(controlledMigration)) {
+  failures.push("Controlled production migration must fail closed if RLS is already enabled before the approved 097-099 cutover.");
+}
 if (!/Verify controlled DDL role owns protected tenant tables/.test(controlledMigration)
  || !/ddl_owner_assertion/.test(controlledMigration)
  || !/\)=17 then 1 else 0 end/.test(controlledMigration)) {
