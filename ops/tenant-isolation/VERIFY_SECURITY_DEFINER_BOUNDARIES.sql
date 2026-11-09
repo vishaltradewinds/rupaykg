@@ -15,7 +15,7 @@ actual as (
     e.identity_args,
     count(p.oid) as function_count,
     bool_or(p.prosecdef) as security_definer,
-    bool_or(pg_get_functiondef(p.oid) like '%set search_path = pg_catalog, public, app%') as hardened_search_path
+    bool_or(coalesce(p.proconfig::text, '') like '%search_path=pg_catalog, public, app%') as hardened_search_path
   from expected e
   left join pg_proc p
     on p.pronamespace = 'app'::regnamespace
@@ -58,7 +58,7 @@ select 1 / case
           and pg_get_function_identity_arguments(p.oid) = 'p_token_hash text')
        )
        and p.prosecdef
-       and pg_get_functiondef(p.oid) like '%set search_path = pg_catalog, public, app%'
+       and coalesce(p.proconfig::text, '') like '%search_path=pg_catalog, public, app%'
    ) = 3
    and has_function_privilege(current_user, 'app.set_request_context(uuid,uuid)', 'EXECUTE')
    and has_function_privilege(current_user, 'app.is_verified_org_member(uuid)', 'EXECUTE')
