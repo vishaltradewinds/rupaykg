@@ -23,29 +23,25 @@ test("accepts a valid external integration envelope", () => {
 });
 
 test("rejects missing idempotency key", () => {
-  assert.equal(
-    validateIntegrationEnvelope({ ...valid, idempotencyKey: "" }).code,
-    "INVALID_INTEGRATION_ENVELOPE",
-  );
+  const result = validateIntegrationEnvelope({ ...valid, idempotencyKey: "" });
+  assert.equal(result.ok, false);
+  assert.equal(result.code, "INVALID_INTEGRATION_ENVELOPE");
 });
 
 test("rejects unsupported contract version", () => {
-  assert.equal(
-    validateIntegrationEnvelope({ ...valid, contractVersion: "2.0" as "1.0" }).code,
-    "UNSUPPORTED_CONTRACT_VERSION",
-  );
+  const result = validateIntegrationEnvelope({ ...valid, contractVersion: "2.0" as "1.0" });
+  assert.equal(result.ok, false);
+  assert.equal(result.code, "UNSUPPORTED_CONTRACT_VERSION");
 });
 
 test("rejects invalid timestamps", () => {
-  assert.equal(
-    validateIntegrationEnvelope({ ...valid, occurredAt: "not-a-date" }).code,
-    "INVALID_OCCURRED_AT",
-  );
+  const result = validateIntegrationEnvelope({ ...valid, occurredAt: "not-a-date" });
+  assert.equal(result.ok, false);
+  assert.equal(result.code, "INVALID_OCCURRED_AT");
 });
 
 test("rejects array payloads", () => {
-  assert.equal(
-    validateIntegrationEnvelope({ ...valid, payload: [] }).code,
-    "INVALID_PAYLOAD",
-  );
+  const result = validateIntegrationEnvelope({ ...valid, payload: [] as unknown as Record<string, unknown> });
+  assert.equal(result.ok, false);
+  assert.equal(result.code, "INVALID_PAYLOAD");
 });
