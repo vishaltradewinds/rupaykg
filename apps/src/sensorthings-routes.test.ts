@@ -22,7 +22,8 @@ function makePool() {
     async query(sql: string, params?: unknown[]) {
       if (sql.includes("app.authenticate_bearer_session")) {
         return { rows: params?.[0] ? [{ identity_id: IDENTITY_A, organization_id: ORG_A, role_id: ROLE_A, status: "VERIFIED" }] : [] };
-      }\n      if (sql.includes("from identity_sessions")) {
+      }
+      if (sql.includes("from identity_sessions")) {
         return { rows: params?.[0] ? [{ identity_id: IDENTITY_A }] : [] };
       }
       if (sql.includes("from organization_memberships")) {
