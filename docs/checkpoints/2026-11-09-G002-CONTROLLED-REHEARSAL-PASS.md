@@ -74,3 +74,10 @@ The rehearsal role graph was further hardened and tested:
 - PUBLIC EXECUTE remains revoked.
 
 One important limitation remains: the Neon SQL control plane executes through the project owner connection, so a separate network-authenticated application connection using the runtime-login credential was not established from this tool session. Therefore application-level runtime acceptance is not claimed complete.
+
+
+## Application runtime DB preflight — 2026-11-09
+
+Added `apps/src/runtime-db-preflight.ts` and the `runtime-db-preflight` npm command. The preflight is fail-closed and verifies that the application connection is using a non-superuser, NOBYPASSRLS role; all 17 protected tables have RLS enabled and are not owned by the runtime role; and the three governed SECURITY DEFINER functions are executable by the runtime role while PUBLIC EXECUTE remains revoked.
+
+This is an executable deployment/runtime gate. It does not itself establish a live application network connection from this tool session; that remains dependent on the deployed service using the runtime-login credential as `DATABASE_URL` and passing this preflight.
