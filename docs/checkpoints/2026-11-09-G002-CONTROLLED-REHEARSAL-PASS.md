@@ -165,3 +165,12 @@ A Render free-plan staging service `rupaykg-g002-runtime-preflight` was created 
 - regulatory certification: NOT CLAIMED
 - field validation: NOT CLAIMED
 - TRL 9: NOT CLAIMED
+
+
+## Deployed runtime preflight attempt — 2026-11-09 08:19Z
+
+A real Render staging deployment was exercised from the canonical CTO branch. The container built successfully, but the application intentionally failed closed during startup because `DATABASE_URL` was not configured in the Render environment. The logs show the expected production configuration guard rejecting startup with `PRODUCTION_CONFIG_INVALID: DATABASE_URL is required`.
+
+This is a useful negative acceptance result: the production runtime does not start with incomplete database configuration. No privileged database credential was committed to Git or embedded in application source.
+
+The remaining deployed-runtime gate is therefore specifically secret injection of the dedicated non-BYPASSRLS `rupaykg_runtime_login` DATABASE_URL into the isolated Render staging service, followed by successful runtime-db-preflight execution and HTTP startup acceptance. Production remains untouched.
