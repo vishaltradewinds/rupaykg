@@ -49,7 +49,7 @@ begin
   end if;
 end $shakti$;
 
-do $shakti$$
+do $shakti$
 declare
   v_suffix text := replace(gen_random_uuid()::text, '-', '');
   v_org_a uuid;
