@@ -24,7 +24,7 @@ end as runtime_role_switch_assertion;
 
 reset role;
 
-do $
+do $shakti$
 declare
   v_missing text[] := array[]::text[];
   v_name text;
@@ -47,9 +47,9 @@ begin
   if cardinality(v_missing) > 0 then
     raise exception 'RLS_NEGATIVE_TEST_BLOCKED: RLS is not enabled on %', array_to_string(v_missing, ', ');
   end if;
-end $$;
+end $shakti$;
 
-do $$
+do $shakti$$
 declare
   v_suffix text := replace(gen_random_uuid()::text, '-', '');
   v_org_a uuid;
@@ -138,6 +138,6 @@ begin
   reset role;
 
   raise notice 'RLS_NEGATIVE_TEST_PASS: tenant A can read/mutate only its own organization scope';
-end $$;
+end $shakti$;
 
 rollback;
