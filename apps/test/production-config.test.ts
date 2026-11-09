@@ -4,12 +4,13 @@ import { readProductionConfig } from "../src/production-config.js";
 
 const baseEnv = {
   NODE_ENV: "production",
-  DATABASE_URL: "postgresql://rupaykg:secret@db.example.com:5432/rupaykg",
+  DATABASE_URL: "postgresql://rupaykg_runtime_login:secret@db.example.com:5432/rupaykg",
   DATABASE_SSL: "require",
   DATABASE_CA_CERT: "-----BEGIN CERTIFICATE-----\nproduction-test-ca\n-----END CERTIFICATE-----",
   RUPAYKG_AUTH_MODE: "real",
   RUPAYKG_ALLOWED_ORIGINS: "https://app.rupaykg.example,https://admin.rupaykg.example",
   RUPAYKG_SYNTHETIC_DATA: "false",
+  RUPAYKG_REQUIRE_RUNTIME_DB_ROLE: "true",
 };
 
 test("production config accepts the fail-closed production contract", () => {
@@ -21,12 +22,14 @@ test("production config accepts the fail-closed production contract", () => {
     allowedOrigins: ["https://app.rupaykg.example", "https://admin.rupaykg.example"],
     authMode: "real",
     syntheticData: false,
+    requireRuntimeDbRole: true,
   });
 });
 
 test("production config rejects missing or unsafe production requirements", () => {
   const cases = [
     [{ ...baseEnv, NODE_ENV: "development" }, /NODE_ENV must be production/],
+    [{ ...baseEnv, RUPAYKG_REQUIRE_RUNTIME_DB_ROLE: "false" }, /RUPAYKG_REQUIRE_RUNTIME_DB_ROLE must be true/],
     [{ ...baseEnv, DATABASE_URL: "postgresql://localhost/rupaykg" }, /must not target localhost/],
     [{ ...baseEnv, DATABASE_SSL: "false" }, /DATABASE_SSL must be require/],
     [{ ...baseEnv, DATABASE_CA_CERT: "" }, /DATABASE_CA_CERT must contain a PEM certificate/],
