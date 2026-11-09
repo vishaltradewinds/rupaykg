@@ -114,3 +114,13 @@ The API overview endpoint had tenant-table reads through the generic pool withou
 Production configuration/server source also had literal escaped newline artifacts from the previous automated edit; those were normalized, and the production config now returns the required `requireRuntimeDbRole: true` contract.
 
 The CI workflow was observed running against the branch after the runtime-role hardening changes; final CI conclusion remains pending and must be checked before any certification claim.
+
+
+## Protected-query runtime audit continuation — 2026-11-09
+
+Additional audit of route modules found pre-context protected-table access in the MRV status and Hedera verification paths. These paths were corrected:
+- MRV status permission evaluation now runs inside `withTenantTransaction`.
+- MRV Hedera provenance read/authorization/update paths now use tenant-bound clients and transaction-local context.
+- External Hedera verification remains outside the DB transaction, followed by a fresh tenant-scoped persistence transaction.
+
+The broader audit also identified platform-admin/onboarding paths that intentionally perform cross-organization administration and therefore require a separate platform-authority RLS policy/break-glass design before production activation. This is not being silently bypassed. Production remains fail-closed.
