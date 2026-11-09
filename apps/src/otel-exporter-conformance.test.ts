@@ -29,14 +29,14 @@ test("exports a real OTLP trace payload and preserves the application trace iden
     traceExporter: new OTLPTraceExporter({ url: endpoint }),
   });
 
-  const context = {
+  const traceContext = {
     traceId: "4bf92f3577b34da6a3ce929d0e0e4736",
     parentId: "00f067aa0ba902b7",
     sampled: true,
   };
 
   const spanContract = buildHttpSpan({
-    context,
+    context: traceContext,
     spanId: "8f0a1e2b3c4d5e6f",
     name: "HTTP GET /api/v1/measurements/:id",
     startTimeUnixNano: "1794120000000000000",
@@ -48,8 +48,8 @@ test("exports a real OTLP trace payload and preserves the application trace iden
   });
 
   validateObservabilitySpan(spanContract);
-  assert.equal(spanContract.traceId, context.traceId);
-  assert.equal(spanContract.parentSpanId, context.parentId);
+  assert.equal(spanContract.traceId, traceContext.traceId);
+  assert.equal(spanContract.parentSpanId, traceContext.parentId);
   assert.equal("authorization" in spanContract.attributes, false);
   assert.equal("request.body" in spanContract.attributes, false);
   assert.equal("payload" in spanContract.attributes, false);
@@ -58,8 +58,8 @@ test("exports a real OTLP trace payload and preserves the application trace iden
     sdk.start();
     const tracer = trace.getTracer("rupaykg-otel-conformance");
     const parentContext = trace.setSpanContext(context.active(), {
-      traceId: context.traceId,
-      spanId: context.parentId,
+      traceId: traceContext.traceId,
+      spanId: traceContext.parentId,
       traceFlags: 1,
       isRemote: true,
     });
@@ -68,7 +68,7 @@ test("exports a real OTLP trace payload and preserves the application trace iden
         "http.request.method": spanContract.attributes["http.request.method"],
         "http.route": spanContract.attributes["http.route"],
         "http.response.status_code": spanContract.attributes["http.response.status_code"],
-        "rupaykg.trace_id": context.traceId,
+        "rupaykg.trace_id": traceContext.traceId,
       },
     }));
     span.end();
