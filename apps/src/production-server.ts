@@ -10,6 +10,6 @@ process.env.DATABASE_SSL = config.databaseSsl;
 process.env.DATABASE_CA_CERT = config.databaseCaCert;
 process.env.RUPAYKG_ALLOWED_ORIGINS = config.allowedOrigins.join(",");
 process.env.RUPAYKG_AUTH_MODE = config.authMode;
-process.env.RUPAYKG_SYNTHETIC_DATA = String(config.syntheticData);
+process.env.RUPAYKG_SYNTHETIC_DATA = String(config.syntheticData);\nprocess.env.RUPAYKG_REQUIRE_RUNTIME_DB_ROLE = String(config.requireRuntimeDbRole);
 
 console.info(JSON.stringify(buildRuntimeAttestation()));\n\nawait import("./server.js");
