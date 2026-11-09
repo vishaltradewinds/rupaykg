@@ -142,3 +142,26 @@ The runtime acceptance suite passed all six runtime-acceptance cases, including 
 Additional test-harness corrections were made to model the governed `app.authenticate_bearer_session` boundary and transaction-backed platform-admin routes. The production auth implementation was also hardened so malformed `x-rupaykg-organization-id` selectors are rejected before the database authentication bootstrap query.
 
 G-002 engineering/CI acceptance is now PASS on the branch. This does not authorize production RLS activation, and it does not constitute field validation, regulatory certification, or TRL 9.
+
+
+## Live-preflight gate continuation — 2026-11-09 08:18Z
+
+The isolated rehearsal database was queried through the explicit `rupaykg_runtime_login` role, not the owner role. The executable runtime boundary returned:
+- current_user=`rupaykg_runtime_login`
+- rolsuper=false
+- rolbypassrls=false
+- protected RLS-enabled table count=17/17
+- governed SECURITY DEFINER functions with runtime EXECUTE and no PUBLIC EXECUTE=3/3
+
+The protected-policy review also confirms `organization_memberships` has SELECT-only tenant policy. No application mutation policy was added because the remaining onboarding/platform-admin mutation paths are cross-organization authority operations and require a separate platform-authority/break-glass design rather than a tenant-policy bypass.
+
+A Render free-plan staging service `rupaykg-g002-runtime-preflight` was created from the canonical CTO branch to establish a real deployed runtime gate without touching production. The service is intentionally not treated as passed yet: its secret `DATABASE_URL` has not been injected because the deployment credential must be supplied through the deployment secret mechanism. Production remains untouched and fail-closed.
+
+## Gate state
+- G-002 engineering/CI: PASS
+- isolated runtime-role DB acceptance: PASS
+- deployed HTTP runtime preflight: OPEN
+- production RLS activation: NOT AUTHORIZED / NOT EXECUTED
+- regulatory certification: NOT CLAIMED
+- field validation: NOT CLAIMED
+- TRL 9: NOT CLAIMED
