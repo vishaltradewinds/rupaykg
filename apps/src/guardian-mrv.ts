@@ -93,8 +93,12 @@ export async function executeGuardianMrv(input: GuardianMrvRequest): Promise<Gua
     const body = raw as Record<string, unknown> | null;
     const status = body?.status === "REJECTED" ? "REJECTED" : body?.status === "VERIFIED" ? "VERIFIED" : "UNAVAILABLE";
     const executionId = typeof body?.executionId === "string" ? body.executionId : typeof body?.id === "string" ? body.id : null;
+    const returnedPolicyId = typeof body?.policyId === "string" ? body.policyId.trim() : null;
     if (status === "VERIFIED" && !executionId) {
       return { status: "UNAVAILABLE", executionId: null, policyId: input.policyId, correlationId, idempotencyKey, raw, message: "Guardian returned VERIFIED without an authoritative execution identifier." };
+    }
+    if (status === "VERIFIED" && (!returnedPolicyId || returnedPolicyId !== input.policyId)) {
+      return { status: "UNAVAILABLE", executionId: null, policyId: input.policyId, correlationId, idempotencyKey, raw, message: "Guardian returned VERIFIED without the expected authoritative policy identifier." };
     }
     return {
       status,
