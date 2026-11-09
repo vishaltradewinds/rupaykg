@@ -124,3 +124,21 @@ Additional audit of route modules found pre-context protected-table access in th
 - External Hedera verification remains outside the DB transaction, followed by a fresh tenant-scoped persistence transaction.
 
 The broader audit also identified platform-admin/onboarding paths that intentionally perform cross-organization administration and therefore require a separate platform-authority RLS policy/break-glass design before production activation. This is not being silently bypassed. Production remains fail-closed.
+
+
+## CI acceptance closure — 2026-11-09 08:08Z
+
+Latest canonical-branch CI run **6659** completed successfully on commit `97a0b76cd65e6113f8f9e3114856b89a86d50ad8`:
+- migration validation: PASS
+- migration rehearsal application: PASS
+- TypeScript typecheck: PASS
+- production build: PASS
+- browser smoke test: PASS
+- disposable PostgreSQL acceptance suite: PASS
+- production container build: PASS
+
+The runtime acceptance suite passed all six runtime-acceptance cases, including authenticated tenant operations, geography authorization, field-sync application, evidence verification, deterministic carbon provenance, and advisory/non-mutating intelligence.
+
+Additional test-harness corrections were made to model the governed `app.authenticate_bearer_session` boundary and transaction-backed platform-admin routes. The production auth implementation was also hardened so malformed `x-rupaykg-organization-id` selectors are rejected before the database authentication bootstrap query.
+
+G-002 engineering/CI acceptance is now PASS on the branch. This does not authorize production RLS activation, and it does not constitute field validation, regulatory certification, or TRL 9.
