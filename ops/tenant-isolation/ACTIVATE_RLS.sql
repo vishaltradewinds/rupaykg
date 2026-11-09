@@ -64,7 +64,7 @@ begin
          'evidence_verification_requirements','chain_of_custody_links'
        )
        and pg_get_userbyid(c.relowner) = current_user
-  ) <> 18 then
+  ) <> 17 then
     raise exception 'TENANT_ISOLATION_ACTIVATION_BLOCKED: current DDL role does not own all protected tenant tables';
   end if;
 end $shakti$;
