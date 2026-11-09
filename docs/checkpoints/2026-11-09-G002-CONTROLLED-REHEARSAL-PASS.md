@@ -92,3 +92,25 @@ The application path is now explicitly prepared for the runtime-role cutover:
 - The executable `runtime-db-preflight` separately verifies the protected-table RLS/ownership boundary and SECURITY DEFINER privilege boundary.
 
 This deliberately makes a production deployment fail closed if `DATABASE_URL` still points at the privileged owner role. The deployment is therefore not certified ready until `DATABASE_URL` is changed to the dedicated runtime-login credential and the preflight passes against the deployed database.
+
+
+## Runtime-role database acceptance — 2026-11-09 07:47Z
+
+A Neon connection was executed explicitly as `rupaykg_runtime_login` on the isolated rehearsal branch:
+- `current_user=rupaykg_runtime_login`
+- `rolsuper=false`
+- `rolbypassrls=false`
+- all 17 protected tables returned zero rows without an established tenant context, demonstrating fail-closed visibility at the runtime-role connection boundary;
+- all 17 protected tables remain RLS-enabled and owned by `rupaykg_ddl`, not the runtime role;
+- runtime login has EXECUTE on `app.set_request_context`, `app.authenticate_bearer_session`, and `app.is_verified_org_member`;
+- PUBLIC EXECUTE is revoked on all three.
+
+This is stronger evidence than role metadata alone, but it is still not the same as a deployed HTTP application connection. The network-authenticated deployed application gate remains open.
+
+## Application query audit correction — 2026-11-09
+
+The API overview endpoint had tenant-table reads through the generic pool without establishing transaction-local tenant context. It was corrected to execute the overview aggregation inside `withTenantTransaction`, using the tenant-bound client for permission checks and protected-table reads.
+
+Production configuration/server source also had literal escaped newline artifacts from the previous automated edit; those were normalized, and the production config now returns the required `requireRuntimeDbRole: true` contract.
+
+The CI workflow was observed running against the branch after the runtime-role hardening changes; final CI conclusion remains pending and must be checked before any certification claim.
