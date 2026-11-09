@@ -90,7 +90,7 @@ try {
     [["set_request_context", "is_verified_org_member", "authenticate_bearer_session"]],
   );
 
-  if (functionPrivileges.length !== 3 || functionPrivileges.rows.some(row => !row.runtime_execute || row.public_execute)) {
+  if (functionPrivileges.rows.length !== 3 || functionPrivileges.rows.some(row => !row.runtime_execute || row.public_execute)) {
     throw new Error(
       `RUPAYKG_RUNTIME_DB_PREFLIGHT_FAILED: SECURITY DEFINER privilege boundary is invalid: ${JSON.stringify(functionPrivileges.rows)}`,
     );
