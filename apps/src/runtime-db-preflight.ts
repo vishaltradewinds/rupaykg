@@ -25,8 +25,14 @@ const protectedTables = [
   "chain_of_custody_links",
 ];
 
+const connectionUrl = new URL(databaseUrl);
+// The runtime supplies TLS policy explicitly through the `ssl` option below.
+// Remove sslmode from the libpq URL so node-postgres does not emit a conflicting
+// SSL configuration warning when both mechanisms are present.
+connectionUrl.searchParams.delete("sslmode");
+
 const pool = new Pool({
-  connectionString: databaseUrl,
+  connectionString: connectionUrl.toString(),
   ssl: process.env.DATABASE_SSL === "require"
     ? { rejectUnauthorized: true, ca: process.env.DATABASE_CA_CERT }
     : { rejectUnauthorized: false },
