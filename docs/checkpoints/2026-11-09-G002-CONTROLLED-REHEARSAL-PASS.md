@@ -174,3 +174,20 @@ A real Render staging deployment was exercised from the canonical CTO branch. Th
 This is a useful negative acceptance result: the production runtime does not start with incomplete database configuration. No privileged database credential was committed to Git or embedded in application source.
 
 The remaining deployed-runtime gate is therefore specifically secret injection of the dedicated non-BYPASSRLS `rupaykg_runtime_login` DATABASE_URL into the isolated Render staging service, followed by successful runtime-db-preflight execution and HTTP startup acceptance. Production remains untouched.
+
+
+## Runtime secret injection attempt — 2026-11-09 08:20Z
+
+The isolated rehearsal `rupaykg_runtime_login` connection credential was retrieved through the database provider and submitted to the Render staging service as the `DATABASE_URL` environment secret. Render accepted the environment update, but the service's current deployment queue has not yet materialized a new deploy. Existing application logs therefore still reflect the previous revision in which `DATABASE_URL` was absent.
+
+A manual deploy trigger was also accepted, but no new deploy has yet been created. This is now a deployment-control-plane queue condition, not a code or database acceptance failure. No production deployment or production database change was performed.
+
+## Gate state
+- G-002 engineering/CI: PASS
+- isolated runtime-role DB acceptance: PASS
+- deployed runtime configuration: secret submitted; rollout pending Render deploy creation
+- deployed HTTP runtime preflight: OPEN
+- production RLS activation: NOT AUTHORIZED / NOT EXECUTED
+- regulatory certification: NOT CLAIMED
+- field validation: NOT CLAIMED
+- TRL 9: NOT CLAIMED
