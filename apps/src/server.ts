@@ -32,6 +32,24 @@ const poolConfig: PoolConfig = { connectionString: databaseUrl, max: 10 };
 if (process.env.DATABASE_SSL === "require") poolConfig.ssl = { rejectUnauthorized: true, ca: process.env.DATABASE_CA_CERT };
 else if (process.env.DATABASE_SSL !== "false") poolConfig.ssl = { rejectUnauthorized: false };
 const pool = databaseUrl ? new Pool(poolConfig) : null;
+
+async function assertRuntimeDatabaseRole(): Promise<void> {
+  if (process.env.NODE_ENV !== "production" || process.env.RUPAYKG_REQUIRE_RUNTIME_DB_ROLE !== "true") return;
+  if (!pool) throw new Error("RUPAYKG_RUNTIME_DB_ROLE_REQUIRED: DATABASE_URL is not configured");
+  const result = await pool.query<{ current_user: string; rolsuper: boolean; rolbypassrls: boolean }>(
+    `select current_user, r.rolsuper, r.rolbypassrls
+       from pg_roles r
+      where r.rolname = current_user`,
+  );
+  const role = result.rows[0];
+  if (!role || role.rolsuper || role.rolbypassrls) {
+    throw new Error(
+      `RUPAYKG_RUNTIME_DB_ROLE_REQUIRED: production application must use a non-superuser, NOBYPASSRLS database role; current_user=${role?.current_user ?? "unknown"} superuser=${role?.rolsuper ?? "unknown"} bypassrls=${role?.rolbypassrls ?? "unknown"}`,
+    );
+  }
+}
+
+await assertRuntimeDatabaseRole();
 if (pool) registerSensorThingsRoutes(app, pool);
 async function query<T extends Record<string, unknown>>(text: string, values: unknown[] = []): Promise<T[]> { if (!pool) throw new Error("DATABASE_URL is not configured"); return (await pool.query<T>(text, values)).rows; }
 function bodyOf(request: { body: unknown }): Record<string, unknown> { return (request.body && typeof request.body === "object" ? request.body : {}) as Record<string, unknown>; }
