@@ -8,7 +8,7 @@
 -- This script deliberately aborts before changing RLS if the executing role
 -- is SUPERUSER, BYPASSRLS, or the application runtime role.
 
-do $$
+do $shakti$
 declare
   v_super boolean;
   v_bypass boolean;
@@ -67,7 +67,7 @@ begin
   ) <> 18 then
     raise exception 'TENANT_ISOLATION_ACTIVATION_BLOCKED: current DDL role does not own all protected tenant tables';
   end if;
-end $;
+end $shakti$;
 
 alter table organizations enable row level security;
 alter table roles enable row level security;
