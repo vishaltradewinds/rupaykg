@@ -219,3 +219,9 @@ CI run **6671** completed successfully on commit `1d68556addc561abcc96043b22b0c1
 The corrected migration-compatibility preflight is therefore CI-validated. It no longer incorrectly requires the post-097 hardened SECURITY DEFINER function to exist before migration 097 itself is applied.
 
 G-002 engineering/CI acceptance remains PASS. Production security migrations, ownership separation, RLS activation, and runtime cutover remain unexecuted pending the controlled production change authorization.
+
+## Production activation package static audit — 2026-11-09 08:34Z
+
+A read-only review of the production activation SQL/runbook found one remaining PostgreSQL dollar-quoting defect in `ops/tenant-isolation/VERIFY_RLS_NEGATIVE_TEST.sql`: the second DO block opened with an extra trailing dollar character (`do $shakti$$`). This was corrected to the valid `do $shakti$` delimiter.
+
+No database was executed or mutated. The fix is committed as `23c9ff4271b0e3a5d5b93b4bf7769170ad9d5ff6` and must pass CI before being treated as closed.
