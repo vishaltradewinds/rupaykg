@@ -52,11 +52,31 @@ test("Guardian MRV rejects a VERIFIED response without an authoritative executio
   }
 });
 
-test("Guardian MRV accepts VERIFIED only with an authoritative execution id", async () => {
+test("Guardian MRV rejects VERIFIED with a mismatched authoritative policy id", async () => {
   const previousUrl = process.env.GUARDIAN_MRV_SUBMIT_URL;
   const previousFetch = globalThis.fetch;
   process.env.GUARDIAN_MRV_SUBMIT_URL = "https://guardian.test/mrv";
-  globalThis.fetch = async () => new Response(JSON.stringify({ status: "VERIFIED", executionId: "guardian-execution-1" }), {
+  globalThis.fetch = async () => new Response(JSON.stringify({ status: "VERIFIED", executionId: "guardian-execution-1", policyId: "different-policy" }), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
+  try {
+    const result = await executeGuardianMrv(request);
+    assert.equal(result.status, "UNAVAILABLE");
+    assert.equal(result.executionId, null);
+    assert.match(result.message, /policy identifier/);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousUrl === undefined) delete process.env.GUARDIAN_MRV_SUBMIT_URL;
+    else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
+  }
+});
+
+test("Guardian MRV accepts VERIFIED only with an authoritative execution id and matching policy id", async () => {
+  const previousUrl = process.env.GUARDIAN_MRV_SUBMIT_URL;
+  const previousFetch = globalThis.fetch;
+  process.env.GUARDIAN_MRV_SUBMIT_URL = "https://guardian.test/mrv";
+  globalThis.fetch = async () => new Response(JSON.stringify({ status: "VERIFIED", executionId: "guardian-execution-1", policyId: "policy-1" }), {
     status: 200,
     headers: { "content-type": "application/json" },
   });
