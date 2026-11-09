@@ -81,3 +81,14 @@ One important limitation remains: the Neon SQL control plane executes through th
 Added `apps/src/runtime-db-preflight.ts` and the `runtime-db-preflight` npm command. The preflight is fail-closed and verifies that the application connection is using a non-superuser, NOBYPASSRLS role; all 17 protected tables have RLS enabled and are not owned by the runtime role; and the three governed SECURITY DEFINER functions are executable by the runtime role while PUBLIC EXECUTE remains revoked.
 
 This is an executable deployment/runtime gate. It does not itself establish a live application network connection from this tool session; that remains dependent on the deployed service using the runtime-login credential as `DATABASE_URL` and passing this preflight.
+
+
+## Production application fail-closed enforcement — 2026-11-09
+
+The application path is now explicitly prepared for the runtime-role cutover:
+- Production configuration requires `RUPAYKG_REQUIRE_RUNTIME_DB_ROLE=true`.
+- Production startup sets that requirement from the validated production configuration.
+- The API server performs a startup database-role assertion and refuses to start if the application connection is superuser or BYPASSRLS.
+- The executable `runtime-db-preflight` separately verifies the protected-table RLS/ownership boundary and SECURITY DEFINER privilege boundary.
+
+This deliberately makes a production deployment fail closed if `DATABASE_URL` still points at the privileged owner role. The deployment is therefore not certified ready until `DATABASE_URL` is changed to the dedicated runtime-login credential and the preflight passes against the deployed database.
