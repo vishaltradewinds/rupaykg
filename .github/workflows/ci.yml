@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
   pull_request:
@@ -12,6 +13,9 @@ permissions:
 env:
   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rupaykg
   DATABASE_SSL: "false"
+  RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS: "1"
+  RUPAYKG_REQUIRE_NON_BYPASSRLS: "1"
+  RUPAYKG_TEST_OWNER_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rupaykg
 
 jobs:
   validate:
@@ -35,9 +39,13 @@ jobs:
         with:
           node-version: '22.x'
           package-manager-cache: false
-      - run: npm install --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
+      - name: Assert disposable non-BYPASSRLS runtime role
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "create role rupaykg_app_runtime nologin nobypassrls;"
+          test "$(psql "$DATABASE_URL" -tAc "select rolbypassrls from pg_roles where rolname = 'rupaykg_app_runtime'")" = "f"
       - run: npm run validate:migrations
       - run: npm run migrate -w @rupaykg/api
       - run: npm run typecheck

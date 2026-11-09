@@ -49,8 +49,9 @@ export async function authenticate(request: FastifyRequest, pool: Pool | null): 
     [hashToken(token)],
   );
   if (!bootstrap.rows[0]) return null;
-  const memberships = bootstrap;
-  if (requestedOrganizationId && !memberships.rows.some((m) => m.organization_id === requestedOrganizationId)) return null;
+  const memberships = { rows: bootstrap.rows.filter((m) => m.status === "VERIFIED") };
+  if (memberships.rows.length === 0) return null;
+  if (requestedOrganizationId && !memberships.rows.some((m) => m.organization_id === requestedOrganizationId && m.status === "VERIFIED")) return null;
 
   // All operational records are organization-scoped. A multi-organization identity
   // must explicitly select the organization before any endpoint can project data or

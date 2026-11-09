@@ -31,9 +31,27 @@ try {
   const files = (await readdir(migrationDir))
     .filter((name) => /^\d+_.+\.sql$/.test(name))
     .sort();
+  const prefixCounts = new Map<string, number>();
+  for (const filename of files) {
+    const prefix = filename.split("_", 1)[0];
+    prefixCounts.set(prefix, (prefixCounts.get(prefix) ?? 0) + 1);
+  }
+  const protectedMigrations = new Set([
+    "097_shakti_tenant_isolation_runtime_contract.sql",
+    "098_shakti_authentication_bootstrap.sql",
+    "099_shakti_rls_policy_foundation.sql",
+    "100_shakti_production_ddl_runtime_role_split.sql",
+  ]);
+  const allowProtected = process.env.RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS === "1";
+  const protectedApplied = await pool.query<{ filename: string }>("select filename from schema_migrations where filename = any($1::text[])", [[...protectedMigrations]]);
+  const appliedProtected = new Set(protectedApplied.rows.map((row) => row.filename));
+  const pendingProtected = files.filter((name) => protectedMigrations.has(name) && !appliedProtected.has(name));
+  if (pendingProtected.length && !allowProtected) throw new Error(`Protected Shakti migrations require RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS=1: ${pendingProtected.join(", ")}`);
 
   for (const filename of files) {
-    const version = filename.split("_", 1)[0];
+    const stem = filename.replace(/\.sql$/, "");
+    const prefix = filename.split("_", 1)[0];
+    const version = (prefixCounts.get(prefix) ?? 0) > 1 ? stem : prefix;
     const existing = await pool.query<{ version: string; filename: string }>(
       "select version, filename from schema_migrations where version = $1",
       [version],

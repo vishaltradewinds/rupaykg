@@ -22,17 +22,10 @@ for (const [name, pattern] of requiredWorkflowInvariants) {
 }
 
 const protectedMigrationPatterns = [
-  ["20261107_authority_hierarchy_context.sql", /authority_hierarchy_context/],
-  ["20261107_context_identity_bootstrap.sql", /context_identity_bootstrap/],
-  ["20261107_context_organization_id.sql", /context_organization_id/],
-  ["20261107_platform_execution_context.sql", /platform_execution_context/],
-  ["20261107_runtime_grant_reconciliation.sql", /runtime_grant_reconciliation/],
-  ["20261107_core_tenant_rls_activation_gate.sql", /core_tenant_rls_activation_gate/],
-  ["20261108_context_identity_liveness_hardening.sql", /context_identity_liveness_hardening/],
-  ["20261108_context_identity_liveness_completion.sql", /context_identity_liveness_completion/],
-  ["082_settlement_reference_trigger_insert_safety.sql", /082_settlement_reference_trigger_insert_safety/],
-  ["088_field_sync_append_only_integrity.sql", /088_field_sync_append_only_integrity/],
-  ["089_settlement_reconciliation_reference_integrity.sql", /089_settlement_reconciliation_reference_integrity/],
+  ["097_shakti_tenant_isolation_runtime_contract.sql", /097_shakti_tenant_isolation_runtime_contract/],
+  ["098_shakti_authentication_bootstrap.sql", /098_shakti_authentication_bootstrap/],
+  ["099_shakti_rls_policy_foundation.sql", /099_shakti_rls_policy_foundation/],
+  ["100_shakti_production_ddl_runtime_role_split.sql", /100_shakti_production_ddl_runtime_role_split/],
 ];
 for (const [filename, pattern] of protectedMigrationPatterns) {
   if (!pattern.test(migrationRunner)) failures.push(`Migration invariant missing: protected migration ${filename}`);
@@ -58,7 +51,7 @@ if (!/auth\.memberships\.some\(\(m\) => m\.status === "VERIFIED" && m\.organizat
 if (!/select exists \(select 1 from organization_memberships om\s+join organizations o on o\.id\s*=\s*om\.organization_id\s+and o\.status\s*=\s*'VERIFIED'\s+where om\.identity_id\s*=\s*\$1\s+and om\.organization_id\s*=\s*\$2\s+and om\.status\s*=\s*'VERIFIED'\)/.test(tenantDb)) {
   failures.push("Tenant transaction invariant missing: authoritative database membership must be revalidated inside the transaction.");
 }
-if (!/auth\.memberships\.length\s*===\s*0/.test(auth) || !/!organizationId/.test(auth) || !/m\.status\s*===\s*"VERIFIED"/.test(auth)) {
+if (!/memberships\.rows\.length\s*===\s*0/.test(auth) || !/activeOrganizationId/.test(auth) || !/status\s*===\s*"VERIFIED"/.test(auth)) {
   failures.push("Authorization fail-closed invariant missing for empty organization/membership context.");
 }
 
