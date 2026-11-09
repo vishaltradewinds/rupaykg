@@ -8,6 +8,7 @@ export type ProductionConfig = {
   allowedOrigins: string[];
   authMode: "real";
   syntheticData: false;
+  requireRuntimeDbRole: true;
 };
 
 function required(env: NodeJS.ProcessEnv, name: string): string {
