@@ -65,16 +65,21 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
   app.get("/api/v1/mrv/status", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const organizationId = auth.activeOrganizationId || auth.memberships[0]?.organization_id;
-    if (!organizationId || !await requirePermission(pool, auth, organizationId, ["guardian:read"])) return reply.code(403).send({ error: "Guardian read permission required", code: "MRV_PERMISSION_REQUIRED" });
-    const guardian = guardianStatus();
-    const hedera = hederaStatus();
-    return {
-      source: "runtime",
-      syntheticData: false,
-      guardian,
-      hedera,
-      registryEligibility: "REQUIRES_GUARDIAN_VERIFIED_AND_HCS_CONSENSUS_CONFIRMED_PROVENANCE",
-    };
+    if (!organizationId) return reply.code(403).send({ error: "Active organization is required", code: "MRV_ORGANIZATION_REQUIRED" });
+    try {
+      return await withTenantTransaction(pool, auth, async client => {
+        if (!await requirePermission(client, auth, organizationId, ["guardian:read"])) return reply.code(403).send({ error: "Guardian read permission required", code: "MRV_PERMISSION_REQUIRED" });
+        const guardian = guardianStatus();
+        const hedera = hederaStatus();
+        return {
+          source: "runtime",
+          syntheticData: false,
+          guardian,
+          hedera,
+          registryEligibility: "REQUIRES_GUARDIAN_VERIFIED_AND_HCS_CONSENSUS_CONFIRMED_PROVENANCE",
+        };
+      });
+    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "MRV status unavailable", code: "MRV_STATUS_UNAVAILABLE", syntheticData: false }); }
   });
 
   app.post("/api/v1/mrv/activities/:activityId/submit", async (request, reply) => {
