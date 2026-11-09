@@ -10,16 +10,16 @@ This document is the production-control record for RupayKg under SHAKTI — Stan
 
 - Repository: `vishaltradewinds/rupaykg`
 - Default branch: `main`
-- Current deployed commit: `5c1c215c777b0e7f15a4b74168db5c0f9307fbd5`
-- Repository head: `2e86d2afa74f7055d9d4307e95dc8f68ee3c82e6` (current control-matrix rollback-gate update)
+- Current deployed commit: `19c40659594760711e1b3584706b3e1586a903e4`
+- Repository head: `19c40659594760711e1b3584706b3e1586a903e4` (current canonical `main` head)
 - The deployment identifiers recorded below are historical observed evidence and must not be treated as proof that this repository head is currently deployed.
 - Render service: `rupaykg`
 - Render URL: `https://rupaykg.onrender.com`
 - Render branch: `main`
 - Auto-deploy: enabled
 - Current Render deployment state: live
-- Latest observed production deployment: `dep-dans9ibm8hqs73cck110`
-- Latest observed startup state: PostgreSQL-backed health/readiness verified on the current live deployment; service listening; root request returned HTTP 200.
+- Latest observed production deployment: `dep-dbopsjoae00c73a01ma0`
+- Latest observed startup state: production deployment is LIVE; `/health` and `/` returned HTTP 200; runtime DB preflight passed; application startup logs showed no `sslmode` warning in the verified deployment window.
 - Acceptance fixture is being created at startup and is explicitly marked as a fixture.
 
 ## SHAKTI gate status
@@ -27,7 +27,7 @@ This document is the production-control record for RupayKg under SHAKTI — Stan
 | Gate | Status | Evidence / condition |
 |---|---|---|
 | S01 Reality | PASS | Active repository, branch, deployed service and current commit verified. |
-| S02 Context | OPEN | Production context is documented; remaining external-service and operational context must be verified. |
+| S02 Context | OPEN | Production runtime context is verified; external-service and operational context remain open. |
 | S03 Need / purpose | PASS | RupayKg is the circular-economy/MRV production platform represented by the current repository. |
 | S04 Evidence | OPEN | CI/deployment evidence exists; authoritative external Guardian/Hedera evidence is still outstanding. |
 | S05 Understanding | OPEN | Production acceptance path is implemented, but external execution must be demonstrated. |
@@ -38,12 +38,12 @@ This document is the production-control record for RupayKg under SHAKTI — Stan
 | S10 Validation | BLOCKED | No observed authoritative `CONSENSUS_CONFIRMED` / Mirror Node evidence in current Render logs. |
 | S11 Decision | BLOCKED | Do not declare production-ready or SHAKTI-certified. |
 | S12 Design | PASS/ONGOING | Current architecture and acceptance path exist; production hardening continues. |
-| S13 Production | PASS | Current main is deployed live on Render. |
+| S13 Production | PASS | Canonical `main` commit `19c4065959...` is live on Render deployment `dep-dbopsjoae00c73a01ma0`. |
 | S14 Verification | OPEN | CI/build/deploy evidence is not equivalent to complete live external verification. |
 | S15 Compliance & approvals | OPEN | Required external/statutory/operational approvals and evidence remain to be closed. |
 | S16 SHAKTI certification | BLOCKED | Certification cannot be issued while material gates remain open. |
 | S17 Live release | BLOCKED FOR PRODUCTION ACCEPTANCE | Service is technically live, but SHAKTI live-production acceptance is not complete. |
-| S18 Assurance | OPEN | Monitoring, backup/restore and rollback evidence remain to be demonstrated. |
+| S18 Assurance | OPEN | Runtime health is verified; monitoring, backup/restore and rollback evidence remain to be demonstrated. |
 | S19 Learning | ACTIVE | Current acceptance findings are feeding the next production actions. |
 
 ## P0 blockers
