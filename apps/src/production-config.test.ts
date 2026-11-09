@@ -9,6 +9,7 @@ const valid = {
   DATABASE_CA_CERT: "-----BEGIN CERTIFICATE-----\nproduction-test-ca\n-----END CERTIFICATE-----",
   RUPAYKG_ALLOWED_ORIGINS: "https://app.rupaykg.example",
   RUPAYKG_AUTH_MODE: "real",
+  RUPAYKG_REQUIRE_RUNTIME_DB_ROLE: "true",
 } as const;
 
 describe("production configuration", () => {
@@ -22,6 +23,7 @@ describe("production configuration", () => {
       allowedOrigins: ["https://app.rupaykg.example"],
       authMode: "real",
       syntheticData: false,
+      requireRuntimeDbRole: true,
     });
   });
 

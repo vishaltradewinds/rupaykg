@@ -39,7 +39,7 @@ export async function acceptExternalIntegrationMessage(
       if (!same) {
         throw Object.assign(new Error("Idempotency key was already used with a different integration message"), { code: "INTEGRATION_IDEMPOTENCY_CONFLICT" });
       }
-      return { accepted: true, duplicate: true, messageId: row.id, authoritativeMutation: true };
+      return { accepted: true, duplicate: true, messageId: row.id, authoritativeMutation: true as const };
     }
 
     const inserted = await client.query<{ id: string }>(
@@ -64,7 +64,7 @@ export async function acceptExternalIntegrationMessage(
       ],
     );
 
-    return { accepted: true, duplicate: false, messageId: inserted.rows[0]!.id, authoritativeMutation: true };
+    return { accepted: true, duplicate: false, messageId: inserted.rows[0]!.id, authoritativeMutation: true as const };
       });
     } catch (error) {
       span.recordException(error instanceof Error ? error : new Error(String(error)));

@@ -71,8 +71,8 @@ export function mapRupayKgProvenance(input: RupayKgProvMappingInput): RupayKgPro
       id: activity,
       type: "Activity",
       label: "RupayKg activity",
-      startTime: input.timestamps?.startedAt,
-      endTime: input.timestamps?.endedAt,
+      ...(input.timestamps?.startedAt ? { startTime: input.timestamps.startedAt } : {}),
+      ...(input.timestamps?.endedAt ? { endTime: input.timestamps.endedAt } : {}),
     },
   ];
   const agent: ProvAgent[] = [

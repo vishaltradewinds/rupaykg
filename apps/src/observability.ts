@@ -59,11 +59,11 @@ export function buildRuntimeAttestation(): RuntimeAttestation {
 }
 
 export function installObservability(app: FastifyInstance): void {
-  app.addHook("onRequest", async request => {
+  app.addHook("onRequest", async (request, reply) => {
     const context = createTraceContext(request);
     request.headers["x-rupaykg-trace-id"] = context.traceId;
     (request as FastifyRequest & { rupaykgTrace?: TraceContext }).rupaykgTrace = context;
-    request.raw.res.setHeader("x-rupaykg-trace-id", context.traceId);
+    reply.header("x-rupaykg-trace-id", context.traceId);
   });
 
   app.addHook("onResponse", async request => {
@@ -77,7 +77,7 @@ export function installObservability(app: FastifyInstance): void {
       method: request.method,
       route: request.routeOptions.url,
       statusCode: request.raw.statusCode,
-      durationMs: Math.round(request.elapsedTime * 100) / 100,
+      durationMs: Math.round(((request as FastifyRequest & { elapsedTime?: number }).elapsedTime ?? 0) * 100) / 100,
     });
   });
 }

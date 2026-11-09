@@ -65,16 +65,21 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
   app.get("/api/v1/mrv/status", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const organizationId = auth.activeOrganizationId || auth.memberships[0]?.organization_id;
-    if (!organizationId || !await requirePermission(pool, auth, organizationId, ["guardian:read"])) return reply.code(403).send({ error: "Guardian read permission required", code: "MRV_PERMISSION_REQUIRED" });
-    const guardian = guardianStatus();
-    const hedera = hederaStatus();
-    return {
-      source: "runtime",
-      syntheticData: false,
-      guardian,
-      hedera,
-      registryEligibility: "REQUIRES_GUARDIAN_VERIFIED_AND_HCS_CONSENSUS_CONFIRMED_PROVENANCE",
-    };
+    if (!organizationId) return reply.code(403).send({ error: "Active organization is required", code: "MRV_ORGANIZATION_REQUIRED" });
+    try {
+      return await withTenantTransaction(pool, auth, async client => {
+        if (!await requirePermission(client, auth, organizationId, ["guardian:read"])) return reply.code(403).send({ error: "Guardian read permission required", code: "MRV_PERMISSION_REQUIRED" });
+        const guardian = guardianStatus();
+        const hedera = hederaStatus();
+        return {
+          source: "runtime",
+          syntheticData: false,
+          guardian,
+          hedera,
+          registryEligibility: "REQUIRES_GUARDIAN_VERIFIED_AND_HCS_CONSENSUS_CONFIRMED_PROVENANCE",
+        };
+      });
+    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "MRV status unavailable", code: "MRV_STATUS_UNAVAILABLE", syntheticData: false }); }
   });
 
   app.post("/api/v1/mrv/activities/:activityId/submit", async (request, reply) => {
@@ -244,25 +249,31 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const timestamp = (request.params as { consensusTimestamp: string }).consensusTimestamp;
     try {
-      const provenance = await pool.query<{ id: string; activity_id: string; verification_id: string; evidence_id: string; guardian_execution_id: string; integrity_hash: string; hcs_topic_id: string | null; mirror_node_verified_at: Date | null }>(
-        "select id, activity_id, verification_id, evidence_id, guardian_execution_id, integrity_hash, hcs_topic_id, mirror_node_verified_at from mrv_provenance_events where hcs_consensus_timestamp=$1 order by created_at desc limit 1",
-        [timestamp],
-      );
-      const row = provenance.rows[0];
-      if (!row) return reply.code(404).send({ error: "No persisted MRV provenance is bound to this Hedera consensus timestamp", code: "HCS_PROVENANCE_NOT_FOUND" });
-      if (!row.hcs_topic_id || row.hcs_topic_id !== (process.env.HEDERA_TOPIC_ID || "")) return reply.code(409).send({ error: "Persisted MRV provenance topic does not match the configured Hedera topic", code: "HCS_TOPIC_MISMATCH" });
-      const owner = await pool.query<{ organization_id: string }>("select organization_id from activities where id=$1", [row.activity_id]);
-      if (!owner.rows[0] || !canActForOrganization(auth, owner.rows[0].organization_id)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
-      if (!await requirePermission(pool, auth, owner.rows[0].organization_id, ["guardian:read"])) return reply.code(403).send({ error: "Guardian read permission required", code: "MRV_PERMISSION_REQUIRED" });
-      if (!await activityInAuthorizedGeography(pool, auth, row.activity_id, owner.rows[0].organization_id)) return reply.code(403).send({ error: "Activity geography is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
-      const verification = await verifyHcsMessage(timestamp, row.hcs_topic_id, row.integrity_hash, row.activity_id, row.verification_id, row.evidence_id, row.guardian_execution_id);
+      const preflight = await withTenantTransaction(pool, auth, async client => {
+        const provenance = await client.query<{ id: string; activity_id: string; verification_id: string; evidence_id: string; guardian_execution_id: string; integrity_hash: string; hcs_topic_id: string | null; mirror_node_verified_at: Date | null }>(
+          "select id, activity_id, verification_id, evidence_id, guardian_execution_id, integrity_hash, hcs_topic_id, mirror_node_verified_at from mrv_provenance_events where hcs_consensus_timestamp=$1 order by created_at desc limit 1",
+          [timestamp],
+        );
+        const row = provenance.rows[0];
+        if (!row) return { response: reply.code(404).send({ error: "No persisted MRV provenance is bound to this Hedera consensus timestamp", code: "HCS_PROVENANCE_NOT_FOUND" }) };
+        if (!row.hcs_topic_id || row.hcs_topic_id !== (process.env.HEDERA_TOPIC_ID || "")) return { response: reply.code(409).send({ error: "Persisted MRV provenance topic does not match the configured Hedera topic", code: "HCS_TOPIC_MISMATCH" }) };
+        const owner = await client.query<{ organization_id: string }>("select organization_id from activities where id=$1", [row.activity_id]);
+        if (!owner.rows[0] || !canActForOrganization(auth, owner.rows[0].organization_id)) return { response: reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" }) };
+        if (!await requirePermission(client, auth, owner.rows[0].organization_id, ["guardian:read"])) return { response: reply.code(403).send({ error: "Guardian read permission required", code: "MRV_PERMISSION_REQUIRED" }) };
+        if (!await activityInAuthorizedGeography(client, auth, row.activity_id, owner.rows[0].organization_id)) return { response: reply.code(403).send({ error: "Activity geography is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" }) };
+        return { row, organizationId: owner.rows[0].organization_id };
+      });
+      if ("response" in preflight) return preflight.response;
+
+      const verification = await verifyHcsMessage(timestamp, preflight.row.hcs_topic_id!, preflight.row.integrity_hash, preflight.row.activity_id, preflight.row.verification_id, preflight.row.evidence_id, preflight.row.guardian_execution_id);
       if (!verification.verified) return { source: "hedera-mirror-node", syntheticData: false, ...verification, eligibleForRegistry: false };
-      const persisted = await pool.query<{ mirror_node_verified_at: Date }>(
+
+      const persisted = await withTenantTransaction(pool, auth, async client => client.query<{ mirror_node_verified_at: Date }>(
         "update mrv_provenance_events set mirror_node_verified_at=clock_timestamp() where id=$1 and hcs_consensus_timestamp=$2 and hcs_topic_id=$3 and integrity_hash=$4 and guardian_execution_id=$5 and guardian_status='VERIFIED' and hcs_status='CONSENSUS_CONFIRMED' returning mirror_node_verified_at",
-        [row.id, timestamp, row.hcs_topic_id, row.integrity_hash, row.guardian_execution_id],
-      );
+        [preflight.row.id, timestamp, preflight.row.hcs_topic_id, preflight.row.integrity_hash, preflight.row.guardian_execution_id],
+      ));
       if (!persisted.rows[0]?.mirror_node_verified_at) return { source: "hedera-mirror-node", syntheticData: false, verified: false, eligibleForRegistry: false, error: "MRV provenance changed during Mirror Node verification; retry against the current record" };
-      const acceptanceFixture = await isAcceptanceFixture(pool, row.activity_id);
+      const acceptanceFixture = await withTenantTransaction(pool, auth, async client => isAcceptanceFixture(client, preflight.row.activity_id));
       return {
         source: "hedera-mirror-node",
         syntheticData: false,

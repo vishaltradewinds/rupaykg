@@ -8,7 +8,7 @@
 -- This script deliberately aborts before changing RLS if the executing role
 -- is SUPERUSER, BYPASSRLS, or the application runtime role.
 
-do $$
+do $shakti$
 declare
   v_super boolean;
   v_bypass boolean;
@@ -45,7 +45,7 @@ begin
          from pg_policies pol
         where pol.schemaname = 'public'
           and pol.tablename = p.table_name
-          and pol.cmd in ('r','*')
+          and pol.cmd in ('SELECT','*')
      )
   ) then
     raise exception 'TENANT_ISOLATION_ACTIVATION_BLOCKED: every protected tenant table must have a SELECT RLS policy before activation';
@@ -64,10 +64,10 @@ begin
          'evidence_verification_requirements','chain_of_custody_links'
        )
        and pg_get_userbyid(c.relowner) = current_user
-  ) <> 18 then
+  ) <> 17 then
     raise exception 'TENANT_ISOLATION_ACTIVATION_BLOCKED: current DDL role does not own all protected tenant tables';
   end if;
-end $;
+end $shakti$;
 
 alter table organizations enable row level security;
 alter table roles enable row level security;
