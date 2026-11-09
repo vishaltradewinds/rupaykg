@@ -78,10 +78,18 @@ try {
     );
   }
 
-  const functionPrivileges = await pool.query<{ function_name: string; runtime_execute: boolean; public_execute: boolean }>(
+  const functionPrivileges = await pool.query<{
+    function_name: string;
+    runtime_execute: boolean;
+    public_execute: boolean;
+    security_definer: boolean;
+    hardened_search_path: boolean;
+  }>(
     `select p.proname as function_name,
             has_function_privilege(current_user, p.oid, 'EXECUTE') as runtime_execute,
-            has_function_privilege('public', p.oid, 'EXECUTE') as public_execute
+            has_function_privilege('public', p.oid, 'EXECUTE') as public_execute,
+            p.prosecdef as security_definer,
+            coalesce(p.proconfig::text, '') like '%search_path=pg_catalog, public, app%' as hardened_search_path
        from pg_proc p
        join pg_namespace n on n.oid = p.pronamespace
       where n.nspname = 'app'
@@ -90,9 +98,14 @@ try {
     [["set_request_context", "is_verified_org_member", "authenticate_bearer_session"]],
   );
 
-  if (functionPrivileges.rows.length !== 3 || functionPrivileges.rows.some(row => !row.runtime_execute || row.public_execute)) {
+  if (
+    functionPrivileges.rows.length !== 3 ||
+    functionPrivileges.rows.some(
+      row => !row.runtime_execute || row.public_execute || !row.security_definer || !row.hardened_search_path,
+    )
+  ) {
     throw new Error(
-      `RUPAYKG_RUNTIME_DB_PREFLIGHT_FAILED: SECURITY DEFINER privilege boundary is invalid: ${JSON.stringify(functionPrivileges.rows)}`,
+      `RUPAYKG_RUNTIME_DB_PREFLIGHT_FAILED: SECURITY DEFINER boundary is invalid: ${JSON.stringify(functionPrivileges.rows)}`,
     );
   }
 
