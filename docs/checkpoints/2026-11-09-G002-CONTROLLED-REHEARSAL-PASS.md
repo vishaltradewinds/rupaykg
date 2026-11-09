@@ -61,3 +61,16 @@ The remaining G-002 work is production deployment preparation:
 5. obtain explicit production-change authorization before applying to production.
 
 Fail-closed remains the production posture until those gates are completed.
+
+
+## Runtime-login acceptance extension — 2026-11-09
+
+The rehearsal role graph was further hardened and tested:
+- `rupaykg_runtime_login` is LOGIN, NOSUPERUSER, NOBYPASSRLS.
+- `rupaykg_runtime_login` inherits only `rupaykg_app_runtime` for application privileges.
+- `rupaykg_ddl` and `rupaykg_app_runtime` are NOLOGIN.
+- The privileged owner role `rupaykg` was removed from the DDL/runtime role memberships in rehearsal.
+- As `rupaykg_runtime_login`, schema/table privileges and all three governed SECURITY DEFINER function EXECUTEs were verified.
+- PUBLIC EXECUTE remains revoked.
+
+One important limitation remains: the Neon SQL control plane executes through the project owner connection, so a separate network-authenticated application connection using the runtime-login credential was not established from this tool session. Therefore application-level runtime acceptance is not claimed complete.
