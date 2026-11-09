@@ -137,7 +137,29 @@ begin
 
   reset role;
 
-  raise notice 'RLS_NEGATIVE_TEST_PASS: tenant A can read/mutate only its own organization scope';
+  -- Fail-closed check: with no tenant context, the runtime must see zero
+  -- rows from every protected tenant table. This prevents accidental
+  -- context omission from becoming cross-tenant visibility.
+  execute 'set local role rupaykg_app_runtime';
+  perform set_config('app.identity_id', '', true);
+  perform set_config('app.organization_id', '', true);
+
+  for v_name in select unnest(array[
+    'organizations','roles','activities','obligations','credentials',
+    'settlements','audit_events','resource_flows','field_devices',
+    'organization_memberships','measurements','evidence','verifications',
+    'carbon_calculations','mrv_observations',
+    'evidence_verification_requirements','chain_of_custody_links'
+  ]) loop
+    execute format('select count(*) from public.%I', v_name) into v_visible;
+    if v_visible <> 0 then
+      raise exception 'RLS_NEGATIVE_TEST_FAILED: no-context runtime can see % rows from protected table %', v_visible, v_name;
+    end if;
+  end loop;
+
+  reset role;
+
+  raise notice 'RLS_NEGATIVE_TEST_PASS: tenant A can read/mutate only its own organization scope and no-context runtime sees zero protected rows';
 end $shakti$;
 
 rollback;
