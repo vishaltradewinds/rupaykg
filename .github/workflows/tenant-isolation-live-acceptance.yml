@@ -2,6 +2,9 @@ name: Tenant Isolation Live Acceptance
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - cto/20261110-live-shakti-drift-reconciliation
 
 jobs:
   tenant-isolation-acceptance:
