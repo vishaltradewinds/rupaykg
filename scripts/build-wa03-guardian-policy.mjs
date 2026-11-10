@@ -105,6 +105,7 @@ const calc=block('calculateContainerBlock','wa03_equation4_calc',[pp],{
   inputSchema:`#${ids.monitoring}`,
   inputFields:[
     {name:'fch4PJ',title:'FCH4,PJ,y',value:'E_FCH4_PJ'},
+    {name:'gwpCH4',title:'GWPCH4',value:'E_GWP'},
     {name:'fch4BL',title:'FCH4,BL,y',value:'E_FCH4_BL'},
     {name:'ox',title:'OX',value:'E_OX'},
     {name:'pey',title:'PEy',value:'E_PE'},
@@ -123,7 +124,7 @@ const calc=block('calculateContainerBlock','wa03_equation4_calc',[pp],{
     {name:'ery',title:'ERy,calculated',value:'E_ER'}
   ],
   children:[{
-    id:uuid(),blockType:'calculateMathAddonBlock',defaultActive:true,permissions:[pp],onErrorAction:'no-action',uiMetaData:{},tag:'wa03_equation4_math',children:[],events:[],artifacts:[],
+    id:uuid(),blockType:'calculateMathAddon',defaultActive:true,permissions:[pp],onErrorAction:'no-action',uiMetaData:{},tag:'wa03_equation4_math',children:[],events:[],artifacts:[],
     equations:[
       {variable:'E_GWP',formula:'29.8'},
       {variable:'E_ER',formula:'(E_FCH4_PJ-E_FCH4_BL)*E_GWP*(1-E_OX)-E_PE-E_LE'}
