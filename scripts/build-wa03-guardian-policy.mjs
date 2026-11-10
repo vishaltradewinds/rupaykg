@@ -98,13 +98,13 @@ for(const s of schemas) fs.writeFileSync(path.join(root,'schemas',`#${s.uuid}.js
 const uuid=()=>crypto.randomUUID();
 const block=(blockType,tag,permissions,extra={})=>({id:uuid(),blockType,defaultActive:true,permissions,onErrorAction:'no-action',uiMetaData:{},tag,children:[],events:[],artifacts:[],...extra});
 const pp='Project Proponent', vv='Verification Body';
-
+const schemaRef=(id)=>`#${id}&1.0.0`;
 const choose=block('policyRolesBlock','Choose_Role',['NO_ROLE'],{roles:[pp,vv]});
-const a=block('requestVcDocumentBlock','wa03_applicability_form',[pp],{uiMetaData:{type:'page',title:'WA03.001 Applicability'},presetFields:[],schema:`#${ids.applicability}`,idType:'UUID'});
-const b=block('requestVcDocumentBlock','wa03_baseline_form',[pp],{uiMetaData:{type:'page',title:'WA03.001 Baseline / BM-T-011'},presetFields:[],schema:`#${ids.baseline}`,idType:'UUID'});
-const m=block('requestVcDocumentBlock','wa03_monitoring_form',[pp],{uiMetaData:{type:'page',title:'WA03.001 Monitoring'},presetFields:[],schema:`#${ids.monitoring}`,idType:'UUID'});
+const a=block('requestVcDocumentBlock','wa03_applicability_form',[pp],{uiMetaData:{type:'page',title:'WA03.001 Applicability'},presetFields:[],schema:schemaRef(ids.applicability),idType:'UUID'});
+const b=block('requestVcDocumentBlock','wa03_baseline_form',[pp],{uiMetaData:{type:'page',title:'WA03.001 Baseline / BM-T-011'},presetFields:[],schema:schemaRef(ids.baseline),idType:'UUID'});
+const m=block('requestVcDocumentBlock','wa03_monitoring_form',[pp],{uiMetaData:{type:'page',title:'WA03.001 Monitoring'},presetFields:[],schema:schemaRef(ids.monitoring),idType:'UUID'});
 const calc=block('calculateContainerBlock','wa03_equation4_calc',[pp],{
-  inputSchema:`#${ids.monitoring}`,
+  inputSchema:schemaRef(ids.monitoring),
   inputFields:[
     {name:'fch4PJ',title:'FCH4,PJ,y',value:'E_FCH4_PJ'},
     {name:'gwpCH4',title:'GWPCH4',value:'E_GWP'},
@@ -114,7 +114,7 @@ const calc=block('calculateContainerBlock','wa03_equation4_calc',[pp],{
     {name:'ley',title:'LEy',value:'E_LE'},
     {name:'activityId',title:'Activity ID',value:'E_ACTIVITY'}
   ],
-  outputSchema:`#${ids.calculation}`,
+  outputSchema:schemaRef(ids.calculation),
   outputFields:[
     {name:'activityId',title:'Activity ID',value:'E_ACTIVITY'},
     {name:'fch4PJ',title:'FCH4,PJ,y',value:'E_FCH4_PJ'},
@@ -133,7 +133,7 @@ const calc=block('calculateContainerBlock','wa03_equation4_calc',[pp],{
     ]
   }]
 });
-const v=block('requestVcDocumentBlock','wa03_verification_form',[vv],{uiMetaData:{type:'page',title:'WA03.001 Independent Verification'},presetFields:[],schema:`#${ids.verification}`,idType:'UUID'});
+const v=block('requestVcDocumentBlock','wa03_verification_form',[vv],{uiMetaData:{type:'page',title:'WA03.001 Independent Verification'},presetFields:[],schema:schemaRef(ids.verification),idType:'UUID'});
 const rootBlock={id:uuid(),blockType:'interfaceContainerBlock',permissions:['ANY_ROLE'],onErrorAction:'no-action',uiMetaData:{type:'blank',fields:[]},options:[],dataSource:'auto',tag:'WA03_001_ROOT',children:[
   choose,
   {id:uuid(),blockType:'interfaceContainerBlock',defaultActive:true,permissions:[pp],onErrorAction:'no-action',uiMetaData:{type:'tabs'},tag:'Project_Proponent',children:[a,b,m,calc],events:[],artifacts:[]},

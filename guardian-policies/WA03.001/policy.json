@@ -1,5 +1,5 @@
 {
-  "updateDate": "2026-11-10T10:18:04.726Z",
+  "updateDate": "2026-11-10T11:15:53.722Z",
   "uuid": "2b1dbf72-0d6c-4d90-9e16-5e8b8c000301",
   "name": "RupayKg BM WA03.001 Landfill Methane Recovery",
   "version": "1.0.0",
@@ -38,7 +38,7 @@
   "detailsUrl": "https://beeindia.gov.in/sites/default/files/BM%20WA03.001.pdf",
   "tools": [],
   "config": {
-    "id": "c06a6a58-969a-4984-b0c1-249b423c7873",
+    "id": "fbc521e4-4b33-43ef-988d-5d76f7fb7626",
     "blockType": "interfaceContainerBlock",
     "permissions": [
       "ANY_ROLE"
@@ -53,7 +53,7 @@
     "tag": "WA03_001_ROOT",
     "children": [
       {
-        "id": "660af4d1-aa05-4145-9201-3bf776cfe7b4",
+        "id": "b0c91bb5-bd76-4fa2-93fb-48deacaa65c4",
         "blockType": "policyRolesBlock",
         "defaultActive": true,
         "permissions": [
@@ -71,7 +71,7 @@
         ]
       },
       {
-        "id": "d474d48b-b81d-47c8-b296-be5620164e37",
+        "id": "e26a43e7-2666-4589-a92e-fc0311e1cefa",
         "blockType": "interfaceContainerBlock",
         "defaultActive": true,
         "permissions": [
@@ -84,7 +84,7 @@
         "tag": "Project_Proponent",
         "children": [
           {
-            "id": "bb4a0815-7ca0-47dd-9dea-ed475c46cb29",
+            "id": "45e68347-bf00-4f62-bb1d-e0551c400ef7",
             "blockType": "requestVcDocumentBlock",
             "defaultActive": true,
             "permissions": [
@@ -100,11 +100,11 @@
             "events": [],
             "artifacts": [],
             "presetFields": [],
-            "schema": "#8b2d9c31-5c1b-4a7f-9b5a-000000000001",
+            "schema": "#8b2d9c31-5c1b-4a7f-9b5a-000000000001&1.0.0",
             "idType": "UUID"
           },
           {
-            "id": "6674b812-6e24-40c5-a5bf-c3a45b5b162b",
+            "id": "1e02074e-50ef-4313-810a-425da1099855",
             "blockType": "requestVcDocumentBlock",
             "defaultActive": true,
             "permissions": [
@@ -120,11 +120,11 @@
             "events": [],
             "artifacts": [],
             "presetFields": [],
-            "schema": "#8b2d9c31-5c1b-4a7f-9b5a-000000000002",
+            "schema": "#8b2d9c31-5c1b-4a7f-9b5a-000000000002&1.0.0",
             "idType": "UUID"
           },
           {
-            "id": "59ec45af-6818-4156-af29-ae1a822eff62",
+            "id": "8324e786-b427-41df-b68c-ed6dbde9dff1",
             "blockType": "requestVcDocumentBlock",
             "defaultActive": true,
             "permissions": [
@@ -140,11 +140,11 @@
             "events": [],
             "artifacts": [],
             "presetFields": [],
-            "schema": "#8b2d9c31-5c1b-4a7f-9b5a-000000000003",
+            "schema": "#8b2d9c31-5c1b-4a7f-9b5a-000000000003&1.0.0",
             "idType": "UUID"
           },
           {
-            "id": "49a09809-d64d-4ed6-89c8-ee7196ff79a5",
+            "id": "300f8153-2a7f-461a-a812-e68094bf3329",
             "blockType": "calculateContainerBlock",
             "defaultActive": true,
             "permissions": [
@@ -155,7 +155,7 @@
             "tag": "wa03_equation4_calc",
             "children": [
               {
-                "id": "3c8eb33c-bd59-4526-ad0c-7790b9dc2655",
+                "id": "90c12151-3b3b-411d-9f06-4ccaab537925",
                 "blockType": "calculateMathAddon",
                 "defaultActive": true,
                 "permissions": [
@@ -181,7 +181,7 @@
             ],
             "events": [],
             "artifacts": [],
-            "inputSchema": "#8b2d9c31-5c1b-4a7f-9b5a-000000000003",
+            "inputSchema": "#8b2d9c31-5c1b-4a7f-9b5a-000000000003&1.0.0",
             "inputFields": [
               {
                 "name": "fch4PJ",
@@ -219,7 +219,7 @@
                 "value": "E_ACTIVITY"
               }
             ],
-            "outputSchema": "#8b2d9c31-5c1b-4a7f-9b5a-000000000004",
+            "outputSchema": "#8b2d9c31-5c1b-4a7f-9b5a-000000000004&1.0.0",
             "outputFields": [
               {
                 "name": "activityId",
@@ -268,7 +268,7 @@
         "artifacts": []
       },
       {
-        "id": "b70e3bd7-025d-4315-8d9b-287fcebdf408",
+        "id": "5ed82d5d-553b-4be8-ae67-4f70fab7f331",
         "blockType": "interfaceContainerBlock",
         "defaultActive": true,
         "permissions": [
@@ -281,7 +281,7 @@
         "tag": "Verification_Body",
         "children": [
           {
-            "id": "98358073-2b85-4c3f-b258-32df01c9b2e4",
+            "id": "00141ac0-fb0e-435a-9582-a7dfc8fb7e4a",
             "blockType": "requestVcDocumentBlock",
             "defaultActive": true,
             "permissions": [
@@ -297,7 +297,7 @@
             "events": [],
             "artifacts": [],
             "presetFields": [],
-            "schema": "#8b2d9c31-5c1b-4a7f-9b5a-000000000005",
+            "schema": "#8b2d9c31-5c1b-4a7f-9b5a-000000000005&1.0.0",
             "idType": "UUID"
           }
         ],
