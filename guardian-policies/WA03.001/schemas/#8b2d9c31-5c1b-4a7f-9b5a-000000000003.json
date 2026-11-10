@@ -1,6 +1,6 @@
 {
-  "createDate": "2026-09-24T09:14:36.139Z",
-  "updateDate": "2026-09-24T09:14:36.139Z",
+  "createDate": "2026-11-10T11:15:53.720Z",
+  "updateDate": "2026-11-10T11:15:53.720Z",
   "uuid": "8b2d9c31-5c1b-4a7f-9b5a-000000000003",
   "hash": "",
   "name": "WA03.001 Project Monitoring",
@@ -74,6 +74,18 @@
         "readOnly": false,
         "type": "number"
       },
+      "fch4BL": {
+        "title": "FCH4,BL,y",
+        "description": "Baseline methane quantity in tCH4 for the monitoring period",
+        "readOnly": false,
+        "type": "number"
+      },
+      "gwpCH4": {
+        "title": "GWPCH4",
+        "description": "Methane GWP in tCO2e/tCH4; locked to 29.8 by WA03.001",
+        "readOnly": false,
+        "type": "number"
+      },
       "ox": {
         "title": "OX",
         "description": "Oxidation factor supported by authoritative evidence",
@@ -122,6 +134,8 @@
       "type",
       "activityId",
       "fch4PJ",
+      "fch4BL",
+      "gwpCH4",
       "ox",
       "pey",
       "ley",
@@ -137,6 +151,12 @@
         "@type": "https://www.schema.org/text"
       },
       "fch4PJ": {
+        "@type": "https://www.schema.org/text"
+      },
+      "fch4BL": {
+        "@type": "https://www.schema.org/text"
+      },
+      "gwpCH4": {
         "@type": "https://www.schema.org/text"
       },
       "ox": {

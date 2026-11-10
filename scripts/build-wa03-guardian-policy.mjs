@@ -62,6 +62,8 @@ const schemas=[
   schema(ids.monitoring,'WA03.001 Project Monitoring','Measured methane recovery, oxidation, project emissions and leakage evidence.',{
     activityId:text('Activity ID','RupayKg activity identifier'),
     fch4PJ:number('FCH4,PJ,y','Project methane quantity in tCH4 for the monitoring period'),
+    fch4BL:number('FCH4,BL,y','Baseline methane quantity in tCH4 for the monitoring period'),
+    gwpCH4:number('GWPCH4','Methane GWP in tCO2e/tCH4; locked to 29.8 by WA03.001'),
     ox:number('OX','Oxidation factor supported by authoritative evidence'),
     pey:number('PEy','Project emissions in tCO2e'),
     ley:number('LEy','Leakage emissions in tCO2e'),
@@ -69,7 +71,7 @@ const schemas=[
     calibrationEvidence:evidence('Calibration Evidence','Instrument calibration evidence reference'),
     dataGapTreatment:text('Data Gap Treatment','Methodology-compliant treatment of missing data'),
     unitsConfirmed:text('Units Confirmed','Explicit confirmation that all measurement units are correct')
-  },['activityId','fch4PJ','ox','pey','ley','measurementEvidence','calibrationEvidence','unitsConfirmed']),
+  },['activityId','fch4PJ','fch4BL','gwpCH4','ox','pey','ley','measurementEvidence','calibrationEvidence','unitsConfirmed']),
   schema(ids.calculation,'WA03.001 Equation 4 Result','Deterministic WA03.001 Equation 4 calculation output.',{
     activityId:text('Activity ID','RupayKg activity identifier'),
     fch4PJ:number('FCH4,PJ,y','Project methane quantity in tCH4'),
@@ -96,22 +98,23 @@ for(const s of schemas) fs.writeFileSync(path.join(root,'schemas',`#${s.uuid}.js
 const uuid=()=>crypto.randomUUID();
 const block=(blockType,tag,permissions,extra={})=>({id:uuid(),blockType,defaultActive:true,permissions,onErrorAction:'no-action',uiMetaData:{},tag,children:[],events:[],artifacts:[],...extra});
 const pp='Project Proponent', vv='Verification Body';
-
+const schemaRef=(id)=>`#${id}&1.0.0`;
 const choose=block('policyRolesBlock','Choose_Role',['NO_ROLE'],{roles:[pp,vv]});
-const a=block('requestVcDocumentBlock','wa03_applicability_form',[pp],{uiMetaData:{type:'page',title:'WA03.001 Applicability'},presetFields:[],schema:`#${ids.applicability}`,idType:'UUID'});
-const b=block('requestVcDocumentBlock','wa03_baseline_form',[pp],{uiMetaData:{type:'page',title:'WA03.001 Baseline / BM-T-011'},presetFields:[],schema:`#${ids.baseline}`,idType:'UUID'});
-const m=block('requestVcDocumentBlock','wa03_monitoring_form',[pp],{uiMetaData:{type:'page',title:'WA03.001 Monitoring'},presetFields:[],schema:`#${ids.monitoring}`,idType:'UUID'});
+const a=block('requestVcDocumentBlock','wa03_applicability_form',[pp],{uiMetaData:{type:'page',title:'WA03.001 Applicability'},presetFields:[],schema:schemaRef(ids.applicability),idType:'UUID'});
+const b=block('requestVcDocumentBlock','wa03_baseline_form',[pp],{uiMetaData:{type:'page',title:'WA03.001 Baseline / BM-T-011'},presetFields:[],schema:schemaRef(ids.baseline),idType:'UUID'});
+const m=block('requestVcDocumentBlock','wa03_monitoring_form',[pp],{uiMetaData:{type:'page',title:'WA03.001 Monitoring'},presetFields:[],schema:schemaRef(ids.monitoring),idType:'UUID'});
 const calc=block('calculateContainerBlock','wa03_equation4_calc',[pp],{
-  inputSchema:`#${ids.monitoring}`,
+  inputSchema:schemaRef(ids.monitoring),
   inputFields:[
     {name:'fch4PJ',title:'FCH4,PJ,y',value:'E_FCH4_PJ'},
+    {name:'gwpCH4',title:'GWPCH4',value:'E_GWP'},
     {name:'fch4BL',title:'FCH4,BL,y',value:'E_FCH4_BL'},
     {name:'ox',title:'OX',value:'E_OX'},
     {name:'pey',title:'PEy',value:'E_PE'},
     {name:'ley',title:'LEy',value:'E_LE'},
     {name:'activityId',title:'Activity ID',value:'E_ACTIVITY'}
   ],
-  outputSchema:`#${ids.calculation}`,
+  outputSchema:schemaRef(ids.calculation),
   outputFields:[
     {name:'activityId',title:'Activity ID',value:'E_ACTIVITY'},
     {name:'fch4PJ',title:'FCH4,PJ,y',value:'E_FCH4_PJ'},
@@ -123,14 +126,14 @@ const calc=block('calculateContainerBlock','wa03_equation4_calc',[pp],{
     {name:'ery',title:'ERy,calculated',value:'E_ER'}
   ],
   children:[{
-    id:uuid(),blockType:'calculateMathAddonBlock',defaultActive:true,permissions:[pp],onErrorAction:'no-action',uiMetaData:{},tag:'wa03_equation4_math',children:[],events:[],artifacts:[],
+    id:uuid(),blockType:'calculateMathAddon',defaultActive:true,permissions:[pp],onErrorAction:'no-action',uiMetaData:{},tag:'wa03_equation4_math',children:[],events:[],artifacts:[],
     equations:[
       {variable:'E_GWP',formula:'29.8'},
       {variable:'E_ER',formula:'(E_FCH4_PJ-E_FCH4_BL)*E_GWP*(1-E_OX)-E_PE-E_LE'}
     ]
   }]
 });
-const v=block('requestVcDocumentBlock','wa03_verification_form',[vv],{uiMetaData:{type:'page',title:'WA03.001 Independent Verification'},presetFields:[],schema:`#${ids.verification}`,idType:'UUID'});
+const v=block('requestVcDocumentBlock','wa03_verification_form',[vv],{uiMetaData:{type:'page',title:'WA03.001 Independent Verification'},presetFields:[],schema:schemaRef(ids.verification),idType:'UUID'});
 const rootBlock={id:uuid(),blockType:'interfaceContainerBlock',permissions:['ANY_ROLE'],onErrorAction:'no-action',uiMetaData:{type:'blank',fields:[]},options:[],dataSource:'auto',tag:'WA03_001_ROOT',children:[
   choose,
   {id:uuid(),blockType:'interfaceContainerBlock',defaultActive:true,permissions:[pp],onErrorAction:'no-action',uiMetaData:{type:'tabs'},tag:'Project_Proponent',children:[a,b,m,calc],events:[],artifacts:[]},
