@@ -1,0 +1,55 @@
+name: Shakti Live Drift Audit
+
+on:
+  workflow_dispatch:
+
+jobs:
+  audit:
+    name: Read-only authoritative production Shakti drift audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: production-db-audit
+    permissions:
+      contents: read
+    env:
+      DATABASE_URL: ${{ secrets.RUPAYKG_PRODUCTION_AUDIT_DATABASE_URL }}
+    steps:
+      - name: Checkout authoritative repository
+        uses: actions/checkout@v4
+
+      - name: Validate audit secret
+        run: |
+          set -euo pipefail
+          test -n "${DATABASE_URL:-}" || { echo "RUPAYKG_PRODUCTION_AUDIT_DATABASE_URL is required."; exit 1; }
+
+      - name: Capture authoritative target fingerprint
+        run: |
+          set -euo pipefail
+          mkdir -p shakti-live-audit
+          psql "$DATABASE_URL" -At -v ON_ERROR_STOP=1             -c "select current_database() || '|' || coalesce(inet_server_addr()::text,'local') || '|' || inet_server_port() || '|' || current_setting('server_version_num');"             | tee shakti-live-audit/target-fingerprint.txt
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1             -c "select current_database(), current_user, session_user;"             | tee shakti-live-audit/target-identity.txt
+
+      - name: Run read-only Shakti drift audit
+        run: |
+          set -euo pipefail
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1             -f ops/tenant-isolation/VERIFY_LIVE_SHAKTI_STATE.sql             | tee shakti-live-audit/live-state.txt
+
+      - name: Fail closed on unresolved production drift
+        run: |
+          set -euo pipefail
+          rls_count="$(psql "$DATABASE_URL" -At -v ON_ERROR_STOP=1 -c "select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r' and c.relname in ('organizations','roles','activities','obligations','credentials','settlements','audit_events','resource_flows','field_devices','organization_memberships','measurements','evidence','verifications','carbon_calculations','mrv_observations','evidence_verification_requirements','chain_of_custody_links') and c.relrowsecurity;")"
+          migration_count="$(psql "$DATABASE_URL" -At -v ON_ERROR_STOP=1 -c "select count(*) from schema_migrations where version in ('097','098','099','100');")"
+          if [ "$rls_count" != "0" ] && [ "$migration_count" != "4" ]; then
+            echo "FAIL-CLOSED: protected RLS state exists without a complete recorded Shakti 097-100 migration chain."
+            exit 1
+          fi
+
+      - name: Upload drift evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shakti-live-drift-audit-${{ github.run_id }}
+          path: shakti-live-audit/
+          if-no-files-found: error
+          retention-days: 30
