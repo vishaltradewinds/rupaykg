@@ -62,6 +62,8 @@ const schemas=[
   schema(ids.monitoring,'WA03.001 Project Monitoring','Measured methane recovery, oxidation, project emissions and leakage evidence.',{
     activityId:text('Activity ID','RupayKg activity identifier'),
     fch4PJ:number('FCH4,PJ,y','Project methane quantity in tCH4 for the monitoring period'),
+    fch4BL:number('FCH4,BL,y','Baseline methane quantity in tCH4 for the monitoring period'),
+    gwpCH4:number('GWPCH4','Methane GWP in tCO2e/tCH4; locked to 29.8 by WA03.001'),
     ox:number('OX','Oxidation factor supported by authoritative evidence'),
     pey:number('PEy','Project emissions in tCO2e'),
     ley:number('LEy','Leakage emissions in tCO2e'),
@@ -69,7 +71,7 @@ const schemas=[
     calibrationEvidence:evidence('Calibration Evidence','Instrument calibration evidence reference'),
     dataGapTreatment:text('Data Gap Treatment','Methodology-compliant treatment of missing data'),
     unitsConfirmed:text('Units Confirmed','Explicit confirmation that all measurement units are correct')
-  },['activityId','fch4PJ','ox','pey','ley','measurementEvidence','calibrationEvidence','unitsConfirmed']),
+  },['activityId','fch4PJ','fch4BL','gwpCH4','ox','pey','ley','measurementEvidence','calibrationEvidence','unitsConfirmed']),
   schema(ids.calculation,'WA03.001 Equation 4 Result','Deterministic WA03.001 Equation 4 calculation output.',{
     activityId:text('Activity ID','RupayKg activity identifier'),
     fch4PJ:number('FCH4,PJ,y','Project methane quantity in tCH4'),
