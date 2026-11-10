@@ -33,7 +33,7 @@ try {
     .sort();
   const prefixCounts = new Map<string, number>();
   for (const filename of files) {
-    const prefix = filename.split("_", 1)[0];
+    const prefix = filename.slice(0, filename.indexOf("_"));
     prefixCounts.set(prefix, (prefixCounts.get(prefix) ?? 0) + 1);
   }
   const protectedMigrations = new Set([
@@ -50,7 +50,7 @@ try {
 
   for (const filename of files) {
     const stem = filename.replace(/\.sql$/, "");
-    const prefix = filename.split("_", 1)[0];
+    const prefix = filename.slice(0, filename.indexOf("_"));
     const version = (prefixCounts.get(prefix) ?? 0) > 1 ? stem : prefix;
     const existing = await pool.query<{ version: string; filename: string }>(
       "select version, filename from schema_migrations where version = $1",
