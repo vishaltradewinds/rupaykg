@@ -90,3 +90,52 @@ test("Guardian MRV accepts VERIFIED only with an authoritative execution id and 
     else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
   }
 });
+
+test("Guardian native DMRV accepts a published-policy block response", async () => {
+  const previousUrl = process.env.GUARDIAN_MRV_SUBMIT_URL;
+  const previousNative = process.env.GUARDIAN_MRV_NATIVE_DMRV;
+  const previousFetch = globalThis.fetch;
+  process.env.GUARDIAN_MRV_SUBMIT_URL = "https://guardian.test/api/v1/dmrv/policy-1/mrv-input";
+  process.env.GUARDIAN_MRV_NATIVE_DMRV = "true";
+  globalThis.fetch = async (_input, init) => {
+    assert.equal(init?.method, "POST");
+    const headers = new Headers(init?.headers);
+    assert.equal(headers.get("x-rupaykg-contract"), "rupaykg:guardian-mrv:v1");
+    const body = JSON.parse(String(init?.body));
+    assert.equal(body.policyId, "policy-1");
+    assert.equal(body.activityId, "activity-1");
+    return new Response(JSON.stringify({ id: "guardian-block-result-1" }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+  try {
+    const result = await executeGuardianMrv(request);
+    assert.equal(result.status, "VERIFIED");
+    assert.equal(result.executionId, "guardian-block-result-1");
+    assert.equal(result.policyId, "policy-1");
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousUrl === undefined) delete process.env.GUARDIAN_MRV_SUBMIT_URL;
+    else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
+    if (previousNative === undefined) delete process.env.GUARDIAN_MRV_NATIVE_DMRV;
+    else process.env.GUARDIAN_MRV_NATIVE_DMRV = previousNative;
+  }
+});
+
+test("Guardian native DMRV refuses a URL bound to another policy", async () => {
+  const previousUrl = process.env.GUARDIAN_MRV_SUBMIT_URL;
+  const previousNative = process.env.GUARDIAN_MRV_NATIVE_DMRV;
+  process.env.GUARDIAN_MRV_SUBMIT_URL = "https://guardian.test/api/v1/dmrv/different-policy/mrv-input";
+  process.env.GUARDIAN_MRV_NATIVE_DMRV = "true";
+  try {
+    const result = await executeGuardianMrv(request);
+    assert.equal(result.status, "UNAVAILABLE");
+    assert.match(result.message, /bound to the configured policy ID/);
+  } finally {
+    if (previousUrl === undefined) delete process.env.GUARDIAN_MRV_SUBMIT_URL;
+    else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
+    if (previousNative === undefined) delete process.env.GUARDIAN_MRV_NATIVE_DMRV;
+    else process.env.GUARDIAN_MRV_NATIVE_DMRV = previousNative;
+  }
+});
