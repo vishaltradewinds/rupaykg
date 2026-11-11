@@ -36,6 +36,9 @@ function makePool() {
       return {
         async query(sql: string, params?: unknown[]) {
           if (sql === "begin" || sql === "commit" || sql === "rollback") return { rows: [] };
+          if (sql.includes("from organization_memberships om")) {
+            return { rows: [{ ok: params?.[1] === ORG_A && params?.[0] === IDENTITY_A }] };
+          }
           if (sql.includes("select app.set_request_context")) {
             transactionOrganization = String(params?.[1] ?? "");
             return { rows: [] };
