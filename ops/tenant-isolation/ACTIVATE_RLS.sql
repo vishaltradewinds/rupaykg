@@ -36,7 +36,7 @@ begin
         ('settlements'),('audit_events'),('resource_flows'),('field_devices'),
         ('organization_memberships'),('measurements'),('evidence'),('verifications'),
         ('carbon_calculations'),('mrv_observations'),
-        ('evidence_verification_requirements'),('chain_of_custody_links')
+        ('evidence_verification_requirements'),('chain_of_custody_links'),('mrv_provenance_events')
     )
     select 1
       from protected p
@@ -45,7 +45,7 @@ begin
          from pg_policies pol
         where pol.schemaname = 'public'
           and pol.tablename = p.table_name
-          and pol.cmd in ('SELECT','*')
+          and pol.cmd in ('SELECT','ALL')
      )
   ) then
     raise exception 'TENANT_ISOLATION_ACTIVATION_BLOCKED: every protected tenant table must have a SELECT RLS policy before activation';
@@ -64,7 +64,7 @@ begin
          'evidence_verification_requirements','chain_of_custody_links'
        )
        and pg_get_userbyid(c.relowner) = current_user
-  ) <> 17 then
+  ) <> 18 then
     raise exception 'TENANT_ISOLATION_ACTIVATION_BLOCKED: current DDL role does not own all protected tenant tables';
   end if;
 end $shakti$;
@@ -86,6 +86,7 @@ alter table carbon_calculations enable row level security;
 alter table mrv_observations enable row level security;
 alter table evidence_verification_requirements enable row level security;
 alter table chain_of_custody_links enable row level security;
+alter table mrv_provenance_events enable row level security;
 
 select
   c.relname as table_name,
