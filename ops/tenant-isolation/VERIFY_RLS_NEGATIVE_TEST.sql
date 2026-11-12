@@ -7,7 +7,7 @@
 -- Connect with a dedicated LOGIN role that is NOBYPASSRLS and has SET ROLE
 -- membership to both rupaykg_ddl and rupaykg_app_runtime. This script switches
 -- to rupaykg_ddl for rollback-only fixture setup, then to the runtime role for
--- tenant assertions. The postgres superuser is accepted only for disposable CI.
+-- tenant assertions. The connection must always be the dedicated restricted DDL login.
 
 begin;
 
@@ -27,13 +27,16 @@ reset role;
 -- The connection login must be a restricted, non-BYPASSRLS DDL operator with
 -- SET ROLE rights to both controlled roles. Disposable CI runs as postgres.
 select 1 / case
-  when session_user = 'postgres' then 1
   when exists (
     select 1 from pg_roles
      where rolname = session_user
        and rolcanlogin
        and not rolsuper
        and not rolbypassrls
+       and not rolcreatedb
+       and not rolcreaterole
+       and not rolreplication
+       and not rolinherit
   )
    and pg_has_role(session_user, 'rupaykg_ddl', 'member')
    and pg_has_role(session_user, 'rupaykg_app_runtime', 'member')
