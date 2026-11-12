@@ -40,6 +40,26 @@ export const CAD_TRUST_INSERT_ORDER: readonly CadTrustEntityType[] = [
   "estimation", "rating", "co_benefit", "issuance", "unit", "unit_label",
 ] as const;
 
+/** Exact user_input fields from CAD Trust schema v2.0.2. System/API fields are excluded. */
+export const CAD_TRUST_PROGRAM_FIELD_RULES: Readonly<Record<string, FieldRule>> = {
+  programName: { required: true, kind: "string" },
+  programRegistry: { required: true, kind: "string" },
+  programRegistryId: { required: true, kind: "string" },
+  programDescription: { required: false, kind: "string" },
+};
+
+export const CAD_TRUST_METHODOLOGY_FIELD_RULES: Readonly<Record<string, FieldRule>> = {
+  methodologyCode: { required: true, kind: "string" },
+  methodologyName: { required: true, kind: "string" },
+  methodologyType: { required: false, kind: "picklist", picklist: [
+    "Avoidance - nature", "Avoidance - technical", "Not Determined",
+    "Reduction - nature", "Reduction - technical", "Removal - nature", "Removal - technical",
+  ] },
+  methodologyVersion: { required: false, kind: "string" },
+  methodologyDate: { required: false, kind: "date" },
+  methodologyLink: { required: false, kind: "url" },
+};
+
 /** Values are pinned to CAD Trust schema v2.0.2 (generated 2026-06-30). */
 export const CAD_TRUST_PROJECT_FIELD_RULES: Readonly<Record<string, FieldRule>> = {
   projectRegistryName: { required: true, kind: "string" },
@@ -134,10 +154,10 @@ export function validateCadTrustProjection(projection: CadTrustProjection): CadT
     }
   }
 
-  for (const [field, rule] of Object.entries(CAD_TRUST_PROJECT_FIELD_RULES)) {
+  for (const [field, rule] of Object.entries(fieldRules)) {
     if (rule.required && (projection.fields[field] === undefined || projection.fields[field] === null ||
       (typeof projection.fields[field] === "string" && !(projection.fields[field] as string).trim()))) {
-      return { ok: false, code: "CADT_REQUIRED_FIELD_MISSING", error: field + " is required for CAD Trust project projection" };
+      return { ok: false, code: "CADT_REQUIRED_FIELD_MISSING", error: field + " is required for CAD Trust " + projection.entityType + " projection" };
     }
   }
   return { ok: true };
