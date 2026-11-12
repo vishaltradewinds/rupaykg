@@ -61,6 +61,7 @@ declare
   v_activity_a uuid := gen_random_uuid();
   v_activity_b uuid := gen_random_uuid();
   v_evidence_a uuid := gen_random_uuid();
+  v_evidence_a_mismatch uuid := gen_random_uuid();
   v_evidence_b uuid := gen_random_uuid();
   v_verification_a uuid := gen_random_uuid();
   v_verification_b uuid := gen_random_uuid();
@@ -127,6 +128,7 @@ begin
   insert into evidence(id,activity_id,evidence_type,status,captured_at,content_uri,content_hash)
   values
     (v_evidence_a,v_activity_a,'RLS_MRV_FIXTURE','VERIFIED',clock_timestamp(),'fixture://mrv-a','fixture-hash-a'),
+    (v_evidence_a_mismatch,v_activity_a,'RLS_MRV_FIXTURE','VERIFIED',clock_timestamp(),'fixture://mrv-a-mismatch','fixture-hash-a-mismatch'),
     (v_evidence_b,v_activity_b,'RLS_MRV_FIXTURE','VERIFIED',clock_timestamp(),'fixture://mrv-b','fixture-hash-b');
 
   insert into verifications(id,evidence_id,activity_id,verifier_identity_id,decision,scope)
@@ -189,6 +191,20 @@ begin
   end;
   if not v_insert_blocked then
     raise exception 'RLS_NEGATIVE_TEST_FAILED: tenant A inserted tenant B MRV provenance';
+  end if;
+
+  -- Same-tenant evidence/verification IDs must still refer to the same evidence.
+  -- Both rows belong to activity A, so this catches a binding gap rather than
+  -- merely repeating the cross-tenant isolation assertion.
+  v_insert_blocked := false;
+  begin
+    insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_status,hcs_status,integrity_hash,metadata)
+    values(v_activity_a,v_verification_a,v_evidence_a_mismatch,'same-tenant-mismatch-test','UNAVAILABLE','NOT_CONFIGURED','blocked-mismatch-'||v_suffix,'{\"fixture\":\"rollback-only\"}'::jsonb);
+  exception when insufficient_privilege then
+    v_insert_blocked := true;
+  end;
+  if not v_insert_blocked then
+    raise exception 'RLS_NEGATIVE_TEST_FAILED: provenance accepted a verification bound to different evidence in the same activity';
   end if;
 
   perform app.set_request_context(v_identity_b,v_org_b);
