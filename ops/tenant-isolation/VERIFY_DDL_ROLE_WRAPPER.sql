@@ -1,6 +1,6 @@
--- Run with the dedicated NOBYPASSRLS DDL login connection URL. The login
--- must have SET ROLE membership to both rupaykg_ddl and rupaykg_app_runtime.
--- The elevated postgres login is accepted only by disposable CI.
+-- Run only with the dedicated LOGIN NOINHERIT NOBYPASSRLS DDL acceptance
+-- login. It must have exactly two direct SET ROLE memberships (DDL + runtime),
+-- no ADMIN option, and no elevated-owner/provider-admin membership.
 \set ON_ERROR_STOP on
 select 1 / case
   when exists (
@@ -32,6 +32,12 @@ select 1 / case
      join pg_roles member_role on member_role.oid = membership.member
      where member_role.rolname = session_user
        and membership.admin_option
+   )
+   and (
+     select count(*) = 2
+       from pg_auth_members membership
+       join pg_roles member_role on member_role.oid = membership.member
+      where member_role.rolname = session_user
    )
    and not exists (
      select 1 from pg_roles elevated
