@@ -101,8 +101,22 @@ begin
    where false;
   v_org_a := gen_random_uuid();
   v_org_b := gen_random_uuid();
-  v_identity_a := gen_random_uuid();
-  v_identity_b := gen_random_uuid();
+  select id into v_identity_a
+    from identities
+   where status = 'VERIFIED'
+     and suspended_at is null
+   order by id
+   limit 1;
+  select id into v_identity_b
+    from identities
+   where status = 'VERIFIED'
+     and suspended_at is null
+     and id <> v_identity_a
+   order by id
+   limit 1;
+  if v_identity_a is null or v_identity_b is null then
+    raise exception 'RLS_NEGATIVE_TEST_BLOCKED: two active verified identities are required for rollback-only acceptance fixtures';
+  end if;
   v_role_a := gen_random_uuid();
   v_role_b := gen_random_uuid();
 
@@ -133,11 +147,6 @@ begin
   ) then
     alter table organizations enable trigger trg_seed_organization_governance_profile;
   end if;
-
-  insert into identities(id,external_subject,display_name,email,status)
-  values
-    (v_identity_a,'shakti-rls-a:'||v_suffix,'Shakti RLS A','shakti-rls-a-'||v_suffix||'@example.invalid','VERIFIED'),
-    (v_identity_b,'shakti-rls-b:'||v_suffix,'Shakti RLS B','shakti-rls-b-'||v_suffix||'@example.invalid','VERIFIED');
 
   insert into roles(id,organization_id,name,permissions,geography_scope)
   values
