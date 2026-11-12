@@ -106,10 +106,33 @@ begin
   v_role_a := gen_random_uuid();
   v_role_b := gen_random_uuid();
 
+  -- This onboarding trigger writes a statutory profile through an
+  -- invoker-security function owned by rupaykg. The disposable RLS fixture
+  -- does not test statutory-profile seeding, so suppress only this trigger
+  -- while inserting fixture organizations; the surrounding transaction
+  -- guarantees the trigger state is rolled back after the test.
+  if exists (
+    select 1 from pg_trigger t
+     where t.tgrelid = 'public.organizations'::regclass
+       and t.tgname = 'trg_seed_organization_governance_profile'
+       and not t.tgisinternal
+  ) then
+    alter table organizations disable trigger trg_seed_organization_governance_profile;
+  end if;
+
   insert into organizations(id,name,organization_type,status)
   values
     (v_org_a, 'SHakti-RLS-A-'||v_suffix, 'test_fixture', 'VERIFIED'),
     (v_org_b, 'SHakti-RLS-B-'||v_suffix, 'test_fixture', 'VERIFIED');
+
+  if exists (
+    select 1 from pg_trigger t
+     where t.tgrelid = 'public.organizations'::regclass
+       and t.tgname = 'trg_seed_organization_governance_profile'
+       and not t.tgisinternal
+  ) then
+    alter table organizations enable trigger trg_seed_organization_governance_profile;
+  end if;
 
   insert into identities(id,external_subject,display_name,email,status)
   values
