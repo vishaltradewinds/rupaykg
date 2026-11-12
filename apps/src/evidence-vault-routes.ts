@@ -52,28 +52,6 @@ async function activityContext(pool:Pool|PoolClient,auth:AuthContext,id:string):
  return scope.rows[0]?.ok?{organization_id:a.organization_id,geography_id:a.geography_id}:null;
 }
 export async function registerEvidenceVaultRoutes(app:FastifyInstance,pool:Pool|null):Promise<void>{
- app.post("/api/v1/evidence/:evidenceId/verification",async(request,reply)=>{
-  const auth=await authFor(request as never,reply,pool);if(!auth||!pool)return;
-  const id=(request.params as {evidenceId:string}).evidenceId,b=bodyOf(request as never),decision=str(b,"decision"),scope=str(b,"scope"),rationale=str(b,"rationale");
-  if(!UUID.test(id))return reply.code(400).send({error:"Invalid evidenceId",code:"EVIDENCE_ID_INVALID"});
-  if((decision!=="APPROVED"&&decision!=="REJECTED")||!scope||scope.length>100||!rationale||rationale.length<5||rationale.length>2000)return reply.code(400).send({error:"Decision, scope and 5–2000 character rationale are required",code:"VERIFICATION_FIELDS_INVALID"});
-  try{
-   return await withTenantTransaction(pool,auth,async client=>{
-    const q=await client.query<{activity_id:string;organization_id:string;status:string;captured_by_identity_id:string|null;actor_identity_id:string}>(
-     "select e.activity_id,a.organization_id,e.status::text status,e.captured_by_identity_id,a.actor_identity_id from evidence e join activities a on a.id=e.activity_id where e.id=$1 for update of e",[id]);
-    const row=q.rows[0];if(!row)return reply.code(404).send({error:"Evidence not found",code:"EVIDENCE_NOT_FOUND"});
-    const ctx=await activityContext(client,auth,row.activity_id);if(!ctx)return reply.code(404).send({error:"Evidence not found",code:"EVIDENCE_NOT_FOUND"});
-    if(row.actor_identity_id===auth.identityId||row.captured_by_identity_id===auth.identityId)return reply.code(403).send({error:"Evidence creator cannot verify its own evidence",code:"EVIDENCE_SELF_REVIEW_FORBIDDEN"});
-    if(!await hasOrganizationPermission(client,auth,ctx.organization_id,["VERIFY_EVIDENCE","verification:approve","verification.approve"])||!await canVerifyEvidence(client,auth.identityId,id))return reply.code(403).send({error:"Explicit evidence verification permission and geography scope are required",code:"VERIFY_EVIDENCE_FORBIDDEN"});
-    if(row.status!=="CAPTURED")return reply.code(409).send({error:"Only captured evidence can be verified; reviewed evidence is immutable",code:"EVIDENCE_ALREADY_REVIEWED"});
-    const verified=await client.query<{id:string}>("insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,$4,$5,$6) returning id",[id,row.activity_id,auth.identityId,decision,scope,rationale]);
-    const verificationId=verified.rows[0]?.id;if(!verificationId)throw new Error("Evidence verification was not recorded");
-    const status=decision==="APPROVED"?"VERIFIED":"REJECTED";
-    await client.query("update evidence set status=$2 where id=$1",[id,status]);
-    return reply.code(201).send({source:"postgresql",syntheticData:false,data:{evidenceId:id,verificationId,decision,status,scope,verifierIdentityId:auth.identityId}});
-   });
-  }catch(error){request.log.error(error);return reply.code(503).send({error:"Evidence verification unavailable",code:"EVIDENCE_VERIFICATION_UNAVAILABLE",syntheticData:false});}
- });
  app.post("/api/v1/evidence-vault/upload",{bodyLimit:7*1024*1024},async(request,reply)=>{
   const auth=await authFor(request as never,reply,pool);if(!auth||!pool)return;
   const b=bodyOf(request as never),activityId=str(b,"activityId"),evidenceType=str(b,"evidenceType"),fileNameRaw=str(b,"fileName"),mediaType=str(b,"mediaType")?.toLowerCase(),encoded=str(b,"contentBase64"),seriesId=str(b,"seriesId"),sourceReference=str(b,"sourceReference"),periodStart=str(b,"measurementPeriodStart"),periodEnd=str(b,"measurementPeriodEnd");
