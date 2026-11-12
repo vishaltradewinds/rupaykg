@@ -19,7 +19,9 @@ export interface GuardianMrvResult {
   policyId: string;
   correlationId: string;
   idempotencyKey: string;
-  raw?: unknown;
+  responseDigest?: string;
+  providerRequestId?: string | null;
+  responseReceivedAt?: string;
   message: string;
 }
 
@@ -35,6 +37,37 @@ function nativeDmrv(): boolean {
 function timeoutMs(): number {
   const parsed = Number.parseInt(process.env.GUARDIAN_MRV_TIMEOUT_MS || "10000", 10);
   return Number.isFinite(parsed) && parsed >= 1000 && parsed <= 60000 ? parsed : 10000;
+}
+
+class ResponseTooLargeError extends Error {}
+
+function maxResponseBytes(): number {
+  const parsed = Number.parseInt(process.env.GUARDIAN_MRV_MAX_RESPONSE_BYTES || "262144", 10);
+  return Number.isFinite(parsed) && parsed >= 1024 && parsed <= 1048576 ? parsed : 262144;
+}
+
+async function readBoundedResponse(response: Response, limit: number): Promise<Buffer> {
+  const declaredLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > limit) throw new ResponseTooLargeError();
+  const reader = response.body?.getReader();
+  if (!reader) return Buffer.alloc(0);
+  const chunks: Buffer[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > limit) {
+        await reader.cancel().catch(() => undefined);
+        throw new ResponseTooLargeError();
+      }
+      chunks.push(Buffer.from(value));
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return Buffer.concat(chunks, size);
 }
 
 function deterministicIdempotencyKey(input: GuardianMrvRequest): string {
@@ -116,20 +149,32 @@ export async function executeGuardianMrv(input: GuardianMrvRequest): Promise<Gua
       body: JSON.stringify(body),
     });
     const contentType = response.headers.get("content-type") || "";
-    const raw = contentType.includes("application/json") ? await response.json().catch(() => null) : null;
+    const responseBytes = await readBoundedResponse(response, maxResponseBytes());
+    const audit = {
+      responseDigest: createHash("sha256").update(responseBytes).digest("hex"),
+      responseReceivedAt: new Date().toISOString(),
+      providerRequestId: (() => {
+        const value = response.headers.get("x-request-id") || response.headers.get("x-correlation-id");
+        return value && /^[A-Za-z0-9._:/-]{1,128}$/.test(value) ? value : null;
+      })(),
+    };
+    let payloadValue: unknown = null;
+    if (contentType.includes("application/json")) {
+      try { payloadValue = JSON.parse(responseBytes.toString("utf8")); } catch { payloadValue = null; }
+    }
     if (!response.ok) {
-      return { status: "UNAVAILABLE", executionId: null, policyId: input.policyId, correlationId, idempotencyKey, raw, message: `Guardian MRV endpoint returned HTTP ${response.status}.` };
+      return { status: "UNAVAILABLE", executionId: null, policyId: input.policyId, correlationId, idempotencyKey, ...audit, message: `Guardian MRV endpoint returned HTTP ${response.status}.` };
     }
 
-    const payload = raw as Record<string, unknown> | null;
+    const payload = payloadValue as Record<string, unknown> | null;
     if (nativeDmrv()) {
       const executionId = typeof payload?.id === "string" ? payload.id : typeof payload?.executionId === "string" ? payload.executionId : null;
       if (!executionId) {
-        return { status: "UNAVAILABLE", executionId: null, policyId: input.policyId, correlationId, idempotencyKey, raw, message: "Native Guardian DMRV returned success without an authoritative block result identifier." };
+        return { status: "UNAVAILABLE", executionId: null, policyId: input.policyId, correlationId, idempotencyKey, ...audit, message: "Native Guardian DMRV returned success without an authoritative block result identifier." };
       }
       const returnedPolicyId = typeof payload?.policyId === "string" ? payload.policyId.trim() : "";
       if (returnedPolicyId && returnedPolicyId !== input.policyId) {
-        return { status: "UNAVAILABLE", executionId: null, policyId: input.policyId, correlationId, idempotencyKey, raw, message: "Native Guardian DMRV returned a result for a different policy identifier." };
+        return { status: "UNAVAILABLE", executionId: null, policyId: input.policyId, correlationId, idempotencyKey, ...audit, message: "Native Guardian DMRV returned a result for a different policy identifier." };
       }
       return {
         status: "VERIFIED",
@@ -137,7 +182,7 @@ export async function executeGuardianMrv(input: GuardianMrvRequest): Promise<Gua
         policyId: input.policyId,
         correlationId,
         idempotencyKey,
-        raw,
+        ...audit,
         message: "Guardian native DMRV policy block accepted the MRV submission.",
       };
     }
@@ -146,10 +191,10 @@ export async function executeGuardianMrv(input: GuardianMrvRequest): Promise<Gua
     const executionId = typeof payload?.executionId === "string" ? payload.executionId : typeof payload?.id === "string" ? payload.id : null;
     const returnedPolicyId = typeof payload?.policyId === "string" ? payload.policyId.trim() : null;
     if (status === "VERIFIED" && !executionId) {
-      return { status: "UNAVAILABLE", executionId: null, policyId: input.policyId, correlationId, idempotencyKey, raw, message: "Guardian returned VERIFIED without an authoritative execution identifier." };
+      return { status: "UNAVAILABLE", executionId: null, policyId: input.policyId, correlationId, idempotencyKey, ...audit, message: "Guardian returned VERIFIED without an authoritative execution identifier." };
     }
     if (status === "VERIFIED" && (!returnedPolicyId || returnedPolicyId !== input.policyId)) {
-      return { status: "UNAVAILABLE", executionId: null, policyId: input.policyId, correlationId, idempotencyKey, raw, message: "Guardian returned VERIFIED without the expected authoritative policy identifier." };
+      return { status: "UNAVAILABLE", executionId: null, policyId: input.policyId, correlationId, idempotencyKey, ...audit, message: "Guardian returned VERIFIED without the expected authoritative policy identifier." };
     }
     return {
       status,
@@ -157,11 +202,14 @@ export async function executeGuardianMrv(input: GuardianMrvRequest): Promise<Gua
       policyId: input.policyId,
       correlationId,
       idempotencyKey,
-      raw,
+      ...audit,
       message: status === "VERIFIED" ? "Guardian completed the configured MRV workflow." : status === "REJECTED" ? "Guardian rejected the configured MRV workflow." : "Guardian did not return an authoritative VERIFIED or REJECTED decision.",
     };
   } catch (error) {
-    const message = error instanceof Error && error.name === "AbortError" ? `Guardian MRV endpoint timed out after ${timeoutMs()}ms.` : `Guardian MRV endpoint is unavailable: ${error instanceof Error ? error.message : String(error)}`;
+    if (error instanceof ResponseTooLargeError) {
+      return { status: "UNAVAILABLE", executionId: null, policyId: input.policyId, correlationId, idempotencyKey, message: "Guardian MRV response exceeded the configured size limit." };
+    }
+    const message = error instanceof Error && error.name === "AbortError" ? `Guardian MRV endpoint timed out after ${timeoutMs()}ms.` : "Guardian MRV endpoint request failed.";
     return { status: "UNAVAILABLE", executionId: null, policyId: input.policyId, correlationId, idempotencyKey, message };
   } finally {
     clearTimeout(timer);
