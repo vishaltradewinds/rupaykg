@@ -48,6 +48,23 @@ describe("CAD Trust v2.0.2 projection boundary", () => {
     expect(result).toEqual({ ok: true });
   });
 
+  it("rejects unmapped fields instead of silently exporting them", () => {
+    const result = validateCadTrustProjection({
+      schemaVersion: CAD_TRUST_SCHEMA_VERSION,
+      entityType: "project",
+      sourceSystem: "RUPAYKG",
+      sourceId: "activity-1",
+      fields: { unexpectedField: "must-not-export" },
+      provenance: { activityId: "activity-1" },
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      code: "CADT_FIELD_UNMAPPED",
+      error: "unexpectedField is not mapped to a CAD Trust user-input field",
+    });
+  });
+
   it("blocks local creation of issuance and unit lifecycle records", () => {
     expect(() => assertExternalLifecycleEntity("issuance")).toThrow();
     expect(() => assertExternalLifecycleEntity("unit")).toThrow();
