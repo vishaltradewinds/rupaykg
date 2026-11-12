@@ -8,6 +8,8 @@
 -- This script deliberately aborts before changing RLS if the executing role
 -- is SUPERUSER, BYPASSRLS, or the application runtime role.
 
+begin;
+
 do $shakti$
 declare
   v_super boolean;
@@ -103,3 +105,5 @@ where n.nspname = 'public'
     'evidence_verification_requirements','chain_of_custody_links'
   )
 order by c.relname;
+
+commit;
