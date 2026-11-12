@@ -1,37 +1,17 @@
 /**
  * CAD Trust Data Model v2.0.2 projection boundary.
  *
- * This module is deliberately transport-neutral. It does not create CAD Trust
- * issuance/unit records and does not mutate authoritative RupayKg state.
+ * Validation is intentionally entity-specific and limited to the project
+ * entity in this slice. Other entities fail closed until their own schema
+ * fixtures and field maps are implemented.
  */
-
 export const CAD_TRUST_SCHEMA_VERSION = "v2.0.2" as const;
+export const CAD_TRUST_SCHEMA_SOURCE_COMMIT = "577f4e394c30d4a225485b2e5f25f1c38a0fd550" as const;
 
 export type CadTrustEntityType =
-  | "program"
-  | "methodology"
-  | "stakeholder"
-  | "label"
-  | "project"
-  | "project_methodology"
-  | "validation"
-  | "verification"
-  | "location"
-  | "estimation"
-  | "rating"
-  | "co_benefit"
-  | "issuance"
-  | "unit"
-  | "unit_label";
-
-export type CadTrustFieldSource = "user_input" | "system" | "api_generated";
-
-export type CadTrustFieldDefinition = {
-  apiField: string;
-  required: boolean;
-  source: CadTrustFieldSource;
-  picklist?: string;
-};
+  | "program" | "methodology" | "stakeholder" | "label" | "project"
+  | "project_methodology" | "validation" | "verification" | "location"
+  | "estimation" | "rating" | "co_benefit" | "issuance" | "unit" | "unit_label";
 
 export type CadTrustProjection = {
   schemaVersion: typeof CAD_TRUST_SCHEMA_VERSION;
@@ -48,94 +28,122 @@ export type CadTrustProjection = {
   };
 };
 
-export const CAD_TRUST_INSERT_ORDER: readonly CadTrustEntityType[] = [
-  "program",
-  "methodology",
-  "stakeholder",
-  "label",
-  "project",
-  "project_methodology",
-  "validation",
-  "verification",
-  "location",
-  "estimation",
-  "rating",
-  "co_benefit",
-  "issuance",
-  "unit",
-  "unit_label",
-] as const;
-
-export const CAD_TRUST_FIELD_RULES: Readonly<Record<string, CadTrustFieldDefinition>> = {
-  programName: { apiField: "programName", required: true, source: "user_input" },
-  programRegistry: { apiField: "programRegistry", required: true, source: "user_input" },
-  programRegistryId: { apiField: "programRegistryId", required: true, source: "user_input" },
-  methodologyCode: { apiField: "methodologyCode", required: true, source: "user_input" },
-  methodologyName: { apiField: "methodologyName", required: true, source: "user_input" },
-  projectRegistryName: { apiField: "projectRegistryName", required: true, source: "user_input" },
-  projectId: { apiField: "projectId", required: true, source: "user_input" },
-  projectName: { apiField: "projectName", required: true, source: "user_input" },
-  projectLink: { apiField: "projectLink", required: true, source: "user_input" },
-  projectSector: { apiField: "projectSector", required: true, source: "user_input", picklist: "project_sector" },
-  projectType: { apiField: "projectType", required: true, source: "user_input", picklist: "project_type" },
-  projectStatus: { apiField: "projectStatus", required: true, source: "user_input", picklist: "project_status" },
-  projectStatusDate: { apiField: "projectStatusDate", required: true, source: "user_input" },
-  projectUnitMetric: { apiField: "projectUnitMetric", required: true, source: "user_input", picklist: "unit_metric" },
+type FieldRule = {
+  required: boolean;
+  kind: "string" | "url" | "date" | "string_array" | "picklist";
+  picklist?: readonly string[];
 };
 
-export function validateCadTrustProjection(
-  projection: CadTrustProjection,
-): { ok: true } | { ok: false; code: string; error: string } {
+export const CAD_TRUST_INSERT_ORDER: readonly CadTrustEntityType[] = [
+  "program", "methodology", "stakeholder", "label", "project",
+  "project_methodology", "validation", "verification", "location",
+  "estimation", "rating", "co_benefit", "issuance", "unit", "unit_label",
+] as const;
+
+/** Values are pinned to CAD Trust schema v2.0.2 (generated 2026-06-30). */
+export const CAD_TRUST_PROJECT_FIELD_RULES: Readonly<Record<string, FieldRule>> = {
+  projectRegistryName: { required: true, kind: "string" },
+  projectId: { required: true, kind: "string" },
+  projectCreditingProgram: { required: false, kind: "string" },
+  projectName: { required: true, kind: "string" },
+  projectLink: { required: true, kind: "url" },
+  projectDescription: { required: false, kind: "string" },
+  projectSector: { required: true, kind: "string_array", picklist: [
+    "Afforestation and reforestation", "Agriculture", "Any combination of the above",
+    "Carbon capture and storage", "Chemical industries", "Construction", "Energy demand",
+    "Energy distribution", "Energy industries (renewable-/ non renewable sources)",
+    "Fugitive emissions from fuel (solid, oil and gas)",
+    "Fugitive emissions from the production and consumption of halocarbons and sulfur hexafluoride",
+    "Livestock and manure management", "Manufacturing industries", "Metal production",
+    "Mining/mineral production", "Others", "Solvent use", "Transport", "Urban Development",
+    "Waste handling and disposal",
+  ] },
+  projectType: { required: true, kind: "string_array", picklist: [
+    "Afforestation", "Agriculture", "Agriculture, forestry and other land use (AFOLU)",
+    "Any combination of the above", "Biogas", "Biomass Energy", "CO2 usage", "Cement",
+    "Coal bed/mine methane", "Energy Efficiency Industry", "Energy Efficiency households",
+    "Energy Efficiency own generation", "Energy Efficiency service", "Energy Efficiency supply side",
+    "Energy distribution", "Fugitive", "Geothermal", "Hydro", "Landfill gas", "Methane avoidance",
+    "N2O", "PFCs and SF6", "Reforestation", "Solar", "Tidal", "Transport", "Waste", "Wind",
+  ] },
+  projectSubtype: { required: false, kind: "string" },
+  projectStatus: { required: true, kind: "picklist", picklist: [
+    "Certified", "Completed", "Inactive", "Listed", "Registered", "Rejected",
+    "Validated", "Verified", "Withdrawn",
+  ] },
+  projectStatusDate: { required: true, kind: "date" },
+  projectUnitMetric: { required: true, kind: "picklist", picklist: [
+    "gCO2eq/kWh", "kt (Kiloton)", "tCO2e",
+  ] },
+  // CAD Trust accepts this optional user-input FK. The ID must come from CAD Trust.
+  cadTrustProgramId: { required: false, kind: "string" },
+};
+
+export type CadTrustValidationResult =
+  | { ok: true }
+  | { ok: false; code: string; error: string };
+
+export function validateCadTrustProjection(projection: CadTrustProjection): CadTrustValidationResult {
   if (projection.schemaVersion !== CAD_TRUST_SCHEMA_VERSION) {
     return { ok: false, code: "CADT_SCHEMA_VERSION_UNSUPPORTED", error: "Unsupported CAD Trust schema version" };
   }
-
   if (!projection.sourceId.trim()) {
     return { ok: false, code: "CADT_SOURCE_ID_REQUIRED", error: "sourceId is required" };
   }
-
   if (projection.sourceSystem !== "RUPAYKG") {
     return { ok: false, code: "CADT_SOURCE_SYSTEM_INVALID", error: "sourceSystem must be RUPAYKG" };
   }
+  if (projection.entityType === "issuance" || projection.entityType === "unit") {
+    return { ok: false, code: "CADT_EXTERNAL_AUTHORITY_REQUIRED", error: "Issuance and unit records require external registry authority" };
+  }
+  if (projection.entityType !== "project") {
+    return { ok: false, code: "CADT_ENTITY_VALIDATION_NOT_IMPLEMENTED", error: "This entity has no pinned field map and cannot be exported" };
+  }
 
-  for (const fieldName of Object.keys(projection.fields)) {
-    const definition = CAD_TRUST_FIELD_RULES[fieldName];
-    if (!definition) {
-      return {
-        ok: false,
-        code: "CADT_FIELD_UNMAPPED",
-        error: fieldName + " is not mapped to a CAD Trust user-input field",
-      };
+  for (const [field, value] of Object.entries(projection.fields)) {
+    const rule = CAD_TRUST_PROJECT_FIELD_RULES[field];
+    if (!rule) {
+      return { ok: false, code: "CADT_FIELD_UNMAPPED", error: field + " is not an allowed CAD Trust project user-input field" };
     }
-    if (definition.source !== "user_input") {
-      return {
-        ok: false,
-        code: "CADT_FIELD_SOURCE_NOT_ALLOWED",
-        error: fieldName + " is not allowed in a RupayKg-authored CAD Trust projection",
-      };
+    if (value === undefined || value === null) {
+      return { ok: false, code: "CADT_FIELD_VALUE_INVALID", error: field + " cannot be null" };
+    }
+    if ((rule.kind === "string" || rule.kind === "url" || rule.kind === "date" || rule.kind === "picklist") &&
+        (typeof value !== "string" || !value.trim())) {
+      return { ok: false, code: "CADT_FIELD_TYPE_INVALID", error: field + " must be a non-empty string" };
+    }
+    if (rule.kind === "url") {
+      try { new URL(value as string); } catch {
+        return { ok: false, code: "CADT_FIELD_FORMAT_INVALID", error: field + " must be an absolute URL" };
+      }
+    }
+    if (rule.kind === "date" && !/^\d{4}-\d{2}-\d{2}$/.test(value as string)) {
+      return { ok: false, code: "CADT_FIELD_FORMAT_INVALID", error: field + " must use YYYY-MM-DD" };
+    }
+    if (rule.kind === "string_array") {
+      if (!Array.isArray(value) || value.length === 0 || value.some(v => typeof v !== "string" || !v.trim())) {
+        return { ok: false, code: "CADT_FIELD_TYPE_INVALID", error: field + " must be a non-empty string array" };
+      }
+      const invalid = value.find(v => !rule.picklist?.includes(v));
+      if (invalid !== undefined) {
+        return { ok: false, code: "CADT_PICKLIST_VALUE_INVALID", error: field + " contains an unsupported value: " + invalid };
+      }
+    }
+    if (rule.kind === "picklist" && !rule.picklist?.includes(value as string)) {
+      return { ok: false, code: "CADT_PICKLIST_VALUE_INVALID", error: field + " contains an unsupported picklist value" };
     }
   }
 
-  for (const [fieldName, definition] of Object.entries(CAD_TRUST_FIELD_RULES)) {
-    if (definition.source !== "user_input") continue;
-    if (!definition.required) continue;
-    const value = projection.fields[fieldName];
-    if (value === undefined || value === null || (typeof value === "string" && !value.trim())) {
-      return {
-        ok: false,
-        code: "CADT_REQUIRED_FIELD_MISSING",
-        error: `${fieldName} is required for CAD Trust projection`,
-      };
+  for (const [field, rule] of Object.entries(CAD_TRUST_PROJECT_FIELD_RULES)) {
+    if (rule.required && (projection.fields[field] === undefined || projection.fields[field] === null ||
+      (typeof projection.fields[field] === "string" && !(projection.fields[field] as string).trim()))) {
+      return { ok: false, code: "CADT_REQUIRED_FIELD_MISSING", error: field + " is required for CAD Trust project projection" };
     }
   }
-
   return { ok: true };
 }
 
-/**
- * Guardrail: registry lifecycle entities are external-authority records.
- * RupayKg cannot manufacture an issuance or unit from an MRV result.
- */
+/** Guardrail retained for callers that model external lifecycle entities. */
 export function assertExternalLifecycleEntity(entityType: CadTrustEntityType): void {
   if (entityType === "issuance" || entityType === "unit") {
     throw new Error("CAD Trust issuance/unit records require external registry authority");
