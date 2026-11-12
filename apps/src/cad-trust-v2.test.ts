@@ -34,9 +34,12 @@ const validProject = {
 };
 
 test("CAD Trust v2.0.2 entity-specific mappings", async (t) => {
-  await t.test("preserves published insert order", () => {
-    assert.equal(CAD_TRUST_INSERT_ORDER[0], "program");
-    assert.equal(CAD_TRUST_INSERT_ORDER.at(-1), "unit_label");
+  await t.test("preserves the complete published insert order", () => {
+    assert.deepEqual(CAD_TRUST_INSERT_ORDER, [
+      "program", "methodology", "stakeholder", "label", "project",
+      "project_methodology", "validation", "verification", "location",
+      "estimation", "rating", "co_benefit", "issuance", "unit", "unit_label",
+    ]);
   });
 
   await t.test("pins project required fields to the entity schema", () => {
@@ -58,9 +61,13 @@ test("CAD Trust v2.0.2 entity-specific mappings", async (t) => {
     assert.equal(generated.ok ? undefined : generated.code, "CADT_FIELD_UNMAPPED");
   });
 
-  await t.test("rejects invalid project picklists, dates and URLs", () => {
+  await t.test("rejects invalid project picklists, arrays, dates and URLs", () => {
     const invalidStatus = validateCadTrustProjection(project({ ...validProject, projectStatus: "APPROVED_BY_RUPAYKG" }));
     assert.equal(invalidStatus.ok ? undefined : invalidStatus.code, "CADT_PICKLIST_VALUE_INVALID");
+    const invalidSector = validateCadTrustProjection(project({ ...validProject, projectSector: ["Waste handling and disposal", "Invented sector"] }));
+    assert.equal(invalidSector.ok ? undefined : invalidSector.code, "CADT_PICKLIST_VALUE_INVALID");
+    assert.equal(validateCadTrustProjection(project({ ...validProject, projectType: [] })).ok, false);
+    assert.equal(validateCadTrustProjection(project({ ...validProject, projectType: "Waste" })).ok, false);
     assert.equal(validateCadTrustProjection(project({ ...validProject, projectStatusDate: "12-11-2026" })).ok, false);
     assert.equal(validateCadTrustProjection(project({ ...validProject, projectLink: "/project/1" })).ok, false);
   });
