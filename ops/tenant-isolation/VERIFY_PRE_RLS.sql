@@ -110,7 +110,7 @@ from (values
   ('settlements'),('audit_events'),('resource_flows'),('field_devices'),
   ('organization_memberships'),('measurements'),('evidence'),('verifications'),
   ('carbon_calculations'),('mrv_observations'),
-  ('evidence_verification_requirements'),('chain_of_custody_links','mrv_provenance_events')
+  ('evidence_verification_requirements'),('chain_of_custody_links'),('mrv_provenance_events')
 ) as protected(table_name)
 order by table_name;
 
