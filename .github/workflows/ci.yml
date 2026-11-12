@@ -53,10 +53,6 @@ jobs:
       - name: Browser smoke test production web build
         shell: bash
         run: |
-      - name: Rehearse migration 101 as restricted non-superuser migration owner
-        env:
-          MIGRATION_FILE: migrations/101_shakti_mrv_provenance_tenant_rls.sql
-        run: bash ops/tenant-isolation/VERIFY_MIGRATION_OWNER_ACCEPTANCE.sh
           set -euo pipefail
           npm run preview -w @rupaykg/web -- --host 127.0.0.1 --port 4173 > /tmp/rupaykg-web-preview.log 2>&1 &
           preview_pid=$!
@@ -83,6 +79,10 @@ jobs:
           grep -q 'RupayKG' /tmp/rupaykg-web-dom.html
           test -s /tmp/rupaykg-web-smoke.png
           echo "Chrome DOM exit: $dom_status; screenshot exit: $shot_status"
+      - name: Rehearse migration 101 as restricted non-superuser migration owner
+        env:
+          MIGRATION_FILE: migrations/101_shakti_mrv_provenance_tenant_rls.sql
+        run: bash ops/tenant-isolation/VERIFY_MIGRATION_OWNER_ACCEPTANCE.sh
       - name: Run tests including disposable PostgreSQL acceptance
         env:
           RUPAYKG_RUN_DB_INTEGRATION_TESTS: "1"
