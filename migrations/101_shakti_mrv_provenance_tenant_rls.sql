@@ -73,6 +73,7 @@ create policy mrv_provenance_events_tenant_select on public.mrv_provenance_event
         join public.verifications v
           on v.id = mrv_provenance_events.verification_id
          and v.activity_id = a.id
+         and v.evidence_id = mrv_provenance_events.evidence_id
        where a.id = mrv_provenance_events.activity_id
          and a.organization_id = app.current_organization_id()
          and app.is_verified_org_member(a.organization_id)
@@ -91,6 +92,7 @@ create policy mrv_provenance_events_tenant_insert on public.mrv_provenance_event
         join public.verifications v
           on v.id = mrv_provenance_events.verification_id
          and v.activity_id = a.id
+         and v.evidence_id = mrv_provenance_events.evidence_id
        where a.id = mrv_provenance_events.activity_id
          and a.organization_id = app.current_organization_id()
          and app.is_verified_org_member(a.organization_id)
@@ -109,6 +111,7 @@ create policy mrv_provenance_events_tenant_update on public.mrv_provenance_event
         join public.verifications v
           on v.id = mrv_provenance_events.verification_id
          and v.activity_id = a.id
+         and v.evidence_id = mrv_provenance_events.evidence_id
        where a.id = mrv_provenance_events.activity_id
          and a.organization_id = app.current_organization_id()
          and app.is_verified_org_member(a.organization_id)
@@ -124,6 +127,7 @@ create policy mrv_provenance_events_tenant_update on public.mrv_provenance_event
         join public.verifications v
           on v.id = mrv_provenance_events.verification_id
          and v.activity_id = a.id
+         and v.evidence_id = mrv_provenance_events.evidence_id
        where a.id = mrv_provenance_events.activity_id
          and a.organization_id = app.current_organization_id()
          and app.is_verified_org_member(a.organization_id)
