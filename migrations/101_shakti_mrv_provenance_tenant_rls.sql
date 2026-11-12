@@ -55,7 +55,9 @@ begin
 end
 $shakti$;
 
-alter table public.mrv_provenance_events owner to rupaykg_ddl;
+-- The new table owner must be able to own objects in this schema.
+-- rupaykg is the current database owner and can grant this privilege.
+grant create on schema public to rupaykg_ddl;
 
 revoke all on table public.mrv_provenance_events from public;
 revoke delete on table public.mrv_provenance_events from rupaykg_app_runtime;
@@ -141,3 +143,7 @@ create policy mrv_provenance_events_tenant_update on public.mrv_provenance_event
 
 comment on table public.mrv_provenance_events is
 'Shakti tenant-scoped Guardian/Hedera provenance. Policies bind activity, evidence and verification to the active verified organization; RLS activation is a separate controlled DDL gate.';
+
+-- Transfer ownership last. All grants, policies and comments above must be
+-- installed while the current migration owner still owns this table.
+alter table public.mrv_provenance_events owner to rupaykg_ddl;
