@@ -101,37 +101,21 @@ begin
    where false;
   v_org_a := gen_random_uuid();
   v_org_b := gen_random_uuid();
-  if session_user = 'postgres' then
-    -- Disposable CI may create synthetic identities inside this transaction.
-    -- Return to the CI superuser only for these fixture rows, then immediately
-    -- resume the non-BYPASSRLS table-owner role.
-    execute 'reset role';
-    v_identity_a := gen_random_uuid();
-    v_identity_b := gen_random_uuid();
-    insert into identities(id,external_subject,display_name,email,status)
-    values
-      (v_identity_a,'shakti-rls-a:'||v_suffix,'Shakti RLS A','shakti-rls-a-'||v_suffix||'@example.invalid','VERIFIED'),
-      (v_identity_b,'shakti-rls-b:'||v_suffix,'Shakti RLS B','shakti-rls-b-'||v_suffix||'@example.invalid','VERIFIED');
-    execute 'set local role rupaykg_ddl';
-  else
-    -- Production acceptance must never manufacture identities. Reuse two
-    -- active verified identities and roll back only the temporary memberships.
-    select id into v_identity_a
-      from identities
-     where status = 'VERIFIED'
-       and suspended_at is null
-     order by id
-     limit 1;
-    select id into v_identity_b
-      from identities
-     where status = 'VERIFIED'
-       and suspended_at is null
-       and id <> v_identity_a
-     order by id
-     limit 1;
-    if v_identity_a is null or v_identity_b is null then
-      raise exception 'RLS_NEGATIVE_TEST_BLOCKED: two active verified identities are required for production acceptance fixtures';
-    end if;
+  select id into v_identity_a
+    from identities
+   where status = 'VERIFIED'
+     and suspended_at is null
+   order by id
+   limit 1;
+  select id into v_identity_b
+    from identities
+   where status = 'VERIFIED'
+     and suspended_at is null
+     and id <> v_identity_a
+   order by id
+   limit 1;
+  if v_identity_a is null or v_identity_b is null then
+    raise exception 'RLS_NEGATIVE_TEST_BLOCKED: two active verified identities are required for rollback-only acceptance fixtures';
   end if;
   v_role_a := gen_random_uuid();
   v_role_b := gen_random_uuid();
