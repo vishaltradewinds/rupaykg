@@ -58,3 +58,12 @@ select 1 / case
   else 0
 end as tenant_ddl_role_preflight_assertion;
 
+-- The verifier integrity triggers need only these identity columns.
+-- This must be column-level access, not broad SELECT on identities.
+select 1 / case
+  when has_column_privilege(current_user, 'public.identities', 'id', 'SELECT')
+   and has_column_privilege(current_user, 'public.identities', 'status', 'SELECT')
+   and has_column_privilege(current_user, 'public.identities', 'suspended_at', 'SELECT')
+  then 1 else 0
+end as ddl_identity_lookup_privilege_assertion;
+
