@@ -78,12 +78,12 @@ test("CAD Trust v2.0.2 entity-specific mappings", async (t) => {
 
   await t.test("rejects missing program fields and CAD Trust-generated identifiers", () => {
     const missing = validateCadTrustProjection(projection("program", { programName: "Incomplete" }));
-    assert.equal(missing.code, "CADT_REQUIRED_FIELD_MISSING");
+    assert.equal(missing.ok ? undefined : missing.code, "CADT_REQUIRED_FIELD_MISSING");
     const generated = validateCadTrustProjection(projection("program", {
       programName: "Example", programRegistry: "Registry", programRegistryId: "P-1",
       cadTrustProgramId: "must-be-generated",
     }));
-    assert.equal(generated.code, "CADT_FIELD_UNMAPPED");
+    assert.equal(generated.ok ? undefined : generated.code, "CADT_FIELD_UNMAPPED");
   });
 
   await t.test("pins methodology required fields and validates optional methodology type", () => {
