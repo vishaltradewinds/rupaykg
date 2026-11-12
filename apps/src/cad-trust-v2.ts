@@ -60,6 +60,14 @@ export const CAD_TRUST_METHODOLOGY_FIELD_RULES: Readonly<Record<string, FieldRul
   methodologyLink: { required: false, kind: "url" },
 };
 
+/** Exact user_input fields from CAD Trust schema v2.0.2; project FK is externally resolved. */
+export const CAD_TRUST_STAKEHOLDER_FIELD_RULES: Readonly<Record<string, FieldRule>> = {
+  stakeholderName: { required: true, kind: "string" },
+  stakeholderType: { required: true, kind: "picklist", picklist: ["Consultant", "Developer", "Owner"] },
+  stakeholderLink: { required: false, kind: "url" },
+  cadTrustProjectId: { required: true, kind: "guid" },
+};
+
 /** Values are pinned to CAD Trust schema v2.0.2 (generated 2026-06-30). */
 export const CAD_TRUST_PROJECT_FIELD_RULES: Readonly<Record<string, FieldRule>> = {
   projectRegistryName: { required: true, kind: "string" },
@@ -126,7 +134,9 @@ export function validateCadTrustProjection(projection: CadTrustProjection): CadT
     return { ok: false, code: "CADT_EXTERNAL_AUTHORITY_REQUIRED", error: "Issuance and unit records require external registry authority" };
   }
 
-  const fieldRules = projection.entityType === "program"
+  const fieldRules = projection.entityType === "stakeholder"
+    ? CAD_TRUST_STAKEHOLDER_FIELD_RULES
+    : projection.entityType === "program"
     ? CAD_TRUST_PROGRAM_FIELD_RULES
     : projection.entityType === "methodology"
       ? CAD_TRUST_METHODOLOGY_FIELD_RULES
