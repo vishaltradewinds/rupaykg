@@ -33,6 +33,11 @@ test("CAD Trust v2.0.2 projection boundary", async (t) => {
       sourceSystem: "RUPAYKG",
       sourceId: "activity-1",
       fields: {
+        programName: "RupayKg Program",
+        programRegistry: "RupayKg",
+        programRegistryId: "rupaykg-program-1",
+        methodologyCode: "RUPAYKG-WASTE-001",
+        methodologyName: "RupayKg Waste MRV",
         projectRegistryName: "RupayKg",
         projectId: "activity-1",
         projectName: "Test Project",
