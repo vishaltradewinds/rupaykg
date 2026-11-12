@@ -24,6 +24,9 @@ Migration 101 is separate from the DDL acceptance login and from RLS activation.
 
 The current observed one-shot migration path requires the restricted migration-owner credential for `rupaykg` (the existing owner role has BYPASSRLS and CREATEROLE). This credential is not an application runtime identity and must never be placed in Render runtime configuration. Before any production use:
 - rehearse migration 101 and ledger recording on a disposable database;
+- verify the migration executor is the current table owner and can `SET ROLE rupaykg_ddl`; `pg_has_role(current_user, 'rupaykg_ddl', 'SET')` must return true. Ordinary membership is insufficient. The migration now fails closed before changing grants or policies if this capability is absent;
+- if the current migration owner lacks SET capability, have the separately authorized database administrator provision a temporary membership for the migration owner (for the observed production path, `rupaykg`) with `SET TRUE`, `INHERIT FALSE`, and `ADMIN FALSE`, then verify the `SET` privilege. This is a privileged role change and is NOT authorized by this runbook while production is on HOLD;
+- after migration 101 commits and the ledger row/table owner are verified, revoke that temporary membership and verify `pg_has_role('rupaykg', 'rupaykg_ddl', 'SET')` is false. Do not grant this membership to the application runtime or DDL acceptance login;
 - inspect the exact SQL, migration fingerprint, rollback/recovery plan and post-migration ownership;
 - use a restricted, audited operator session and set `RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS=1` only for that one migration run;
 - unset the flag immediately afterward and verify the exact ledger row and table owner;
