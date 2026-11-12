@@ -22,6 +22,7 @@ $role$;
 ALTER SCHEMA public OWNER TO rupaykg;
 ALTER TABLE public.mrv_provenance_events OWNER TO rupaykg;
 GRANT SELECT ON public.activities, public.evidence, public.verifications TO rupaykg;
+GRANT USAGE ON SCHEMA app TO rupaykg;
 GRANT SELECT (id, status, suspended_at) ON public.identities TO rupaykg WITH GRANT OPTION;
 GRANT EXECUTE ON FUNCTION app.current_organization_id() TO rupaykg;
 GRANT EXECUTE ON FUNCTION app.is_verified_org_member(uuid) TO rupaykg;
