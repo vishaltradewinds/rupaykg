@@ -212,18 +212,16 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
          on conflict(activity_id,verification_id,integrity_hash) do update set guardian_execution_id=excluded.guardian_execution_id,guardian_status=excluded.guardian_status,hcs_status=excluded.hcs_status,hcs_topic_id=excluded.hcs_topic_id,hcs_transaction_id=excluded.hcs_transaction_id,hcs_consensus_timestamp=excluded.hcs_consensus_timestamp,metadata=excluded.metadata,mirror_node_verified_at=null
          returning *`,
         [activityId, verificationId, evidenceId, policyId, guardian.executionId, guardian.status, anchor.status, anchor.topicId || null, anchor.transactionId, anchor.consensusTimestamp, anchor.integrityHash, methodologyCode || null, JSON.stringify({
-            guardian: {
-              schema: "rupaykg:guardian-audit:v1",
-              status: guardian.status,
-              executionId: guardian.executionId,
-              policyId: guardian.policyId,
-              correlationId: guardian.correlationId,
-              idempotencyKey: guardian.idempotencyKey,
-              responseDigest: guardian.responseDigest ?? null,
-              providerRequestId: guardian.providerRequestId ?? null,
-              responseReceivedAt: guardian.responseReceivedAt ?? null,
-            },
-          })],
+          guardian: {
+            schema: "rupaykg:guardian-audit:v1",
+            status: guardian.status,
+            executionId: guardian.executionId,
+            policyId: guardian.policyId,
+            correlationId: guardian.correlationId,
+            idempotencyKey: guardian.idempotencyKey,
+            responseDigest: guardian.responseDigest,
+          },
+        })],
       ));
       return reply.code(anchor.status === "CONSENSUS_CONFIRMED" ? 201 : 503).send({ source: "postgresql+guardian+hedera", syntheticData: false, guardian, hedera: anchor, provenance: persisted.rows[0], eligibleForRegistry: false });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authoritative MRV submission unavailable", code: "MRV_UNAVAILABLE", syntheticData: false }); }
