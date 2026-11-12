@@ -70,7 +70,7 @@ CAD Trust is therefore downstream of a validated RupayKg evidence/MRV chain when
 | stakeholder | RupayKg organisation + project participants | Adapter mapping required |
 | label | RupayKg eligibility/compliance labels | Adapter mapping required |
 | project | RupayKg project/activity aggregate | Requires governed projection |
-| project_methodology | RupayKg methodology relationship | Adapter mapping required |
+| project_methodology | RupayKg methodology relationship | **Schema-pinned user-input validation implemented; parent resolution still required** |
 | validation | RupayKg/external validation evidence and decision | Requires external-verifier semantics |
 | verification | RupayKg verification record | Strong conceptual mapping |
 | location | RupayKg geography/site records | Adapter mapping required |
@@ -317,25 +317,26 @@ Those claims require live external evidence.
 
 ## 15. Schema-conformance checkpoint (2026-11-12)
 
-The official CAD Trust repository schema `docs/cadtrust-schema-v2.0.2.json` was inspected at source commit `577f4e394c30d4a225485b2e5f25f1c38a0fd550` (schema generated 2026-06-30). The adapter now validates **`program`, `methodology`, and `project` independently**, using only each entity's fields marked `source: user_input`.
+The official CAD Trust repository schema `docs/cadtrust-schema-v2.0.2.json` was inspected at source commit `577f4e394c30d4a225485b2e5f25f1c38a0fd550` (schema generated 2026-06-30). The adapter now validates **`program`, `methodology`, `project`, and `project_methodology` independently**, using only each entity's fields marked `source: user_input`.
 
 - `program`: required `programName`, `programRegistry`, `programRegistryId`; optional `programDescription`. CAD Trust-generated `cadTrustProgramId` is excluded from program input.
 - `methodology`: required `methodologyCode`, `methodologyName`; optional type/version/date/link. The methodology-type picklist is pinned to v2.0.2.
 - `project`: existing project-specific required fields and picklists remain unchanged; the optional `cadTrustProgramId` is an externally assigned CAD Trust FK and must never be invented by RupayKg.
+- `project_methodology`: required `cadTrustProjectMethodologyId` and `cadTrustProjectId` GUIDs; optional date and description. `cadTrustMethodologyId` is marked `source: system` in v2.0.2 and is rejected as caller-supplied input. Parent project/methodology existence must be resolved against CAD Trust before staging.
 
-All three maps reject unmapped/system/API-generated fields, invalid types, invalid HTTP(S) URLs, invalid calendar dates, and unsupported picklist values. Other entity types still fail closed. `issuance` and `unit` remain external-authority-only. Picklists are pinned schema snapshots; a live CADT node's `/v2/governance/meta/pickList` remains authoritative when connectivity is later implemented. This is fixture/schema validation, not live CAD Trust API validation.
+All four maps reject unmapped/system/API-generated fields, invalid types, invalid HTTP(S) URLs, invalid calendar dates, and unsupported picklist values. Other entity types still fail closed. `issuance` and `unit` remain external-authority-only. Picklists are pinned schema snapshots; a live CADT node's `/v2/governance/meta/pickList` remains authoritative when connectivity is later implemented. This is fixture/schema validation, not live CAD Trust API validation.
 
 ## 16. Next implementation slice
 
 Completed in the current code slice:
 
-1. entity-specific field maps for `program`, `methodology`, and `project`;
+1. entity-specific field maps for `program`, `methodology`, `project`, and `project_methodology`;
 2. required-field, user-input-only, type, URL, calendar-date, and picklist validation;
 3. fixture tests for valid and invalid payloads, including exclusion of CAD Trust-generated identifiers.
 
 Remaining before any external write capability:
 
-1. implement and test `project_methodology` and other entities individually;
+1. implement and test remaining entities individually;
 2. add explicit parent-reference resolution and idempotent external-reference persistence;
 3. add a read-only CAD Trust discovery/health adapter;
 4. add sandbox/testnet connectivity and staging/reconciliation tests;
