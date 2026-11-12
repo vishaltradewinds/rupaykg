@@ -44,7 +44,12 @@ begin
     raise exception 'SHakti abort: public.mrv_provenance_events is missing';
   end if;
 
-  if actual_owner not in ('rupaykg', 'rupaykg_ddl') then
+  if actual_owner not in ('rupaykg', 'rupaykg_ddl')
+     and not exists (
+       select 1 from pg_roles
+        where rolname = current_user
+          and rolsuper = true
+     ) then
     raise exception 'SHakti abort: unexpected owner for public.mrv_provenance_events: %', actual_owner;
   end if;
 end
