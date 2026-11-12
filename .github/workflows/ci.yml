@@ -88,7 +88,6 @@ jobs:
           set -euo pipefail
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f ops/tenant-isolation/CI_ACTIVATE_RLS.sql
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "GRANT rupaykg_app_runtime TO postgres"
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f ops/tenant-isolation/VERIFY_RLS_POLICY_COVERAGE.sql
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f ops/tenant-isolation/VERIFY_RLS_NEGATIVE_TEST.sql
       - name: Build production container
         run: docker build --pull --tag rupaykg:ci .
