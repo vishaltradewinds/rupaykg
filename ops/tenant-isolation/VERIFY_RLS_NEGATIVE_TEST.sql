@@ -93,8 +93,8 @@ begin
 
   insert into roles(id,organization_id,name,permissions,geography_scope)
   values
-    (v_role_a,v_org_a,'shakti_rls_test_role_a','["dashboard:read"]'::jsonb,'[]'::jsonb),
-    (v_role_b,v_org_b,'shakti_rls_test_role_b','["dashboard:read"]'::jsonb,'[]'::jsonb);
+    (v_role_a,v_org_a,'shakti_rls_test_role_a','["dashboard:read","VERIFY_EVIDENCE","verification:approve"]'::jsonb,'[]'::jsonb),
+    (v_role_b,v_org_b,'shakti_rls_test_role_b','["dashboard:read","VERIFY_EVIDENCE","verification:approve"]'::jsonb,'[]'::jsonb);
 
   if exists (
     select 1 from pg_trigger t
