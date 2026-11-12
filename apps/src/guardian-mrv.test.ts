@@ -163,3 +163,58 @@ test("Guardian native DMRV refuses a URL bound to another policy", async () => {
     else process.env.GUARDIAN_MRV_NATIVE_DMRV = previousNative;
   }
 });
+
+
+test("Guardian MRV exposes only normalized audit metadata, never the provider payload", async () => {
+  const previousUrl = process.env.GUARDIAN_MRV_SUBMIT_URL;
+  const previousFetch = globalThis.fetch;
+  process.env.GUARDIAN_MRV_SUBMIT_URL = "https://guardian.test/mrv";
+  const providerBody = JSON.stringify({
+    status: "VERIFIED",
+    executionId: "guardian-execution-audit",
+    policyId: "policy-1",
+    privateToken: "must-not-leak",
+    nested: { personalData: "must-not-leak" },
+  });
+  globalThis.fetch = async () => new Response(providerBody, {
+    status: 200,
+    headers: { "content-type": "application/json", "x-request-id": "guardian-request-123" },
+  });
+  try {
+    const result = await executeGuardianMrv(request);
+    assert.equal(result.status, "VERIFIED");
+    assert.equal("raw" in result, false);
+    assert.match(result.responseDigest ?? "", /^[a-f0-9]{64}$/);
+    assert.equal(result.providerRequestId, "guardian-request-123");
+    assert.ok(result.responseReceivedAt);
+    assert.equal(JSON.stringify(result).includes("must-not-leak"), false);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousUrl === undefined) delete process.env.GUARDIAN_MRV_SUBMIT_URL;
+    else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
+  }
+});
+
+test("Guardian MRV rejects an oversized provider response without exposing its body", async () => {
+  const previousUrl = process.env.GUARDIAN_MRV_SUBMIT_URL;
+  const previousLimit = process.env.GUARDIAN_MRV_MAX_RESPONSE_BYTES;
+  const previousFetch = globalThis.fetch;
+  process.env.GUARDIAN_MRV_SUBMIT_URL = "https://guardian.test/mrv";
+  process.env.GUARDIAN_MRV_MAX_RESPONSE_BYTES = "1024";
+  globalThis.fetch = async () => new Response("x".repeat(2048), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
+  try {
+    const result = await executeGuardianMrv(request);
+    assert.equal(result.status, "UNAVAILABLE");
+    assert.match(result.message, /size limit/);
+    assert.equal("raw" in result, false);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousUrl === undefined) delete process.env.GUARDIAN_MRV_SUBMIT_URL;
+    else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
+    if (previousLimit === undefined) delete process.env.GUARDIAN_MRV_MAX_RESPONSE_BYTES;
+    else process.env.GUARDIAN_MRV_MAX_RESPONSE_BYTES = previousLimit;
+  }
+});
