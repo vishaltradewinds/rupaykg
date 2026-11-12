@@ -103,16 +103,70 @@ export async function submitHcsAnchor(payload: AnchorPayload): Promise<AnchorRes
   }
 }
 
+class MirrorNodeResponseTooLargeError extends Error {}
+
+function mirrorNodeTimeoutMs(): number {
+  const parsed = Number.parseInt(process.env.HEDERA_MIRROR_NODE_TIMEOUT_MS || "8000", 10);
+  return Number.isFinite(parsed) && parsed >= 500 && parsed <= 30000 ? parsed : 8000;
+}
+
+function mirrorNodeMaxResponseBytes(): number {
+  const parsed = Number.parseInt(process.env.HEDERA_MIRROR_NODE_MAX_RESPONSE_BYTES || "524288", 10);
+  return Number.isFinite(parsed) && parsed >= 1024 && parsed <= 2097152 ? parsed : 524288;
+}
+
+async function readBoundedMirrorNodeResponse(response: Response, limit: number): Promise<Buffer> {
+  const declaredLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > limit) throw new MirrorNodeResponseTooLargeError();
+  const reader = response.body?.getReader();
+  if (!reader) return Buffer.alloc(0);
+  const chunks: Buffer[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > limit) {
+        await reader.cancel().catch(() => undefined);
+        throw new MirrorNodeResponseTooLargeError();
+      }
+      chunks.push(Buffer.from(value));
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return Buffer.concat(chunks, size);
+}
+
 export async function verifyHcsMessage(consensusTimestamp: string, topicId = process.env.HEDERA_TOPIC_ID || "", expectedIntegrityHash?: string, expectedActivityId?: string, expectedVerificationId?: string, expectedEvidenceId?: string, expectedGuardianExecutionId?: string) {
   const network = networkName();
   if (!topicId) return { verified: false, network, error: "HEDERA_TOPIC_ID is not configured" };
-  const response = await fetch(`${mirrorEndpoint(network)}/api/v1/topics/${encodeURIComponent(topicId)}/messages?timestamp=${encodeURIComponent(`eq:${consensusTimestamp}`)}&limit=1&order=desc`);
-  if (!response.ok) return { verified: false, network, error: `Mirror node HTTP ${response.status}` };
-  const data = await response.json() as { messages?: Array<{ consensus_timestamp?: string; sequence_number?: number; message?: string; topic_id?: string }> };
-  const found = data.messages?.find(message => message.consensus_timestamp === consensusTimestamp && (!message.topic_id || message.topic_id === topicId));
+  const timeout = mirrorNodeTimeoutMs();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeout);
+  let data: { messages: Array<{ consensus_timestamp?: string; sequence_number?: number; message?: string; topic_id?: string }> };
+  try {
+    const response = await fetch(`${mirrorEndpoint(network)}/api/v1/topics/${encodeURIComponent(topicId)}/messages?timestamp=${encodeURIComponent(`eq:${consensusTimestamp}`)}&limit=1&order=desc`, { signal: controller.signal });
+    if (!response.ok) return { verified: false, network, error: `Mirror node HTTP ${response.status}` };
+    const bytes = await readBoundedMirrorNodeResponse(response, mirrorNodeMaxResponseBytes());
+    const parsed: unknown = JSON.parse(bytes.toString("utf8"));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || !Array.isArray((parsed as Record<string, unknown>).messages)) {
+      return { verified: false, network, error: "Mirror Node response has an invalid message collection" };
+    }
+    data = parsed as typeof data;
+  } catch (error) {
+    if (error instanceof MirrorNodeResponseTooLargeError) return { verified: false, network, error: "Mirror Node response exceeded the configured size limit" };
+    if (error instanceof SyntaxError) return { verified: false, network, error: "Mirror Node returned malformed JSON" };
+    if (error instanceof Error && error.name === "AbortError") return { verified: false, network, error: `Mirror Node request timed out after ${timeout}ms` };
+    return { verified: false, network, error: "Mirror Node request failed" };
+  } finally {
+    clearTimeout(timer);
+  }
+  const found = data.messages.find(message => message.consensus_timestamp === consensusTimestamp && message.topic_id === topicId);
   if (!found) return { verified: false, network, error: "Consensus message not found for the supplied Hedera topic and consensus timestamp" };
   let payload: unknown = null;
-  if (found.message) {
+  if (typeof found.message === "string") {
     try { payload = JSON.parse(Buffer.from(found.message, "base64").toString("utf8")); }
     catch { payload = Buffer.from(found.message, "base64").toString("utf8"); }
   }
