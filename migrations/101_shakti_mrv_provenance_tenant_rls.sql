@@ -44,6 +44,20 @@ begin
     raise exception 'SHakti abort: public.mrv_provenance_events is missing';
   end if;
 
+  -- ALTER TABLE ... OWNER requires the executing migration owner to be able
+  -- to SET ROLE to the target owner. Do not rely on ordinary membership or
+  -- on a superuser-only CI rehearsal for the production migration path.
+  if not exists (
+    select 1 from pg_roles where rolname = current_user and rolsuper = true
+  ) then
+    if current_user <> actual_owner then
+      raise exception 'SHakti abort: migration executor % does not own public.mrv_provenance_events (owner: %)', current_user, actual_owner;
+    end if;
+    if not pg_has_role(current_user, 'rupaykg_ddl', 'SET') then
+      raise exception 'SHakti abort: migration executor % cannot SET ROLE rupaykg_ddl; provision temporary SET membership before migration 101', current_user;
+    end if;
+  end if;
+
   if actual_owner not in ('rupaykg', 'rupaykg_ddl')
      and not exists (
        select 1 from pg_roles
