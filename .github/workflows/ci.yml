@@ -100,3 +100,7 @@ jobs:
           unset PGPASSWORD
       - name: Build production container
         run: docker build --pull --tag rupaykg:ci .
+      - name: Rehearse migration 101 as restricted non-superuser migration owner
+        env:
+          MIGRATION_FILE: migrations/101_shakti_mrv_provenance_tenant_rls.sql
+        run: bash ops/tenant-isolation/VERIFY_MIGRATION_OWNER_ACCEPTANCE.sh
