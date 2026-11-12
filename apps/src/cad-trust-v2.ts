@@ -193,6 +193,9 @@ export function validateCadTrustProjection(projection: CadTrustProjection): CadT
       return { ok: false, code: "CADT_FIELD_UNMAPPED", error: field + " is not an allowed CAD Trust " + projection.entityType + " user-input field" };
     }
     if (value === undefined || value === null) {
+      if (rule.required) {
+        return { ok: false, code: "CADT_REQUIRED_FIELD_MISSING", error: field + " is required for CAD Trust " + projection.entityType + " projection" };
+      }
       return { ok: false, code: "CADT_FIELD_VALUE_INVALID", error: field + " cannot be null" };
     }
     if ((rule.kind === "string" || rule.kind === "url" || rule.kind === "date" || rule.kind === "guid" || rule.kind === "picklist") &&
