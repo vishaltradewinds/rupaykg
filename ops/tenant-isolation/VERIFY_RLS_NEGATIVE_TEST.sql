@@ -224,7 +224,7 @@ begin
 
   reset role;
 
-  raise notice 'RLS_NEGATIVE_TEST_PASS: tenant A can read/mutate only its own organization scope and no-context runtime sees zero protected rows';
+  raise notice 'RLS_NEGATIVE_TEST_PASS: tenant A/B cannot cross-read or mutate MRV provenance, organization isolation holds, and no-context runtime sees zero protected rows';
 end $shakti$;
 
 rollback;
