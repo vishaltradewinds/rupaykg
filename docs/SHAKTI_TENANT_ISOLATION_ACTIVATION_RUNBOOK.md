@@ -18,9 +18,22 @@ All must be true before activation:
 6. Administrative operations use explicit privileged paths and are not performed through the ordinary tenant runtime role.
 7. Cross-tenant negative tests pass.
 
+## Protected migration execution boundary
+
+Migration 101 is separate from the DDL acceptance login and from RLS activation. The migration runner writes the `schema_migrations` ledger using the database connection role. The current production ledger is owned by `rupaykg`; read-only catalog inspection confirms that neither `rupaykg_ddl` nor `rupaykg_runtime_login` has SELECT/INSERT/UPDATE privileges on it. Therefore, the DDL acceptance login must not be used to run `apps/src/migrate.ts`.
+
+The current observed one-shot migration path requires the restricted migration-owner credential for `rupaykg` (the existing owner role has BYPASSRLS and CREATEROLE). This credential is not an application runtime identity and must never be placed in Render runtime configuration. Before any production use:
+- rehearse migration 101 and ledger recording on a disposable database;
+- inspect the exact SQL, migration fingerprint, rollback/recovery plan and post-migration ownership;
+- use a restricted, audited operator session and set `RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS=1` only for that one migration run;
+- unset the flag immediately afterward and verify the exact ledger row and table owner;
+- do not continue to RLS activation unless the separate DDL acceptance login passes its preflight.
+
+The production ledger currently has no `101_shakti_mrv_provenance_tenant_rls.sql` row. Production remains READ-ONLY / HOLD; this runbook documents the controlled path and does not authorize executing it.
+
 ## Activation sequence
 
-1. Apply all migrations to the target PostgreSQL instance.
+1. Apply protected migration 101 only through the separately controlled migration-owner procedure above; never run it through the Render application startup or the runtime/DDL acceptance login. Reconcile all earlier migration lineage before running it.
 2. Keep three identities separate: (a) the application runtime login derived from `rupaykg_app_runtime`; (b) the non-login owner role `rupaykg_ddl`, which owns the 18 protected tables and is not SUPERUSER or BYPASSRLS; and (c) a dedicated acceptance login (for example `rupaykg_ddl_login`) with `LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION`. Grant this acceptance login `SET TRUE, INHERIT FALSE` membership to both `rupaykg_ddl` and `rupaykg_app_runtime`, with no ADMIN option and no membership to `rupaykg` or provider-admin roles. Store its connection URL only in a restricted GitHub Actions environment secret. The acceptance script uses `rupaykg_ddl` only for rollback-only fixture setup and switches to `rupaykg_app_runtime` for the actual tenant assertions. Do not reuse the application runtime login as the DDL acceptance login.
 3. Run `ops/tenant-isolation/VERIFY_DDL_ROLE_PRE_RLS.sql` using the controlled migration/DDL role and preserve its output. It must prove ownership of all 18 protected tenant tables and fail closed for SUPERUSER, BYPASSRLS, or runtime-role execution.
 4. Run `ops/tenant-isolation/VERIFY_PRE_RLS.sql` using the exact intended application runtime login role and preserve its output as deployment evidence.
@@ -44,7 +57,7 @@ Expected runtime result:
 7. Verify the authentication/bootstrap path is RLS-compatible before activation. Run `ops/tenant-isolation/VERIFY_AUTH_BOOTSTRAP.sql` using the exact intended application runtime login and preserve its output. The ordinary application runtime must not depend on unrestricted pre-context reads of `organization_memberships`; authentication must use the explicitly governed `app.authenticate_bearer_session(text)` SECURITY DEFINER bootstrap path (or another separately governed authentication database role). The bootstrap function must have an explicit `search_path`, public EXECUTE revoked, runtime EXECUTE granted, and must return only verified memberships attached to the presented bearer session. Do not enable RLS while bearer authentication still requires an unscoped runtime query of the protected membership table.
 8. Run the authentication bootstrap contract tests and execute the tenant-isolation integration suite with `RUPAYKG_RUN_DB_INTEGRATION_TESTS=1`.
 9. Confirm organization A cannot read or mutate organization B state.
-10. Only after steps 1–9 pass, execute `ops/tenant-isolation/ACTIVATE_RLS.sql` using the controlled migration/DDL role, not the application runtime role. The script is fail-closed and aborts before RLS changes if the executing role is SUPERUSER, BYPASSRLS, the application runtime role, or does not own the protected tenant tables.
+10. Only after steps 1–9 pass, execute `ops/tenant-isolation/ACTIVATE_RLS_WRAPPER.sql` using the dedicated DDL acceptance login. The wrapper validates the login and switches to `rupaykg_ddl` before invoking `ACTIVATE_RLS.sql`; do not run the raw activation file as the login or application runtime role.
 11. Execute `ops/tenant-isolation/VERIFY_RLS_NEGATIVE_TEST.sql` and preserve the PASS output as acceptance evidence. The test must prove tenant A cannot read or mutate tenant B and is transactional/rollback-safe.
 12. Repeat the complete application runtime acceptance suite, including cross-tenant negative tests.
 13. Record database role, migration fingerprint, preflight output, activation output, negative-test output, application test evidence, deployment commit and rollback procedure.
