@@ -41,6 +41,7 @@ try {
     "098_shakti_authentication_bootstrap.sql",
     "099_shakti_rls_policy_foundation.sql",
     "100_shakti_production_ddl_runtime_role_split.sql",
+    "101_shakti_mrv_provenance_tenant_rls.sql",
   ]);
   const allowProtected = process.env.RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS === "1";
   const protectedApplied = await pool.query<{ filename: string }>("select filename from schema_migrations where filename = any($1::text[])", [[...protectedMigrations]]);
