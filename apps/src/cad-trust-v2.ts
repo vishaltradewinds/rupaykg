@@ -150,7 +150,7 @@ export function validateCadTrustProjection(projection: CadTrustProjection): CadT
     }
     if (rule.kind === "date") {
       const date = value as string;
-      const match = /^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(date);
+      const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
       const parsed = match ? new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))) : null;
       if (!match || !parsed || parsed.toISOString().slice(0, 10) !== date) {
         return { ok: false, code: "CADT_FIELD_FORMAT_INVALID", error: field + " must be a valid calendar date in YYYY-MM-DD" };
