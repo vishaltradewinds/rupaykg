@@ -67,6 +67,7 @@ declare
   v_provenance_a uuid := gen_random_uuid();
   v_provenance_b uuid := gen_random_uuid();
   v_insert_blocked boolean := false;
+  v_name text;
   v_visible integer;
   v_affected integer;
 begin
