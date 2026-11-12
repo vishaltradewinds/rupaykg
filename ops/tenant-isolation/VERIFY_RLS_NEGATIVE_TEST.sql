@@ -198,6 +198,7 @@ begin
   -- merely repeating the cross-tenant isolation assertion.
   v_insert_blocked := false;
   begin
+    -- Keep this JSON literal unescaped: PostgreSQL standard_conforming_strings is ON.
     insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_status,hcs_status,integrity_hash,metadata)
     values(v_activity_a,v_verification_a,v_evidence_a_mismatch,'same-tenant-mismatch-test','UNAVAILABLE','NOT_CONFIGURED','blocked-mismatch-'||v_suffix,'{"fixture":"rollback-only"}'::jsonb);
   exception when insufficient_privilege then
