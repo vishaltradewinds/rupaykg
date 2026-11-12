@@ -315,7 +315,7 @@ Those claims require live external evidence.
 | BRSR/ESG | Reporting/enterprise layer |
 | CCTS/BEE | Carbon-market/compliance adapter layer |
 
-## 15. Next implementation slice
+## 15. Schema-conformance checkpoint (2026-11-12)\n\nThe official CAD Trust repository schema `docs/cadtrust-schema-v2.0.2.json` was inspected at source commit `577f4e394c30d4a225485b2e5f25f1c38a0fd550` (schema generated 2026-06-30). The current code validates **only the `project` entity** using its entity-specific user-input fields, exact v2.0.2 project picklists, URL/date formats, and required fields. Parent `program` and `methodology` records are separate entities and their required fields must not be incorrectly imposed on a project payload.\n\nOther entity types fail closed until their own field maps and fixtures are implemented. `issuance` and `unit` remain external-authority-only. Picklists are pinned schema snapshots; a live CADT node's `/v2/governance/meta/pickList` remains authoritative when connectivity is later implemented. This is schema-fixture validation, not live CAD Trust API validation.\n\n## 16. Next implementation slice
 
 The next code slice should be deliberately small:
 
