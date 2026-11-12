@@ -4,6 +4,8 @@
 
 Activate the tenant-isolation policy foundation only after the application runtime satisfies the database security contract.
 
+The protected inventory is 18 tenant-owned tables. It now includes `mrv_provenance_events`, whose policy boundary must bind the provenance row's activity, evidence and verification to the active verified organization. Its ownership and policy installation are protected migration 101; enabling RLS remains a separate controlled activation step.
+
 ## Preconditions
 
 All must be true before activation:
