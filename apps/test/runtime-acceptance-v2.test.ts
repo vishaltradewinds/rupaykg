@@ -44,6 +44,9 @@ async function waitFor(url: string, status: number, child: ChildProcess): Promis
 async function request(path: string, init: RequestInit = {}, bearer?: string): Promise<Response> {
   const headers = new Headers(init.headers);
   if (bearer) headers.set("authorization", `Bearer ${bearer}`);
+  // Acceptance requests always select their tenant explicitly, matching the
+  // production contract for identities that can belong to multiple orgs.
+  if (orgId && !headers.has("x-rupaykg-organization-id")) headers.set("x-rupaykg-organization-id", orgId);
   if (init.body && !headers.has("content-type")) headers.set("content-type", "application/json");
   return fetch(`${baseUrl}${path}`, { ...init, headers });
 }
