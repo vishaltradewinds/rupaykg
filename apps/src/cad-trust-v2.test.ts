@@ -4,6 +4,7 @@ import {
   assertExternalLifecycleEntity,
   CAD_TRUST_INSERT_ORDER,
   CAD_TRUST_PROJECT_FIELD_RULES,
+  CAD_TRUST_STAKEHOLDER_FIELD_RULES,
   CAD_TRUST_PROJECT_METHODOLOGY_FIELD_RULES,
   CAD_TRUST_PROGRAM_FIELD_RULES,
   CAD_TRUST_METHODOLOGY_FIELD_RULES,
@@ -11,7 +12,7 @@ import {
   validateCadTrustProjection,
 } from "./cad-trust-v2.js";
 
-const projection = (entityType: "project" | "program" | "methodology" | "project_methodology", fields: Record<string, unknown>) => ({
+const projection = (entityType: "project" | "program" | "methodology" | "stakeholder" | "project_methodology", fields: Record<string, unknown>) => ({
   schemaVersion: CAD_TRUST_SCHEMA_VERSION,
   entityType,
   sourceSystem: "RUPAYKG" as const,
@@ -115,6 +116,43 @@ test("CAD Trust v2.0.2 entity-specific mappings", async (t) => {
     assert.equal(validateCadTrustProjection(projection("methodology", { ...base, methodologyDate: "2026-13-40" })).ok, false);
   });
 
+
+  await t.test("pins stakeholder user-input fields, project FK and v2.0.2 picklist", () => {
+    assert.deepEqual(Object.entries(CAD_TRUST_STAKEHOLDER_FIELD_RULES).filter(([, rule]) => rule.required).map(([name]) => name),
+      ["stakeholderName", "stakeholderType", "cadTrustProjectId"]);
+    const valid = projection("stakeholder", {
+      stakeholderName: "Municipal Aggregator Cooperative",
+      stakeholderType: "Developer",
+      stakeholderLink: "https://example.org/participants/aggregator",
+      cadTrustProjectId: "b1b2c3d4-e5f6-4789-8abc-1234567890ab",
+    });
+    assert.deepEqual(validateCadTrustProjection(valid), { ok: true });
+    const missingProject = validateCadTrustProjection(projection("stakeholder", {
+      stakeholderName: "Municipal Aggregator Cooperative",
+      stakeholderType: "Developer",
+    }));
+    assert.equal(missingProject.ok ? undefined : missingProject.code, "CADT_REQUIRED_FIELD_MISSING");
+    const invalidType = validateCadTrustProjection(projection("stakeholder", {
+      stakeholderName: "Municipal Aggregator Cooperative",
+      stakeholderType: "Generator",
+      cadTrustProjectId: "b1b2c3d4-e5f6-4789-8abc-1234567890ab",
+    }));
+    assert.equal(invalidType.ok ? undefined : invalidType.code, "CADT_PICKLIST_VALUE_INVALID");
+    const generated = validateCadTrustProjection(projection("stakeholder", {
+      stakeholderName: "Municipal Aggregator Cooperative",
+      stakeholderType: "Developer",
+      cadTrustProjectId: "b1b2c3d4-e5f6-4789-8abc-1234567890ab",
+      cadTrustStakeholderId: "must-be-generated",
+    }));
+    assert.equal(generated.ok ? undefined : generated.code, "CADT_FIELD_UNMAPPED");
+    const invalidUrl = validateCadTrustProjection(projection("stakeholder", {
+      stakeholderName: "Municipal Aggregator Cooperative",
+      stakeholderType: "Developer",
+      stakeholderLink: "/participants/aggregator",
+      cadTrustProjectId: "b1b2c3d4-e5f6-4789-8abc-1234567890ab",
+    }));
+    assert.equal(invalidUrl.ok ? undefined : invalidUrl.code, "CADT_FIELD_FORMAT_INVALID");
+  });
 
   await t.test("pins project-methodology join fields and requires externally resolved parent references", () => {
     assert.deepEqual(Object.entries(CAD_TRUST_PROJECT_METHODOLOGY_FIELD_RULES)
