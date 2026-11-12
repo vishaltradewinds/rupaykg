@@ -30,7 +30,7 @@ export type CadTrustProjection = {
 
 type FieldRule = {
   required: boolean;
-  kind: "string" | "url" | "date" | "string_array" | "picklist";
+  kind: "string" | "url" | "date" | "guid" | "string_array" | "picklist";
   picklist?: readonly string[];
 };
 
@@ -99,6 +99,15 @@ export const CAD_TRUST_PROJECT_FIELD_RULES: Readonly<Record<string, FieldRule>> 
   cadTrustProgramId: { required: false, kind: "string" },
 };
 
+
+/** Exact user_input fields from CAD Trust schema v2.0.2. The methodology FK is system-resolved. */
+export const CAD_TRUST_PROJECT_METHODOLOGY_FIELD_RULES: Readonly<Record<string, FieldRule>> = {
+  cadTrustProjectMethodologyId: { required: true, kind: "guid" },
+  cadTrustProjectId: { required: true, kind: "guid" },
+  projectMethodologyDate: { required: false, kind: "date" },
+  projectMethodologyDescription: { required: false, kind: "string" },
+};
+
 export type CadTrustValidationResult =
   | { ok: true }
   | { ok: false; code: string; error: string };
@@ -123,7 +132,9 @@ export function validateCadTrustProjection(projection: CadTrustProjection): CadT
       ? CAD_TRUST_METHODOLOGY_FIELD_RULES
       : projection.entityType === "project"
         ? CAD_TRUST_PROJECT_FIELD_RULES
-        : undefined;
+        : projection.entityType === "project_methodology"
+          ? CAD_TRUST_PROJECT_METHODOLOGY_FIELD_RULES
+          : undefined;
   if (!fieldRules) {
     return { ok: false, code: "CADT_ENTITY_VALIDATION_NOT_IMPLEMENTED", error: "This entity has no pinned field map and cannot be exported" };
   }
@@ -136,7 +147,7 @@ export function validateCadTrustProjection(projection: CadTrustProjection): CadT
     if (value === undefined || value === null) {
       return { ok: false, code: "CADT_FIELD_VALUE_INVALID", error: field + " cannot be null" };
     }
-    if ((rule.kind === "string" || rule.kind === "url" || rule.kind === "date" || rule.kind === "picklist") &&
+    if ((rule.kind === "string" || rule.kind === "url" || rule.kind === "date" || rule.kind === "guid" || rule.kind === "picklist") &&
         (typeof value !== "string" || !value.trim())) {
       return { ok: false, code: "CADT_FIELD_TYPE_INVALID", error: field + " must be a non-empty string" };
     }
@@ -147,6 +158,9 @@ export function validateCadTrustProjection(projection: CadTrustProjection): CadT
       } catch {
         return { ok: false, code: "CADT_FIELD_FORMAT_INVALID", error: field + " must be an absolute HTTP(S) URL" };
       }
+    }
+    if (rule.kind === "guid" && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value as string)) {
+      return { ok: false, code: "CADT_FIELD_FORMAT_INVALID", error: field + " must be a valid UUID/GUID" };
     }
     if (rule.kind === "date") {
       const date = value as string;
