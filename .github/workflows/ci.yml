@@ -83,11 +83,20 @@ jobs:
         env:
           RUPAYKG_RUN_DB_INTEGRATION_TESTS: "1"
         run: npm test
-      - name: Rehearse protected RLS activation and cross-tenant acceptance
+      - name: Rehearse production DDL acceptance login, RLS activation and cross-tenant isolation
+        shell: bash
         run: |
           set -euo pipefail
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f ops/tenant-isolation/CI_ACTIVATE_RLS.sql
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "GRANT rupaykg_app_runtime TO postgres"
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f ops/tenant-isolation/VERIFY_RLS_NEGATIVE_TEST.sql
+          # Disposable CI-only credential. Production uses a separately provisioned
+          # secret and the exact same SQL wrappers; no CI password is reused.
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE ROLE rupaykg_ddl_login LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD 'ci-only-acceptance-password'; GRANT rupaykg_ddl TO rupaykg_ddl_login WITH INHERIT FALSE, SET TRUE; GRANT rupaykg_app_runtime TO rupaykg_ddl_login WITH INHERIT FALSE, SET TRUE;"
+          export PGPASSWORD=ci-only-acceptance-password
+          DDL_DATABASE_URL="postgresql://rupaykg_ddl_login@localhost:5432/rupaykg"
+          psql "$DDL_DATABASE_URL" -v ON_ERROR_STOP=1 -f ops/tenant-isolation/VERIFY_DDL_ROLE_WRAPPER.sql
+          psql "$DDL_DATABASE_URL" -v ON_ERROR_STOP=1 -f ops/tenant-isolation/VERIFY_RUNTIME_PRE_RLS_WRAPPER.sql
+          psql "$DDL_DATABASE_URL" -v ON_ERROR_STOP=1 -f ops/tenant-isolation/ACTIVATE_RLS_WRAPPER.sql
+          psql "$DDL_DATABASE_URL" -v ON_ERROR_STOP=1 -f ops/tenant-isolation/VERIFY_RLS_POLICY_COVERAGE_WRAPPER.sql
+          psql "$DDL_DATABASE_URL" -v ON_ERROR_STOP=1 -f ops/tenant-isolation/VERIFY_RLS_NEGATIVE_TEST.sql
+          unset PGPASSWORD
       - name: Build production container
         run: docker build --pull --tag rupaykg:ci .
