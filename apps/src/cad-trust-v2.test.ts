@@ -4,13 +4,14 @@ import {
   assertExternalLifecycleEntity,
   CAD_TRUST_INSERT_ORDER,
   CAD_TRUST_PROJECT_FIELD_RULES,
+  CAD_TRUST_PROJECT_METHODOLOGY_FIELD_RULES,
   CAD_TRUST_PROGRAM_FIELD_RULES,
   CAD_TRUST_METHODOLOGY_FIELD_RULES,
   CAD_TRUST_SCHEMA_VERSION,
   validateCadTrustProjection,
 } from "./cad-trust-v2.js";
 
-const projection = (entityType: "project" | "program" | "methodology", fields: Record<string, unknown>) => ({
+const projection = (entityType: "project" | "program" | "methodology" | "project_methodology", fields: Record<string, unknown>) => ({
   schemaVersion: CAD_TRUST_SCHEMA_VERSION,
   entityType,
   sourceSystem: "RUPAYKG" as const,
@@ -112,6 +113,35 @@ test("CAD Trust v2.0.2 entity-specific mappings", async (t) => {
     assert.equal(invalidType.ok ? undefined : invalidType.code, "CADT_PICKLIST_VALUE_INVALID");
     assert.equal(validateCadTrustProjection(projection("methodology", { ...base, methodologyLink: "/method" })).ok, false);
     assert.equal(validateCadTrustProjection(projection("methodology", { ...base, methodologyDate: "2026-13-40" })).ok, false);
+  });
+
+
+  await t.test("pins project-methodology join fields and requires externally resolved parent references", () => {
+    assert.deepEqual(Object.entries(CAD_TRUST_PROJECT_METHODOLOGY_FIELD_RULES)
+      .filter(([, rule]) => rule.required).map(([name]) => name),
+      ["cadTrustProjectMethodologyId", "cadTrustProjectId"]);
+    const valid = projection("project_methodology", {
+      cadTrustProjectMethodologyId: "a1b2c3d4-e5f6-4789-8abc-1234567890ab",
+      cadTrustProjectId: "b1b2c3d4-e5f6-4789-8abc-1234567890ab",
+      projectMethodologyDate: "2026-11-12",
+      projectMethodologyDescription: "Fixture relationship only",
+    });
+    assert.deepEqual(validateCadTrustProjection(valid), { ok: true });
+    const missingParent = validateCadTrustProjection(projection("project_methodology", {
+      cadTrustProjectMethodologyId: "a1b2c3d4-e5f6-4789-8abc-1234567890ab",
+    }));
+    assert.equal(missingParent.ok ? undefined : missingParent.code, "CADT_REQUIRED_FIELD_MISSING");
+    const badGuid = validateCadTrustProjection(projection("project_methodology", {
+      cadTrustProjectMethodologyId: "not-a-guid",
+      cadTrustProjectId: "b1b2c3d4-e5f6-4789-8abc-1234567890ab",
+    }));
+    assert.equal(badGuid.ok ? undefined : badGuid.code, "CADT_FIELD_FORMAT_INVALID");
+    const systemField = validateCadTrustProjection(projection("project_methodology", {
+      cadTrustProjectMethodologyId: "a1b2c3d4-e5f6-4789-8abc-1234567890ab",
+      cadTrustProjectId: "b1b2c3d4-e5f6-4789-8abc-1234567890ab",
+      cadTrustMethodologyId: "c1d2e3f4-a5b6-4789-8abc-1234567890ab",
+    }));
+    assert.equal(systemField.ok ? undefined : systemField.code, "CADT_FIELD_UNMAPPED");
   });
 
   await t.test("fails closed for entities without an implemented field map", () => {
