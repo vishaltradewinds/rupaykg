@@ -1,9 +1,17 @@
 {
   "schemaVersion": "1.0",
-  "asOf": "2026-11-08",
+  "asOf": "2026-11-12",
   "repository": "vishaltradewinds/rupaykg",
   "branch": "main",
-  "controlChain": ["reference","implementation","gap","adaptation","test","evidence","decision"],
+  "controlChain": [
+    "reference",
+    "implementation",
+    "gap",
+    "adaptation",
+    "test",
+    "evidence",
+    "decision"
+  ],
   "statusDefinitions": {
     "EXISTING": "Concrete material implementation is present.",
     "PARTIAL": "Related capability exists but is incomplete or externally unvalidated.",
@@ -12,33 +20,279 @@
     "N/A": "Research context only, not a direct platform capability."
   },
   "reconciliations": [
-    {"referenceId":"dpga-dpg-standard","status":"PARTIAL","implementation":["README.md","docs/SHAKTI_REFERENCE_ECOSYSTEM_ADOPTION_MATRIX.md"],"gap":"No formal component-level DPG self-assessment evidence pack.","decision":"ADAPT","nextAction":"Create reusable component assessment template; do not claim DPG status."},
-    {"referenceId":"dpga-dpg-registry","status":"EXISTING","implementation":["docs/SHAKTI_REFERENCE_ECOSYSTEM_ADOPTION_MATRIX.md"],"gap":"No automated registry ingestion/catalogue.","decision":"ADOPT-AS-DISCOVERY","nextAction":"Record versioned source evidence when components are selected."},
-    {"referenceId":"govstack-building-blocks","status":"PARTIAL","implementation":["docs/RUPAYKG_ENVIRONMENTAL_OPERATING_SYSTEM_ARCHITECTURE.md","apps/src/external-integration-contract.ts"],"gap":"No formal GovStack conformance profile.","decision":"ADAPT","nextAction":"Define reusable adapter/component contracts."},
-    {"referenceId":"govstack-digital-registries","status":"EXISTING-ADAPT","implementation":["apps/src/registry-routes.ts","apps/src/registry-routes.test.ts"],"gap":"External lifecycle/profile mapping remains.","decision":"ADAPT","nextAction":"Map native registry lifecycle without replacing statutory controls."},
-    {"referenceId":"govstack-information-mediator","status":"IMPLEMENTED-PARTIAL","implementation":["apps/src/external-integration-contract.ts","apps/src/external-integration-mediator.ts","apps/src/external-integration-adapter-registry.ts"],"gap":"Provider-specific connector and external conformance remain.","decision":"ADAPT","nextAction":"Add production connector through controlled adapter boundary."},
-    {"referenceId":"govstack-identity-registration","status":"EXISTING-ADAPT","implementation":["apps/src/auth.ts","apps/src/tenant-db.ts"],"gap":"No claim of GovStack identity conformance.","decision":"ADAPT","nextAction":"Preserve native identity; reuse registration patterns selectively."},
-    {"referenceId":"universal-dpi-safeguards","status":"PARTIAL","implementation":["docs/SHAKTI_STANDARDS_EXTERNAL_REFERENCE_ECOSYSTEM.md","docs/RUPAYKG_ENVIRONMENTAL_OPERATING_SYSTEM_CONTROL_MATRIX.md"],"gap":"No complete measurable safeguard-to-control matrix.","decision":"ADAPT","nextAction":"Add safeguard mapping to Shakti control matrix."},
-    {"referenceId":"undp-dpi-playbook","status":"PARTIAL","implementation":["docs/RUPAYKG_ENVIRONMENTAL_OPERATING_SYSTEM_ARCHITECTURE.md"],"gap":"No formal playbook crosswalk.","decision":"ADAPT","nextAction":"Maintain as strategy/reference input."},
-    {"referenceId":"global-dpi-repository","status":"EXISTING-AS-RESEARCH-CONTROL","implementation":["docs/SHAKTI_REFERENCE_ECOSYSTEM_ADOPTION_MATRIX.md"],"gap":"No automated evidence catalogue.","decision":"ADOPT-AS-RESEARCH","nextAction":"Record proven implementations before reuse."},
-    {"referenceId":"indian-dpi-ecosystems","status":"PARTIAL","implementation":["docs/SHAKTI_REFERENCE_ECOSYSTEM_ADOPTION_MATRIX.md"],"gap":"Connector-specific official specs and acceptance evidence remain.","decision":"ADOPT/ADAPT","nextAction":"Build India-first connector register."},
-    {"referenceId":"w3c-vc-2","status":"CONDITIONAL-PENDING","implementation":["credential domain model and settlement guards"],"gap":"No W3C VC 2.0 issuer/holder/verifier and proof-format conformance evidence.","decision":"ADOPT-WHERE-JUSTIFIED","nextAction":"Do not retrofit until concrete portable credential use case is approved."},
-    {"referenceId":"w3c-data-integrity","status":"CONDITIONAL-PENDING","implementation":["apps/src/hedera-anchor.ts","integrity migrations"],"gap":"Existing integrity is not W3C Data Integrity proof-suite conformance.","decision":"ADOPT-WHERE-VC-USED","nextAction":"Implement only under approved VC profile."},
-    {"referenceId":"w3c-prov","status":"IMPLEMENTED-PARTIAL","implementation":["apps/src/prov-interoperability.ts","apps/src/prov-interoperability.test.ts"],"gap":"Production consumer and external conformance remain.","decision":"ADAPT","nextAction":"Add consumer/conformance evidence; retain native provenance as authority."},
-    {"referenceId":"ogc-sensorthings","status":"IMPLEMENTED-PARTIAL","implementation":["apps/src/sensorthings-interoperability.ts","apps/src/sensorthings-routes.ts","apps/src/sensorthings-interoperability.test.ts"],"gap":"Actual consumer/conformance and production acceptance remain.","decision":"ADAPT","nextAction":"Execute consumer/conformance validation against target environment."},
-    {"referenceId":"ogc-api-features","status":"MISSING-PROFILE","implementation":["site/geography authorization and facility/site data"],"gap":"No OGC API Features contract/conformance implementation.","decision":"ADAPT-WHEN-REQUIRED","nextAction":"Implement only for justified geospatial interoperability."},
-    {"referenceId":"opentelemetry","status":"FOUNDATION-PARTIAL","implementation":["apps/src/observability.ts","apps/src/observability.test.ts"],"gap":"No full SDK/exporter/collector end-to-end acceptance.","decision":"ADOPT","nextAction":"Complete OTLP/collector interoperability and production evidence."},
-    {"referenceId":"cad-trust","status":"PARTIAL","implementation":["apps/src/registry-routes.ts","apps/src/guardian-mrv.ts"],"gap":"No CAD Trust exchange profile or interoperability evidence.","decision":"ADAPT","nextAction":"Map after authoritative carbon registry model is frozen."},
-    {"referenceId":"unfccc-article-6-4-patterns","status":"PARTIAL","implementation":["registry lifecycle and external acceptance gates"],"gap":"External acceptance and Indian legal applicability remain.","decision":"ADAPT-SUBJECT-TO-AUTHORITY","nextAction":"Map only applicable lifecycle concepts."},
-    {"referenceId":"openaq","status":"OBSERVE","implementation":["field measurement/MRV architecture"],"gap":"No justified OpenAQ integration requirement.","decision":"OBSERVE/ADAPT","nextAction":"Do not build until a concrete use case exists."},
-    {"referenceId":"icvcm-ccp","status":"EXISTING-AS-GOVERNANCE-REFERENCE","implementation":["docs/SHAKTI_REFERENCE_ECOSYSTEM_ADOPTION_MATRIX.md"],"gap":"No project/methodology-specific CCP assessment package.","decision":"ADAPT-NON-STATUTORY","nextAction":"Map separately from Indian legal compliance."},
-    {"referenceId":"gri","status":"EXISTING-ADAPT","implementation":["ESG/BRSR reporting capabilities and governance references"],"gap":"No complete versioned GRI disclosure profile.","decision":"ADAPT-COMPLEMENTARY","nextAction":"Create versioned crosswalk only when customer/reporting requirement exists."}
+    {
+      "referenceId": "dpga-dpg-standard",
+      "status": "PARTIAL",
+      "implementation": [
+        "README.md",
+        "docs/SHAKTI_REFERENCE_ECOSYSTEM_ADOPTION_MATRIX.md"
+      ],
+      "gap": "No formal component-level DPG self-assessment evidence pack.",
+      "decision": "ADAPT",
+      "nextAction": "Create reusable component assessment template; do not claim DPG status."
+    },
+    {
+      "referenceId": "dpga-dpg-registry",
+      "status": "EXISTING",
+      "implementation": [
+        "docs/SHAKTI_REFERENCE_ECOSYSTEM_ADOPTION_MATRIX.md"
+      ],
+      "gap": "No automated registry ingestion/catalogue.",
+      "decision": "ADOPT-AS-DISCOVERY",
+      "nextAction": "Record versioned source evidence when components are selected."
+    },
+    {
+      "referenceId": "govstack-building-blocks",
+      "status": "PARTIAL",
+      "implementation": [
+        "docs/RUPAYKG_ENVIRONMENTAL_OPERATING_SYSTEM_ARCHITECTURE.md",
+        "apps/src/external-integration-contract.ts"
+      ],
+      "gap": "No formal GovStack conformance profile.",
+      "decision": "ADAPT",
+      "nextAction": "Define reusable adapter/component contracts."
+    },
+    {
+      "referenceId": "govstack-digital-registries",
+      "status": "EXISTING-ADAPT",
+      "implementation": [
+        "apps/src/registry-routes.ts",
+        "apps/src/registry-routes.test.ts"
+      ],
+      "gap": "External lifecycle/profile mapping remains.",
+      "decision": "ADAPT",
+      "nextAction": "Map native registry lifecycle without replacing statutory controls."
+    },
+    {
+      "referenceId": "govstack-information-mediator",
+      "status": "IMPLEMENTED-PARTIAL",
+      "implementation": [
+        "apps/src/external-integration-contract.ts",
+        "apps/src/external-integration-mediator.ts",
+        "apps/src/external-integration-adapter-registry.ts"
+      ],
+      "gap": "Provider-specific connector and external conformance remain.",
+      "decision": "ADAPT",
+      "nextAction": "Add production connector through controlled adapter boundary."
+    },
+    {
+      "referenceId": "govstack-identity-registration",
+      "status": "EXISTING-ADAPT",
+      "implementation": [
+        "apps/src/auth.ts",
+        "apps/src/tenant-db.ts"
+      ],
+      "gap": "No claim of GovStack identity conformance.",
+      "decision": "ADAPT",
+      "nextAction": "Preserve native identity; reuse registration patterns selectively."
+    },
+    {
+      "referenceId": "universal-dpi-safeguards",
+      "status": "PARTIAL",
+      "implementation": [
+        "docs/SHAKTI_STANDARDS_EXTERNAL_REFERENCE_ECOSYSTEM.md",
+        "docs/RUPAYKG_ENVIRONMENTAL_OPERATING_SYSTEM_CONTROL_MATRIX.md"
+      ],
+      "gap": "No complete measurable safeguard-to-control matrix.",
+      "decision": "ADAPT",
+      "nextAction": "Add safeguard mapping to Shakti control matrix."
+    },
+    {
+      "referenceId": "undp-dpi-playbook",
+      "status": "PARTIAL",
+      "implementation": [
+        "docs/RUPAYKG_ENVIRONMENTAL_OPERATING_SYSTEM_ARCHITECTURE.md"
+      ],
+      "gap": "No formal playbook crosswalk.",
+      "decision": "ADAPT",
+      "nextAction": "Maintain as strategy/reference input."
+    },
+    {
+      "referenceId": "global-dpi-repository",
+      "status": "EXISTING-AS-RESEARCH-CONTROL",
+      "implementation": [
+        "docs/SHAKTI_REFERENCE_ECOSYSTEM_ADOPTION_MATRIX.md"
+      ],
+      "gap": "No automated evidence catalogue.",
+      "decision": "ADOPT-AS-RESEARCH",
+      "nextAction": "Record proven implementations before reuse."
+    },
+    {
+      "referenceId": "indian-dpi-ecosystems",
+      "status": "PARTIAL",
+      "implementation": [
+        "docs/SHAKTI_REFERENCE_ECOSYSTEM_ADOPTION_MATRIX.md"
+      ],
+      "gap": "Connector-specific official specs and acceptance evidence remain.",
+      "decision": "ADOPT/ADAPT",
+      "nextAction": "Build India-first connector register."
+    },
+    {
+      "referenceId": "w3c-vc-2",
+      "status": "CONDITIONAL-PENDING",
+      "implementation": [
+        "credential domain model and settlement guards"
+      ],
+      "gap": "No W3C VC 2.0 issuer/holder/verifier and proof-format conformance evidence.",
+      "decision": "ADOPT-WHERE-JUSTIFIED",
+      "nextAction": "Do not retrofit until concrete portable credential use case is approved."
+    },
+    {
+      "referenceId": "w3c-data-integrity",
+      "status": "CONDITIONAL-PENDING",
+      "implementation": [
+        "apps/src/hedera-anchor.ts",
+        "integrity migrations"
+      ],
+      "gap": "Existing integrity is not W3C Data Integrity proof-suite conformance.",
+      "decision": "ADOPT-WHERE-VC-USED",
+      "nextAction": "Implement only under approved VC profile."
+    },
+    {
+      "referenceId": "w3c-prov",
+      "status": "IMPLEMENTED-PARTIAL",
+      "implementation": [
+        "apps/src/prov-interoperability.ts",
+        "apps/src/prov-interoperability.test.ts"
+      ],
+      "gap": "Production consumer and external conformance remain.",
+      "decision": "ADAPT",
+      "nextAction": "Add consumer/conformance evidence; retain native provenance as authority."
+    },
+    {
+      "referenceId": "ogc-sensorthings",
+      "status": "IMPLEMENTED-PARTIAL",
+      "implementation": [
+        "apps/src/sensorthings-interoperability.ts",
+        "apps/src/sensorthings-routes.ts",
+        "apps/src/sensorthings-interoperability.test.ts"
+      ],
+      "gap": "Actual consumer/conformance and production acceptance remain.",
+      "decision": "ADAPT",
+      "nextAction": "Execute consumer/conformance validation against target environment."
+    },
+    {
+      "referenceId": "ogc-api-features",
+      "status": "MISSING-PROFILE",
+      "implementation": [
+        "site/geography authorization and facility/site data"
+      ],
+      "gap": "No OGC API Features contract/conformance implementation.",
+      "decision": "ADAPT-WHEN-REQUIRED",
+      "nextAction": "Implement only for justified geospatial interoperability."
+    },
+    {
+      "referenceId": "opentelemetry",
+      "status": "FOUNDATION-PARTIAL",
+      "implementation": [
+        "apps/src/observability.ts",
+        "apps/src/observability.test.ts"
+      ],
+      "gap": "No full SDK/exporter/collector end-to-end acceptance.",
+      "decision": "ADOPT",
+      "nextAction": "Complete OTLP/collector interoperability and production evidence."
+    },
+    {
+      "referenceId": "cad-trust",
+      "status": "PARTIAL",
+      "implementation": [
+        "apps/src/registry-routes.ts",
+        "apps/src/guardian-mrv.ts"
+      ],
+      "gap": "No CAD Trust exchange profile or interoperability evidence.",
+      "decision": "ADAPT",
+      "nextAction": "Map after authoritative carbon registry model is frozen."
+    },
+    {
+      "referenceId": "unfccc-article-6-4-patterns",
+      "status": "PARTIAL",
+      "implementation": [
+        "registry lifecycle and external acceptance gates"
+      ],
+      "gap": "External acceptance and Indian legal applicability remain.",
+      "decision": "ADAPT-SUBJECT-TO-AUTHORITY",
+      "nextAction": "Map only applicable lifecycle concepts."
+    },
+    {
+      "referenceId": "openaq",
+      "status": "OBSERVE",
+      "implementation": [
+        "field measurement/MRV architecture"
+      ],
+      "gap": "No justified OpenAQ integration requirement.",
+      "decision": "OBSERVE/ADAPT",
+      "nextAction": "Do not build until a concrete use case exists."
+    },
+    {
+      "referenceId": "icvcm-ccp",
+      "status": "EXISTING-AS-GOVERNANCE-REFERENCE",
+      "implementation": [
+        "docs/SHAKTI_REFERENCE_ECOSYSTEM_ADOPTION_MATRIX.md"
+      ],
+      "gap": "No project/methodology-specific CCP assessment package.",
+      "decision": "ADAPT-NON-STATUTORY",
+      "nextAction": "Map separately from Indian legal compliance."
+    },
+    {
+      "referenceId": "gri",
+      "status": "EXISTING-ADAPT",
+      "implementation": [
+        "ESG/BRSR reporting capabilities and governance references"
+      ],
+      "gap": "No complete versioned GRI disclosure profile.",
+      "decision": "ADAPT-COMPLEMENTARY",
+      "nextAction": "Create versioned crosswalk only when customer/reporting requirement exists."
+    },
+    {
+      "referenceId": "aspi-policy-institute",
+      "status": "EXISTING-AS-RESEARCH-REFERENCE",
+      "implementation": [
+        "docs/reference-ecosystem/ASPI_POLICY_TO_ENGINEERING_CROSSWALK.md",
+        "docs/CARBON-MARKET-MECHANISM-CONTROL.md",
+        "docs/CARBON_METHODOLOGY_IMPLEMENTATION_STANDARD.md",
+        "docs/CCTS_METHODOLOGY_REGISTRY_FOUNDATION.md"
+      ],
+      "gap": "Current Indian regulatory-source refresh is required before any ASPI-derived policy observation becomes a normative product requirement; no ASPI institutional engagement or endorsement is evidenced.",
+      "decision": "OBSERVE/ADAPT-AS-POLICY-INTELLIGENCE",
+      "nextAction": "Use ASPI paper as a non-binding policy input; reconcile each proposed requirement to current BEE/MoEFCC/CPCB/other competent-authority sources, then link to existing controls and tests. Do not create a duplicate MRV or carbon subsystem."
+    }
   ],
   "priority": [
-    {"priority":"P0","item":"Live tenant isolation acceptance","status":"OPEN","reason":"Production RLS and cross-tenant negative evidence must be executed against target DB."},
-    {"priority":"P1","item":"OpenTelemetry production interoperability","status":"PARTIAL","reason":"Transport-neutral trace foundation exists; full collector/exporter acceptance remains."},
-    {"priority":"P1","item":"External integration provider conformance","status":"PARTIAL","reason":"Mediator and adapter registry exist; real provider acceptance remains."},
-    {"priority":"P1","item":"SensorThings consumer conformance","status":"PARTIAL","reason":"Tenant-scoped export exists; actual consumer/conformance acceptance remains."},
-    {"priority":"P2","item":"OGC API Features","status":"NOT-YET-JUSTIFIED","reason":"No external geospatial integration requirement currently evidenced."}
+    {
+      "priority": "P0",
+      "item": "Live tenant isolation acceptance",
+      "status": "OPEN",
+      "reason": "Production RLS and cross-tenant negative evidence must be executed against target DB."
+    },
+    {
+      "priority": "P1",
+      "item": "OpenTelemetry production interoperability",
+      "status": "PARTIAL",
+      "reason": "Transport-neutral trace foundation exists; full collector/exporter acceptance remains."
+    },
+    {
+      "priority": "P1",
+      "item": "External integration provider conformance",
+      "status": "PARTIAL",
+      "reason": "Mediator and adapter registry exist; real provider acceptance remains."
+    },
+    {
+      "priority": "P1",
+      "item": "SensorThings consumer conformance",
+      "status": "PARTIAL",
+      "reason": "Tenant-scoped export exists; actual consumer/conformance acceptance remains."
+    },
+    {
+      "priority": "P2",
+      "item": "OGC API Features",
+      "status": "NOT-YET-JUSTIFIED",
+      "reason": "No external geospatial integration requirement currently evidenced."
+    },
+    {
+      "priority": "P2",
+      "item": "ASPI policy intelligence crosswalk",
+      "status": "DOCUMENTED-RESEARCH-REFERENCE",
+      "reason": "September 2024 India CCTS/ETS policy paper is mapped to existing carbon controls; current official-source validation and any customer/authority-specific finance reporting use case remain conditional."
+    }
   ]
 }
