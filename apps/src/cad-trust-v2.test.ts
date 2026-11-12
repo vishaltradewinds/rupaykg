@@ -52,14 +52,14 @@ test("CAD Trust v2.0.2 entity-specific mappings", async (t) => {
   await t.test("rejects missing project fields and system-generated fields", () => {
     const missing = validateCadTrustProjection(project({ projectName: "Incomplete" }));
     assert.equal(missing.ok, false);
-    assert.equal(missing.code, "CADT_REQUIRED_FIELD_MISSING");
+    assert.equal(missing.ok ? undefined : missing.code, "CADT_REQUIRED_FIELD_MISSING");
     const generated = validateCadTrustProjection(project({ ...validProject, cadTrustProjectId: "must-not-submit" }));
     assert.equal(generated.ok, false);
-    assert.equal(generated.code, "CADT_FIELD_UNMAPPED");
+    assert.equal(generated.ok ? undefined : generated.code, "CADT_FIELD_UNMAPPED");
   });
 
   await t.test("rejects invalid project picklists, dates and URLs", () => {
-    assert.equal(validateCadTrustProjection(project({ ...validProject, projectStatus: "APPROVED_BY_RUPAYKG" })).code, "CADT_PICKLIST_VALUE_INVALID");
+    const invalidStatus = validateCadTrustProjection(project({ ...validProject, projectStatus: "APPROVED_BY_RUPAYKG" }));\n    assert.equal(invalidStatus.ok ? undefined : invalidStatus.code, "CADT_PICKLIST_VALUE_INVALID");
     assert.equal(validateCadTrustProjection(project({ ...validProject, projectStatusDate: "12-11-2026" })).ok, false);
     assert.equal(validateCadTrustProjection(project({ ...validProject, projectLink: "/project/1" })).ok, false);
   });
@@ -100,7 +100,7 @@ test("CAD Trust v2.0.2 entity-specific mappings", async (t) => {
 
   await t.test("rejects invalid methodology picklist, URL and calendar date", () => {
     const base = { methodologyCode: "M-1", methodologyName: "Method" };
-    assert.equal(validateCadTrustProjection(projection("methodology", { ...base, methodologyType: "RupayKg Verified" })).code, "CADT_PICKLIST_VALUE_INVALID");
+    const invalidType = validateCadTrustProjection(projection("methodology", { ...base, methodologyType: "RupayKg Verified" }));\n    assert.equal(invalidType.ok ? undefined : invalidType.code, "CADT_PICKLIST_VALUE_INVALID");
     assert.equal(validateCadTrustProjection(projection("methodology", { ...base, methodologyLink: "/method" })).ok, false);
     assert.equal(validateCadTrustProjection(projection("methodology", { ...base, methodologyDate: "2026-13-40" })).ok, false);
   });
