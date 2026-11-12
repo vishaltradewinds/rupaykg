@@ -123,6 +123,30 @@ test("Guardian native DMRV accepts a published-policy block response", async () 
   }
 });
 
+test("Guardian native DMRV rejects a block result for a different policy", async () => {
+  const previousUrl = process.env.GUARDIAN_MRV_SUBMIT_URL;
+  const previousNative = process.env.GUARDIAN_MRV_NATIVE_DMRV;
+  const previousFetch = globalThis.fetch;
+  process.env.GUARDIAN_MRV_SUBMIT_URL = "https://guardian.test/api/v1/dmrv/policy-1/mrv-input";
+  process.env.GUARDIAN_MRV_NATIVE_DMRV = "true";
+  globalThis.fetch = async () => new Response(JSON.stringify({ id: "guardian-block-result-2", policyId: "different-policy" }), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
+  try {
+    const result = await executeGuardianMrv(request);
+    assert.equal(result.status, "UNAVAILABLE");
+    assert.equal(result.executionId, null);
+    assert.match(result.message, /different policy identifier/);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousUrl === undefined) delete process.env.GUARDIAN_MRV_SUBMIT_URL;
+    else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
+    if (previousNative === undefined) delete process.env.GUARDIAN_MRV_NATIVE_DMRV;
+    else process.env.GUARDIAN_MRV_NATIVE_DMRV = previousNative;
+  }
+});
+
 test("Guardian native DMRV refuses a URL bound to another policy", async () => {
   const previousUrl = process.env.GUARDIAN_MRV_SUBMIT_URL;
   const previousNative = process.env.GUARDIAN_MRV_NATIVE_DMRV;
