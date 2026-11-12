@@ -102,8 +102,23 @@ where n.nspname = 'public'
     'settlements','audit_events','resource_flows','field_devices',
     'organization_memberships','measurements','evidence','verifications',
     'carbon_calculations','mrv_observations',
-    'evidence_verification_requirements','chain_of_custody_links'
+    'evidence_verification_requirements','chain_of_custody_links','mrv_provenance_events'
   )
 order by c.relname;
+
+select 1 / case
+  when count(*) = 18 and bool_and(c.relrowsecurity) then 1
+  else 0
+end as tenant_rls_activation_assertion
+from pg_class c
+join pg_namespace n on n.oid = c.relnamespace
+where n.nspname = 'public'
+  and c.relname in (
+    'organizations','roles','activities','obligations','credentials',
+    'settlements','audit_events','resource_flows','field_devices',
+    'organization_memberships','measurements','evidence','verifications',
+    'carbon_calculations','mrv_observations',
+    'evidence_verification_requirements','chain_of_custody_links','mrv_provenance_events'
+  );
 
 commit;
