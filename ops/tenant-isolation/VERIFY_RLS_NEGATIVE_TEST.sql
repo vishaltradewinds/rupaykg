@@ -34,7 +34,7 @@ begin
     'obligations','credentials','settlements','audit_events','resource_flows',
     'field_devices','measurements','evidence','verifications',
     'carbon_calculations','mrv_observations',
-    'evidence_verification_requirements','chain_of_custody_links'
+    'evidence_verification_requirements','chain_of_custody_links','mrv_provenance_events'
   ] loop
     if not exists (
       select 1 from pg_class c
@@ -58,6 +58,15 @@ declare
   v_identity_b uuid;
   v_role_a uuid;
   v_role_b uuid;
+  v_activity_a uuid := gen_random_uuid();
+  v_activity_b uuid := gen_random_uuid();
+  v_evidence_a uuid := gen_random_uuid();
+  v_evidence_b uuid := gen_random_uuid();
+  v_verification_a uuid := gen_random_uuid();
+  v_verification_b uuid := gen_random_uuid();
+  v_provenance_a uuid := gen_random_uuid();
+  v_provenance_b uuid := gen_random_uuid();
+  v_insert_blocked boolean := false;
   v_visible integer;
   v_affected integer;
 begin
@@ -109,6 +118,26 @@ begin
     alter table organization_memberships enable trigger stakeholder_membership_application_guard;
   end if;
 
+  insert into activities(id,organization_id,activity_type,status)
+  values
+    (v_activity_a,v_org_a,'RLS_MRV_FIXTURE','COMPLETED'),
+    (v_activity_b,v_org_b,'RLS_MRV_FIXTURE','COMPLETED');
+
+  insert into evidence(id,activity_id,evidence_type,status,captured_at,content_uri,content_hash)
+  values
+    (v_evidence_a,v_activity_a,'RLS_MRV_FIXTURE','VERIFIED',clock_timestamp(),'fixture://mrv-a','fixture-hash-a'),
+    (v_evidence_b,v_activity_b,'RLS_MRV_FIXTURE','VERIFIED',clock_timestamp(),'fixture://mrv-b','fixture-hash-b');
+
+  insert into verifications(id,evidence_id,activity_id,verifier_identity_id,decision,scope)
+  values
+    (v_verification_a,v_evidence_a,v_activity_a,v_identity_a,'APPROVED','RLS_MRV_FIXTURE'),
+    (v_verification_b,v_evidence_b,v_activity_b,v_identity_b,'APPROVED','RLS_MRV_FIXTURE');
+
+  insert into mrv_provenance_events(id,activity_id,verification_id,evidence_id,guardian_policy_id,guardian_status,hcs_status,integrity_hash,metadata)
+  values
+    (v_provenance_a,v_activity_a,v_verification_a,v_evidence_a,'test-policy-a','UNAVAILABLE','NOT_CONFIGURED','test-mrv-a-'||v_suffix,'{"fixture":"rollback-only"}'::jsonb),
+    (v_provenance_b,v_activity_b,v_verification_b,v_evidence_b,'test-policy-b','UNAVAILABLE','NOT_CONFIGURED','test-mrv-b-'||v_suffix,'{"fixture":"rollback-only"}'::jsonb);
+
   execute 'set local role rupaykg_app_runtime';
 
   perform app.set_request_context(v_identity_a,v_org_a);
@@ -135,6 +164,42 @@ begin
     raise exception 'RLS_NEGATIVE_TEST_FAILED: tenant A deleted organization B';
   end if;
 
+  select count(*) into v_visible from mrv_provenance_events where id=v_provenance_a;
+  if v_visible <> 1 then
+    raise exception 'RLS_NEGATIVE_TEST_FAILED: tenant A cannot read its MRV provenance';
+  end if;
+
+  select count(*) into v_visible from mrv_provenance_events where id=v_provenance_b;
+  if v_visible <> 0 then
+    raise exception 'RLS_NEGATIVE_TEST_FAILED: tenant A can read tenant B MRV provenance';
+  end if;
+
+  update mrv_provenance_events set metadata=metadata where id=v_provenance_b;
+  get diagnostics v_affected = row_count;
+  if v_affected <> 0 then
+    raise exception 'RLS_NEGATIVE_TEST_FAILED: tenant A mutated tenant B MRV provenance';
+  end if;
+
+  begin
+    insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_status,hcs_status,integrity_hash,metadata)
+    values(v_activity_b,v_verification_b,v_evidence_b,'cross-tenant-test','UNAVAILABLE','NOT_CONFIGURED','blocked-mrv-'||v_suffix,'{"fixture":"rollback-only"}'::jsonb);
+  exception when insufficient_privilege then
+    v_insert_blocked := true;
+  end;
+  if not v_insert_blocked then
+    raise exception 'RLS_NEGATIVE_TEST_FAILED: tenant A inserted tenant B MRV provenance';
+  end if;
+
+  perform app.set_request_context(v_identity_b,v_org_b);
+  select count(*) into v_visible from mrv_provenance_events where id=v_provenance_b;
+  if v_visible <> 1 then
+    raise exception 'RLS_NEGATIVE_TEST_FAILED: tenant B cannot read its MRV provenance';
+  end if;
+  select count(*) into v_visible from mrv_provenance_events where id=v_provenance_a;
+  if v_visible <> 0 then
+    raise exception 'RLS_NEGATIVE_TEST_FAILED: tenant B can read tenant A MRV provenance';
+  end if;
+
   reset role;
 
   -- Fail-closed check: with no tenant context, the runtime must see zero
@@ -149,7 +214,7 @@ begin
     'settlements','audit_events','resource_flows','field_devices',
     'organization_memberships','measurements','evidence','verifications',
     'carbon_calculations','mrv_observations',
-    'evidence_verification_requirements','chain_of_custody_links'
+    'evidence_verification_requirements','chain_of_custody_links','mrv_provenance_events'
   ]) loop
     execute format('select count(*) from public.%I', v_name) into v_visible;
     if v_visible <> 0 then
