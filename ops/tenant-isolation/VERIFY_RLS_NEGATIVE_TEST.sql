@@ -4,15 +4,15 @@
 --
 -- The test is transactional and rolls back all fixtures. It proves both
 -- visibility and mutation isolation for two independent organizations.
--- Execute with the controlled DDL role that owns the protected tables and
--- has SET ROLE permission to rupaykg_app_runtime. The fixture setup requires
--- owner-level trigger control; the actual tenant assertions execute as the
--- non-BYPASSRLS runtime role.
+-- Connect with a dedicated LOGIN role that is NOBYPASSRLS and has SET ROLE
+-- membership to both rupaykg_ddl and rupaykg_app_runtime. This script switches
+-- to rupaykg_ddl for rollback-only fixture setup, then to the runtime role for
+-- tenant assertions. The postgres superuser is accepted only for disposable CI.
 
 begin;
 
 select 1 / case
-  when pg_has_role(current_user, 'rupaykg_app_runtime', 'member') then 1
+  when pg_has_role(session_user, 'rupaykg_app_runtime', 'member') then 1
   else 0
 end as runtime_role_membership_assertion;
 
@@ -23,6 +23,30 @@ select 1 / case
 end as runtime_role_switch_assertion;
 
 reset role;
+
+-- The connection login must be a restricted, non-BYPASSRLS DDL operator with
+-- SET ROLE rights to both controlled roles. Disposable CI runs as postgres.
+select 1 / case
+  when session_user = 'postgres' then 1
+  when exists (
+    select 1 from pg_roles
+     where rolname = session_user
+       and rolcanlogin
+       and not rolsuper
+       and not rolbypassrls
+  )
+   and pg_has_role(session_user, 'rupaykg_ddl', 'member')
+   and pg_has_role(session_user, 'rupaykg_app_runtime', 'member')
+  then 1
+  else 0
+end as controlled_ddl_login_assertion;
+
+set local role rupaykg_ddl;
+select 1 / case
+  when current_user = 'rupaykg_ddl'
+   and not (select rolsuper or rolbypassrls from pg_roles where rolname = current_user)
+  then 1 else 0
+end as controlled_ddl_role_assertion;
 
 do $shakti$
 declare
