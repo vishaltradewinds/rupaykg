@@ -1,0 +1,71 @@
+name: Production Migration 101 (Controlled)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type APPLY-MIGRATION-101 to authorize the one-time production migration"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  migrate-101:
+    if: ${{ inputs.confirm == 'APPLY-MIGRATION-101' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production-migration
+    steps:
+      - name: Checkout canonical repository
+        uses: actions/checkout@v4
+
+      - name: Validate production migration secret
+        env:
+          DATABASE_URL: ${{ secrets.RUPAYKG_MIGRATION_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          test -n "${DATABASE_URL:-}" || {
+            echo "RUPAYKG_MIGRATION_DATABASE_URL is required."
+            exit 1
+          }
+
+      - name: Verify migration-owner preflight
+        env:
+          DATABASE_URL: ${{ secrets.RUPAYKG_MIGRATION_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "
+            select current_user,
+                   (select rolsuper from pg_roles where rolname=current_user),
+                   (select rolbypassrls from pg_roles where rolname=current_user),
+                   pg_has_role(current_user, 'rupaykg_ddl', 'SET');
+          " | tee migration-owner-preflight.txt
+
+      - name: Run protected migration 101
+        env:
+          DATABASE_URL: ${{ secrets.RUPAYKG_MIGRATION_DATABASE_URL }}
+          RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS: "1"
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run migrate -w @rupaykg/api
+
+      - name: Verify migration ledger and ownership
+        env:
+          DATABASE_URL: ${{ secrets.RUPAYKG_MIGRATION_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          test "$(psql "$DATABASE_URL" -Atc "select count(*) from public.schema_migrations where version='101' and filename='101_shakti_mrv_provenance_tenant_rls.sql'")" = "1"
+          test "$(psql "$DATABASE_URL" -Atc "select pg_get_userbyid(relowner) from pg_class where oid='public.mrv_provenance_events'::regclass")" = "rupaykg_ddl"
+          echo "PASS: migration 101 ledger and provenance ownership verified."
+
+      - name: Upload non-secret evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-migration-101-evidence-${{ github.run_id }}
+          path: migration-owner-preflight.txt
+          if-no-files-found: error
+          retention-days: 30
