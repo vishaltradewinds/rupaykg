@@ -189,7 +189,13 @@ test("CAD Trust v2.0.2 entity-specific mappings", async (t) => {
     assert.equal(badBody.ok ? undefined : badBody.code, "CADT_PICKLIST_VALUE_INVALID");
     const badValidationRef = validateCadTrustProjection(projection("verification", { ...valid, cadTrustValidationId: "local-validation-id" }));
     assert.equal(badValidationRef.ok ? undefined : badValidationRef.code, "CADT_FIELD_FORMAT_INVALID");
-    const withoutOptionalValidation = { ...valid }; delete withoutOptionalValidation.cadTrustValidationId;
+    const withoutOptionalValidation = {
+      verificationId: valid.verificationId,
+      verificationStartDate: valid.verificationStartDate,
+      verificationEndDate: valid.verificationEndDate,
+      verificationBody: valid.verificationBody,
+      cadTrustProjectId: valid.cadTrustProjectId,
+    };
     assert.deepEqual(validateCadTrustProjection(projection("verification", withoutOptionalValidation)), { ok: true });
   });
 
@@ -219,6 +225,16 @@ test("CAD Trust v2.0.2 entity-specific mappings", async (t) => {
       cadTrustMethodologyId: "c1d2e3f4-a5b6-4789-8abc-1234567890ab",
     }));
     assert.equal(systemField.ok ? undefined : systemField.code, "CADT_FIELD_UNMAPPED");
+  });
+
+  await t.test("validates optional project program GUID and rejects inherited Object prototype keys", () => {
+    assert.deepEqual(validateCadTrustProjection(project({ ...validProject, cadTrustProgramId: "b1b2c3d4-e5f6-4789-8abc-1234567890ab" })), { ok: true });
+    const badProgramId = validateCadTrustProjection(project({ ...validProject, cadTrustProgramId: "not-a-guid" }));
+    assert.equal(badProgramId.ok ? undefined : badProgramId.code, "CADT_FIELD_FORMAT_INVALID");
+    const constructorField = validateCadTrustProjection(project({ ...validProject, constructor: "unmapped" }));
+    assert.equal(constructorField.ok ? undefined : constructorField.code, "CADT_FIELD_UNMAPPED");
+    const toStringField = validateCadTrustProjection(project({ ...validProject, toString: "unmapped" }));
+    assert.equal(toStringField.ok ? undefined : toStringField.code, "CADT_FIELD_UNMAPPED");
   });
 
   await t.test("fails closed for entities without an implemented field map", () => {
