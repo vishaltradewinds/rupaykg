@@ -1,9 +1,9 @@
 /**
  * CAD Trust Data Model v2.0.2 projection boundary.
  *
- * Validation is intentionally entity-specific and limited to the project
- * entity in this slice. Other entities fail closed until their own schema
- * fixtures and field maps are implemented.
+ * Validation is entity-specific for program, methodology, and project.
+ * Other entities fail closed until their own schema fixtures and field maps
+ * are implemented.
  */
 export const CAD_TRUST_SCHEMA_VERSION = "v2.0.2" as const;
 export const CAD_TRUST_SCHEMA_SOURCE_COMMIT = "577f4e394c30d4a225485b2e5f25f1c38a0fd550" as const;
