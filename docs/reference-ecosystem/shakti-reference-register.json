@@ -316,7 +316,8 @@
       "implementation": "docs/reference-ecosystem/ASPI_POLICY_TO_ENGINEERING_CROSSWALK.md",
       "evidenceRequired": [
         "exact publication/source URL and date",
-        "current Indian competent-authority source check",
+        "current BEE competent-authority source snapshot and effective-date review",
+        "current approved methodology and verifier-scope check",
         "policy-to-control mapping",
         "legal/applicability review",
         "engineering acceptance evidence"
@@ -324,7 +325,8 @@
       "boundaries": [
         "policy research is not Indian law or regulatory instruction",
         "ASPI is not a registry, verifier, issuer or technical certification authority",
-        "September 2024 CCTS paper is historical policy analysis; refresh against current official sources"
+        "September 2024 CCTS paper remains historical policy analysis; current official BEE and Ministry of Power sources are recorded in the crosswalk as a dated snapshot",
+        "waste-sector CCTS offset eligibility must be checked against the exact approved methodology; ordinary waste collection, recycling, composting or general SWM activity is not presumed eligible"
       ]
     }
   ],
