@@ -116,14 +116,22 @@ export function validateCadTrustProjection(projection: CadTrustProjection): CadT
   if (projection.entityType === "issuance" || projection.entityType === "unit") {
     return { ok: false, code: "CADT_EXTERNAL_AUTHORITY_REQUIRED", error: "Issuance and unit records require external registry authority" };
   }
-  if (projection.entityType !== "project") {
+
+  const fieldRules = projection.entityType === "program"
+    ? CAD_TRUST_PROGRAM_FIELD_RULES
+    : projection.entityType === "methodology"
+      ? CAD_TRUST_METHODOLOGY_FIELD_RULES
+      : projection.entityType === "project"
+        ? CAD_TRUST_PROJECT_FIELD_RULES
+        : undefined;
+  if (!fieldRules) {
     return { ok: false, code: "CADT_ENTITY_VALIDATION_NOT_IMPLEMENTED", error: "This entity has no pinned field map and cannot be exported" };
   }
 
   for (const [field, value] of Object.entries(projection.fields)) {
-    const rule = CAD_TRUST_PROJECT_FIELD_RULES[field];
+    const rule = fieldRules[field];
     if (!rule) {
-      return { ok: false, code: "CADT_FIELD_UNMAPPED", error: field + " is not an allowed CAD Trust project user-input field" };
+      return { ok: false, code: "CADT_FIELD_UNMAPPED", error: field + " is not an allowed CAD Trust " + projection.entityType + " user-input field" };
     }
     if (value === undefined || value === null) {
       return { ok: false, code: "CADT_FIELD_VALUE_INVALID", error: field + " cannot be null" };
@@ -133,12 +141,20 @@ export function validateCadTrustProjection(projection: CadTrustProjection): CadT
       return { ok: false, code: "CADT_FIELD_TYPE_INVALID", error: field + " must be a non-empty string" };
     }
     if (rule.kind === "url") {
-      try { new URL(value as string); } catch {
-        return { ok: false, code: "CADT_FIELD_FORMAT_INVALID", error: field + " must be an absolute URL" };
+      try {
+        const parsed = new URL(value as string);
+        if (parsed.protocol !== "https:" && parsed.protocol !== "http:") throw new Error("Unsupported URL protocol");
+      } catch {
+        return { ok: false, code: "CADT_FIELD_FORMAT_INVALID", error: field + " must be an absolute HTTP(S) URL" };
       }
     }
-    if (rule.kind === "date" && !/^\d{4}-\d{2}-\d{2}$/.test(value as string)) {
-      return { ok: false, code: "CADT_FIELD_FORMAT_INVALID", error: field + " must use YYYY-MM-DD" };
+    if (rule.kind === "date") {
+      const date = value as string;
+      const match = /^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(date);
+      const parsed = match ? new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))) : null;
+      if (!match || !parsed || parsed.toISOString().slice(0, 10) !== date) {
+        return { ok: false, code: "CADT_FIELD_FORMAT_INVALID", error: field + " must be a valid calendar date in YYYY-MM-DD" };
+      }
     }
     if (rule.kind === "string_array") {
       if (!Array.isArray(value) || value.length === 0 || value.some(v => typeof v !== "string" || !v.trim())) {
@@ -155,8 +171,10 @@ export function validateCadTrustProjection(projection: CadTrustProjection): CadT
   }
 
   for (const [field, rule] of Object.entries(fieldRules)) {
-    if (rule.required && (projection.fields[field] === undefined || projection.fields[field] === null ||
-      (typeof projection.fields[field] === "string" && !(projection.fields[field] as string).trim()))) {
+    const value = projection.fields[field];
+    if (rule.required && (value === undefined || value === null ||
+      (typeof value === "string" && !value.trim()) ||
+      (Array.isArray(value) && value.length === 0))) {
       return { ok: false, code: "CADT_REQUIRED_FIELD_MISSING", error: field + " is required for CAD Trust " + projection.entityType + " projection" };
     }
   }
