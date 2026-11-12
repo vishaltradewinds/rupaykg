@@ -252,9 +252,9 @@
         "docs/CARBON_METHODOLOGY_IMPLEMENTATION_STANDARD.md",
         "docs/CCTS_METHODOLOGY_REGISTRY_FOUNDATION.md"
       ],
-      "gap": "A dated official-source snapshot is now recorded for BEE CCTS mechanisms, approved offset methodologies and accredited verifier register, plus Ministry of Power institutional roles. Legal applicability, project-specific methodology eligibility, customer/authority mandate and any ASPI institutional engagement remain unvalidated.",
+      "gap": "A dated official-source snapshot is now recorded for BEE CCTS mechanisms, approved offset methodologies and accredited verifier register, plus Ministry of Power institutional roles. Legal applicability, project-specific methodology eligibility, customer/authority mandate and any ASPI institutional engagement remain unvalidated. The BEE approved-methodology inventory includes BM WA03.003 for defined CBG project activities; the crosswalk was corrected to include this third waste-sector methodology and retain scope-specific eligibility controls.",
       "decision": "OBSERVE/ADAPT-AS-POLICY-INTELLIGENCE",
-      "nextAction": "Before any CCTS-related workflow or customer claim, re-check the latest Gazette/BEE methodology and verifier registers, confirm the exact project and sector eligibility with the competent authority, then map the approved requirements to existing evidence, methodology and issuance gates. Do not create a duplicate MRV/carbon subsystem."
+      "nextAction": "Before any CCTS-related workflow or customer claim, re-check the latest Gazette/BEE methodology and verifier registers, confirm the exact project and sector eligibility and WA03.003 scope where CBG is involved with the competent authority, then map approved requirements to existing evidence, methodology and issuance gates. Do not create a duplicate MRV/carbon subsystem."
     }
   ],
   "priority": [
