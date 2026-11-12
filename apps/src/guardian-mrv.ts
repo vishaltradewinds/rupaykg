@@ -127,6 +127,10 @@ export async function executeGuardianMrv(input: GuardianMrvRequest): Promise<Gua
       if (!executionId) {
         return { status: "UNAVAILABLE", executionId: null, policyId: input.policyId, correlationId, idempotencyKey, raw, message: "Native Guardian DMRV returned success without an authoritative block result identifier." };
       }
+      const returnedPolicyId = typeof payload?.policyId === "string" ? payload.policyId.trim() : "";
+      if (returnedPolicyId && returnedPolicyId !== input.policyId) {
+        return { status: "UNAVAILABLE", executionId: null, policyId: input.policyId, correlationId, idempotencyKey, raw, message: "Native Guardian DMRV returned a result for a different policy identifier." };
+      }
       return {
         status: "VERIFIED",
         executionId,
