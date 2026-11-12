@@ -8,9 +8,18 @@ do $shakti$
 declare
   actual_owner text;
 begin
-  if current_user = 'rupaykg_app_runtime'
-     or pg_has_role(current_user, 'rupaykg_app_runtime', 'member') then
-    raise exception 'SHakti abort: application runtime role cannot install MRV provenance RLS';
+  if current_user in ('rupaykg_app_runtime', 'rupaykg_runtime_login') then
+    raise exception 'SHakti abort: application runtime login cannot install MRV provenance RLS';
+  end if;
+
+  if not exists (
+    select 1 from pg_roles
+     where rolname = 'rupaykg_app_runtime'
+       and rolsuper = false
+       and rolbypassrls = false
+       and rolcanlogin = false
+  ) then
+    raise exception 'SHakti abort: application runtime role is missing or unsafe';
   end if;
 
   if not exists (
