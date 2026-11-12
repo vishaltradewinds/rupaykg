@@ -63,7 +63,7 @@ begin
          'settlements','audit_events','resource_flows','field_devices',
          'organization_memberships','measurements','evidence','verifications',
          'carbon_calculations','mrv_observations',
-         'evidence_verification_requirements','chain_of_custody_links'
+         'evidence_verification_requirements','chain_of_custody_links','mrv_provenance_events'
        )
        and pg_get_userbyid(c.relowner) = current_user
   ) <> 18 then
