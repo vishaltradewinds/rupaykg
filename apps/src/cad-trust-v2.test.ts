@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import assert from "node:assert/strict";
+import test from "node:test";
 import {
   assertExternalLifecycleEntity,
   CAD_TRUST_INSERT_ORDER,
@@ -6,13 +7,13 @@ import {
   validateCadTrustProjection,
 } from "./cad-trust-v2.js";
 
-describe("CAD Trust v2.0.2 projection boundary", () => {
-  it("uses the published v2 insert order", () => {
-    expect(CAD_TRUST_INSERT_ORDER[0]).toBe("program");
-    expect(CAD_TRUST_INSERT_ORDER.at(-1)).toBe("unit_label");
+test("CAD Trust v2.0.2 projection boundary", async (t) => {
+  await t.test("uses the published v2 insert order", () => {
+    assert.equal(CAD_TRUST_INSERT_ORDER[0], "program");
+    assert.equal(CAD_TRUST_INSERT_ORDER.at(-1), "unit_label");
   });
 
-  it("rejects missing required project fields", () => {
+  await t.test("rejects missing required project fields", () => {
     const result = validateCadTrustProjection({
       schemaVersion: CAD_TRUST_SCHEMA_VERSION,
       entityType: "project",
@@ -22,10 +23,10 @@ describe("CAD Trust v2.0.2 projection boundary", () => {
       provenance: { activityId: "activity-1" },
     });
 
-    expect(result.ok).toBe(false);
+    assert.equal(result.ok, false);
   });
 
-  it("accepts a minimally complete project projection", () => {
+  await t.test("accepts a minimally complete project projection", () => {
     const result = validateCadTrustProjection({
       schemaVersion: CAD_TRUST_SCHEMA_VERSION,
       entityType: "project",
@@ -45,10 +46,10 @@ describe("CAD Trust v2.0.2 projection boundary", () => {
       provenance: { activityId: "activity-1" },
     });
 
-    expect(result).toEqual({ ok: true });
+    assert.deepEqual(result, { ok: true });
   });
 
-  it("rejects unmapped fields instead of silently exporting them", () => {
+  await t.test("rejects unmapped fields instead of silently exporting them", () => {
     const result = validateCadTrustProjection({
       schemaVersion: CAD_TRUST_SCHEMA_VERSION,
       entityType: "project",
@@ -58,15 +59,15 @@ describe("CAD Trust v2.0.2 projection boundary", () => {
       provenance: { activityId: "activity-1" },
     });
 
-    expect(result).toEqual({
+    assert.deepEqual(result, {
       ok: false,
       code: "CADT_FIELD_UNMAPPED",
       error: "unexpectedField is not mapped to a CAD Trust user-input field",
     });
   });
 
-  it("blocks local creation of issuance and unit lifecycle records", () => {
-    expect(() => assertExternalLifecycleEntity("issuance")).toThrow();
-    expect(() => assertExternalLifecycleEntity("unit")).toThrow();
+  await t.test("blocks local creation of issuance and unit lifecycle records", () => {
+    assert.throws(() => assertExternalLifecycleEntity("issuance"));
+    assert.throws(() => assertExternalLifecycleEntity("unit"));
   });
 });
