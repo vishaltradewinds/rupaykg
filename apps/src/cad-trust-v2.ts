@@ -133,7 +133,7 @@ export const CAD_TRUST_PROJECT_FIELD_RULES: Readonly<Record<string, FieldRule>> 
     "gCO2eq/kWh", "kt (Kiloton)", "tCO2e",
   ] },
   // CAD Trust accepts this optional user-input FK. The ID must come from CAD Trust.
-  cadTrustProgramId: { required: false, kind: "string" },
+  cadTrustProgramId: { required: false, kind: "guid" },
 };
 
 
@@ -185,6 +185,9 @@ export function validateCadTrustProjection(projection: CadTrustProjection): CadT
   }
 
   for (const [field, value] of Object.entries(projection.fields)) {
+    if (!Object.prototype.hasOwnProperty.call(fieldRules, field)) {
+      return { ok: false, code: "CADT_FIELD_UNMAPPED", error: field + " is not an allowed CAD Trust " + projection.entityType + " user-input field" };
+    }
     const rule = fieldRules[field];
     if (!rule) {
       return { ok: false, code: "CADT_FIELD_UNMAPPED", error: field + " is not an allowed CAD Trust " + projection.entityType + " user-input field" };
