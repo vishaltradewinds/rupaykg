@@ -5,6 +5,9 @@ import {
   CAD_TRUST_INSERT_ORDER,
   CAD_TRUST_PROJECT_FIELD_RULES,
   CAD_TRUST_STAKEHOLDER_FIELD_RULES,
+  CAD_TRUST_LABEL_FIELD_RULES,
+  CAD_TRUST_VALIDATION_FIELD_RULES,
+  CAD_TRUST_VERIFICATION_FIELD_RULES,
   CAD_TRUST_PROJECT_METHODOLOGY_FIELD_RULES,
   CAD_TRUST_PROGRAM_FIELD_RULES,
   CAD_TRUST_METHODOLOGY_FIELD_RULES,
@@ -12,7 +15,7 @@ import {
   validateCadTrustProjection,
 } from "./cad-trust-v2.js";
 
-const projection = (entityType: "project" | "program" | "methodology" | "stakeholder" | "project_methodology", fields: Record<string, unknown>) => ({
+const projection = (entityType: "project" | "program" | "methodology" | "stakeholder" | "label" | "validation" | "verification" | "project_methodology", fields: Record<string, unknown>) => ({
   schemaVersion: CAD_TRUST_SCHEMA_VERSION,
   entityType,
   sourceSystem: "RUPAYKG" as const,
@@ -152,6 +155,42 @@ test("CAD Trust v2.0.2 entity-specific mappings", async (t) => {
       cadTrustProjectId: "b1b2c3d4-e5f6-4789-8abc-1234567890ab",
     }));
     assert.equal(invalidUrl.ok ? undefined : invalidUrl.code, "CADT_FIELD_FORMAT_INVALID");
+  });
+
+  await t.test("pins label fields; labelName is free text and labelType is picklisted", () => {
+    assert.deepEqual(Object.entries(CAD_TRUST_LABEL_FIELD_RULES).filter(([, r]) => r.required).map(([n]) => n), ["labelName", "labelType"]);
+    assert.deepEqual(validateCadTrustProjection(projection("label", { labelName: "RupayKg pilot label", labelType: "Certification", labelLink: "https://example.org/label", labelDate: "2026-11-12" })), { ok: true });
+    const badType = validateCadTrustProjection(projection("label", { labelName: "Article 6 readiness", labelType: "RupayKg Approved" }));
+    assert.equal(badType.ok ? undefined : badType.code, "CADT_PICKLIST_VALUE_INVALID");
+    assert.equal(validateCadTrustProjection(projection("label", { labelName: "Certification", labelType: "Certification", labelLink: "/label" })).ok, false);
+  });
+
+  await t.test("pins validation fields, exact picklists, project FK and dates", () => {
+    assert.deepEqual(Object.entries(CAD_TRUST_VALIDATION_FIELD_RULES).filter(([, r]) => r.required).map(([n]) => n), ["validationId", "validationType", "validationBody", "cadTrustProjectId"]);
+    const valid = { validationId: "VCS9218-Valid1023CP01", validationType: "Validation of Project Design Document", validationBody: "Bureau Veritas India Private Limited", validationDate: "2026-11-12", validationCreditPeriodStartDate: "2026-01-01", validationCreditPeriodEndDate: "2030-12-31", cadTrustProjectId: "b1b2c3d4-e5f6-4789-8abc-1234567890ab" };
+    assert.deepEqual(validateCadTrustProjection(projection("validation", valid)), { ok: true });
+    const missingParent = validateCadTrustProjection(projection("validation", { ...valid, cadTrustProjectId: undefined }));
+    assert.equal(missingParent.ok ? undefined : missingParent.code, "CADT_REQUIRED_FIELD_MISSING");
+    const badBody = validateCadTrustProjection(projection("validation", { ...valid, validationBody: "RupayKg Internal Team" }));
+    assert.equal(badBody.ok ? undefined : badBody.code, "CADT_PICKLIST_VALUE_INVALID");
+    const badDate = validateCadTrustProjection(projection("validation", { ...valid, validationCreditPeriodEndDate: "2026-02-30" }));
+    assert.equal(badDate.ok ? undefined : badDate.code, "CADT_FIELD_FORMAT_INVALID");
+    const systemField = validateCadTrustProjection(projection("validation", { ...valid, createdAt: "2026-11-12" }));
+    assert.equal(systemField.ok ? undefined : systemField.code, "CADT_FIELD_UNMAPPED");
+  });
+
+  await t.test("pins verification fields and external project/validation GUID references", () => {
+    assert.deepEqual(Object.entries(CAD_TRUST_VERIFICATION_FIELD_RULES).filter(([, r]) => r.required).map(([n]) => n), ["verificationId", "verificationBody", "cadTrustProjectId"]);
+    const valid = { verificationId: "VCS9218-V1023", verificationStartDate: "2026-01-01", verificationEndDate: "2026-11-12", verificationBody: "Bureau Veritas India Private Limited", cadTrustProjectId: "b1b2c3d4-e5f6-4789-8abc-1234567890ab", cadTrustValidationId: "c1b2c3d4-e5f6-4789-8abc-1234567890ab" };
+    assert.deepEqual(validateCadTrustProjection(projection("verification", valid)), { ok: true });
+    const missingParent = validateCadTrustProjection(projection("verification", { ...valid, cadTrustProjectId: undefined }));
+    assert.equal(missingParent.ok ? undefined : missingParent.code, "CADT_REQUIRED_FIELD_MISSING");
+    const badBody = validateCadTrustProjection(projection("verification", { ...valid, verificationBody: "RupayKg" }));
+    assert.equal(badBody.ok ? undefined : badBody.code, "CADT_PICKLIST_VALUE_INVALID");
+    const badValidationRef = validateCadTrustProjection(projection("verification", { ...valid, cadTrustValidationId: "local-validation-id" }));
+    assert.equal(badValidationRef.ok ? undefined : badValidationRef.code, "CADT_FIELD_FORMAT_INVALID");
+    const withoutOptionalValidation = { ...valid }; delete withoutOptionalValidation.cadTrustValidationId;
+    assert.deepEqual(validateCadTrustProjection(projection("verification", withoutOptionalValidation)), { ok: true });
   });
 
   await t.test("pins project-methodology join fields and requires externally resolved parent references", () => {
