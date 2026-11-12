@@ -53,6 +53,10 @@ jobs:
       - name: Browser smoke test production web build
         shell: bash
         run: |
+      - name: Rehearse migration 101 as restricted non-superuser migration owner
+        env:
+          MIGRATION_FILE: migrations/101_shakti_mrv_provenance_tenant_rls.sql
+        run: bash ops/tenant-isolation/VERIFY_MIGRATION_OWNER_ACCEPTANCE.sh
           set -euo pipefail
           npm run preview -w @rupaykg/web -- --host 127.0.0.1 --port 4173 > /tmp/rupaykg-web-preview.log 2>&1 &
           preview_pid=$!
@@ -100,7 +104,3 @@ jobs:
           unset PGPASSWORD
       - name: Build production container
         run: docker build --pull --tag rupaykg:ci .
-      - name: Rehearse migration 101 as restricted non-superuser migration owner
-        env:
-          MIGRATION_FILE: migrations/101_shakti_mrv_provenance_tenant_rls.sql
-        run: bash ops/tenant-isolation/VERIFY_MIGRATION_OWNER_ACCEPTANCE.sh
