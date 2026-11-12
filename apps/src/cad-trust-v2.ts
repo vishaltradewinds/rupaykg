@@ -98,6 +98,24 @@ export function validateCadTrustProjection(
     return { ok: false, code: "CADT_SOURCE_SYSTEM_INVALID", error: "sourceSystem must be RUPAYKG" };
   }
 
+  for (const fieldName of Object.keys(projection.fields)) {
+    const definition = CAD_TRUST_FIELD_RULES[fieldName];
+    if (!definition) {
+      return {
+        ok: false,
+        code: "CADT_FIELD_UNMAPPED",
+        error: fieldName + " is not mapped to a CAD Trust user-input field",
+      };
+    }
+    if (definition.source !== "user_input") {
+      return {
+        ok: false,
+        code: "CADT_FIELD_SOURCE_NOT_ALLOWED",
+        error: fieldName + " is not allowed in a RupayKg-authored CAD Trust projection",
+      };
+    }
+  }
+
   for (const [fieldName, definition] of Object.entries(CAD_TRUST_FIELD_RULES)) {
     if (definition.source !== "user_input") continue;
     if (!definition.required) continue;
