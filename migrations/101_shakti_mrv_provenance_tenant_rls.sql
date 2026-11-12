@@ -61,6 +61,11 @@ revoke all on table public.mrv_provenance_events from public;
 revoke delete on table public.mrv_provenance_events from rupaykg_app_runtime;
 grant select, insert, update on table public.mrv_provenance_events to rupaykg_app_runtime;
 
+-- Verification guard functions run as the controlled DDL owner during
+-- rollback-only acceptance fixtures. Expose only the identity columns those
+-- guards need; do not grant broad identity-table access.
+grant select (id, status, suspended_at) on table public.identities to rupaykg_ddl;
+
 create policy mrv_provenance_events_tenant_select on public.mrv_provenance_events
   for select
   using (
