@@ -1,42 +1,386 @@
 {
   "schemaVersion": "1.0",
   "status": "controlled-engineering-reference",
-  "asOf": "2026-11-08",
+  "asOf": "2026-11-12",
   "repository": "vishaltradewinds/rupaykg",
   "branch": "main",
   "governingRule": "Reference -> Cross-map -> Legal/Regulatory Check -> Technical Validation -> Adapt -> Implement -> Test -> Field Validate -> Assure",
-  "decisionClasses": ["ADOPT", "ADAPT", "OBSERVE", "REJECT", "PENDING"],
+  "decisionClasses": [
+    "ADOPT",
+    "ADAPT",
+    "OBSERVE",
+    "REJECT",
+    "PENDING"
+  ],
   "references": [
-    {"id":"dpga-dpg-standard","name":"DPGA DPG Standard","capability":"Reusable-component governance","decision":"ADAPT","rupaykgLayer":"Shakti assurance / reusable components","evidenceRequired":["source/version","licence","ownership","documentation","privacy/security review","component assessment"]},
-    {"id":"dpga-dpg-registry","name":"DPGA DPG Registry","capability":"Discovery of reusable digital public goods","decision":"ADOPT","rupaykgLayer":"Engineering reuse intelligence","evidenceRequired":["source/version","component assessment","licence","technical validation"]},
-    {"id":"govstack-building-blocks","name":"GovStack Building Blocks","capability":"Composable interoperable modules and REST APIs","decision":"ADAPT","rupaykgLayer":"Platform decomposition / interoperability","evidenceRequired":["API fit","deployment fit","security","operational tests","integration tests"]},
-    {"id":"govstack-digital-registries","name":"GovStack Digital Registries","capability":"Registry lifecycle, identifiers, schema/API patterns","decision":"ADAPT","rupaykgLayer":"Environmental registry","evidenceRequired":["domain model","versioning","authorization","audit tests","export tests"]},
-    {"id":"govstack-information-mediator","name":"GovStack Information Mediator","capability":"Cross-organization API/event interoperability","decision":"ADAPT","rupaykgLayer":"External integration mediator","evidenceRequired":["contract tests","authentication","ordering","failure/retry evidence"]},
-    {"id":"govstack-identity-registration","name":"GovStack Identity/Registration","capability":"Identity and entity registration patterns","decision":"ADAPT","rupaykgLayer":"Organisation/facility/site/person/device/verifier identity","evidenceRequired":["Indian legal boundary","authorization tests","tenant tests"]},
-    {"id":"universal-dpi-safeguards","name":"Universal DPI Safeguards","capability":"Rights, safety, privacy, inclusion and governance safeguards","decision":"ADAPT","rupaykgLayer":"Shakti assurance","evidenceRequired":["risk mapping","responsible authority mapping","measurable outcomes","review evidence"]},
-    {"id":"undp-dpi-playbook","name":"UNDP DPI Playbook","capability":"DPI discovery/design/deployment patterns","decision":"ADAPT","rupaykgLayer":"Platform strategy","evidenceRequired":["architecture cross-map","implementation decision"]},
-    {"id":"global-dpi-repository","name":"Global DPI Repository","capability":"Proven implementations and governance patterns","decision":"ADOPT","rupaykgLayer":"Reference intelligence","evidenceRequired":["source record","implementation pattern","maturity","contextual applicability"]},
-    {"id":"un-innovation-network","name":"UN Innovation Network","capability":"Public-sector innovation patterns","decision":"OBSERVE","rupaykgLayer":"Institutional adoption intelligence","evidenceRequired":["case evidence","relevance","validation"]},
-    {"id":"fair-forward-bmz","name":"FAIR Forward / BMZ","capability":"Open, interoperable and inclusive digital-development practices","decision":"ADAPT","rupaykgLayer":"Open infrastructure / responsible reuse","evidenceRequired":["practice mapping","applicability","local adaptation"]},
-    {"id":"indian-dpi-ecosystems","name":"Relevant Indian DPI ecosystems","capability":"India-specific interoperability, APIs, governance and deployment patterns","decision":"ADOPT/ADAPT","rupaykgLayer":"India interoperability boundary","evidenceRequired":["official source","legal basis","API/spec version","acceptance evidence"]},
-    {"id":"w3c-vc-2","name":"W3C Verifiable Credentials 2.0","capability":"Machine-verifiable cryptographically secured credentials","decision":"ADOPT-WHERE-JUSTIFIED","rupaykgLayer":"Environmental credentials","evidenceRequired":["signature verification","tamper rejection","issuer/holder/verifier tests","key lifecycle"]},
-    {"id":"w3c-data-integrity","name":"W3C Data Integrity","capability":"Cryptographic integrity proofs","decision":"ADOPT-WHERE-VC-USED","rupaykgLayer":"Credential/evidence integrity","evidenceRequired":["proof verification","tamper/negative tests"]},
-    {"id":"w3c-prov","name":"W3C PROV","capability":"Provenance entities, activities, agents and derivation","decision":"ADAPT","rupaykgLayer":"Evidence/MRV provenance","implementation":"apps/src/prov-interoperability.ts","evidenceRequired":["model mapping","end-to-end lineage tests","consumer validation"]},
-    {"id":"ogc-sensorthings","name":"OGC SensorThings API","capability":"IoT observation and sensor interoperability","decision":"ADAPT","rupaykgLayer":"MRV measurement interoperability","implementation":"apps/src/sensorthings-interoperability.ts; apps/src/sensorthings-routes.ts","evidenceRequired":["mapping tests","authentication","replay/duplicate tests","offline tests","consumer/conformance validation"]},
-    {"id":"ogc-api-features","name":"OGC API Features","capability":"Standard geospatial feature access","decision":"ADAPT","rupaykgLayer":"Site/facility/measurement-point geospatial access","evidenceRequired":["API contract","authorization tests","consumer validation"]},
-    {"id":"opentelemetry","name":"OpenTelemetry","capability":"Traces, metrics and logs","decision":"ADOPT","rupaykgLayer":"Operational assurance","implementation":"apps/src/observability.ts (transport-neutral foundation)","evidenceRequired":["trace correlation","exporter/collector validation","redaction","retention","incident reconstruction"]},
-    {"id":"cad-trust","name":"CAD Trust","capability":"Carbon data interoperability and registry transparency","decision":"ADAPT","rupaykgLayer":"Carbon registry interoperability","evidenceRequired":["data model mapping","lifecycle tests","double-counting controls","exchange tests"]},
-    {"id":"unfccc-article-6-4-patterns","name":"UNFCCC Article 6.4 registry patterns","capability":"Issuance/transfer/retirement/cancellation lifecycle","decision":"ADAPT-SUBJECT-TO-AUTHORITY","rupaykgLayer":"Carbon/environmental attribute registry","evidenceRequired":["legal applicability","lifecycle controls","external acceptance"]},
-    {"id":"openaq","name":"OpenAQ","capability":"Environmental observation data architecture","decision":"OBSERVE/ADAPT","rupaykgLayer":"Environmental measurement/data lineage","evidenceRequired":["source provenance","raw-to-derived lineage","quality controls"]},
-    {"id":"icvcm-ccp","name":"ICVCM Core Carbon Principles","capability":"Carbon-credit quality benchmark","decision":"ADAPT-NON-STATUTORY","rupaykgLayer":"Carbon integrity benchmark","evidenceRequired":["separate benchmark mapping","non-substitution for Indian law"]},
-    {"id":"gri","name":"GRI","capability":"Sustainability reporting/cross-mapping","decision":"ADAPT-COMPLEMENTARY","rupaykgLayer":"Reporting interoperability","evidenceRequired":["mapping version","applicability","disclosure evidence"]}
+    {
+      "id": "dpga-dpg-standard",
+      "name": "DPGA DPG Standard",
+      "capability": "Reusable-component governance",
+      "decision": "ADAPT",
+      "rupaykgLayer": "Shakti assurance / reusable components",
+      "evidenceRequired": [
+        "source/version",
+        "licence",
+        "ownership",
+        "documentation",
+        "privacy/security review",
+        "component assessment"
+      ]
+    },
+    {
+      "id": "dpga-dpg-registry",
+      "name": "DPGA DPG Registry",
+      "capability": "Discovery of reusable digital public goods",
+      "decision": "ADOPT",
+      "rupaykgLayer": "Engineering reuse intelligence",
+      "evidenceRequired": [
+        "source/version",
+        "component assessment",
+        "licence",
+        "technical validation"
+      ]
+    },
+    {
+      "id": "govstack-building-blocks",
+      "name": "GovStack Building Blocks",
+      "capability": "Composable interoperable modules and REST APIs",
+      "decision": "ADAPT",
+      "rupaykgLayer": "Platform decomposition / interoperability",
+      "evidenceRequired": [
+        "API fit",
+        "deployment fit",
+        "security",
+        "operational tests",
+        "integration tests"
+      ]
+    },
+    {
+      "id": "govstack-digital-registries",
+      "name": "GovStack Digital Registries",
+      "capability": "Registry lifecycle, identifiers, schema/API patterns",
+      "decision": "ADAPT",
+      "rupaykgLayer": "Environmental registry",
+      "evidenceRequired": [
+        "domain model",
+        "versioning",
+        "authorization",
+        "audit tests",
+        "export tests"
+      ]
+    },
+    {
+      "id": "govstack-information-mediator",
+      "name": "GovStack Information Mediator",
+      "capability": "Cross-organization API/event interoperability",
+      "decision": "ADAPT",
+      "rupaykgLayer": "External integration mediator",
+      "evidenceRequired": [
+        "contract tests",
+        "authentication",
+        "ordering",
+        "failure/retry evidence"
+      ]
+    },
+    {
+      "id": "govstack-identity-registration",
+      "name": "GovStack Identity/Registration",
+      "capability": "Identity and entity registration patterns",
+      "decision": "ADAPT",
+      "rupaykgLayer": "Organisation/facility/site/person/device/verifier identity",
+      "evidenceRequired": [
+        "Indian legal boundary",
+        "authorization tests",
+        "tenant tests"
+      ]
+    },
+    {
+      "id": "universal-dpi-safeguards",
+      "name": "Universal DPI Safeguards",
+      "capability": "Rights, safety, privacy, inclusion and governance safeguards",
+      "decision": "ADAPT",
+      "rupaykgLayer": "Shakti assurance",
+      "evidenceRequired": [
+        "risk mapping",
+        "responsible authority mapping",
+        "measurable outcomes",
+        "review evidence"
+      ]
+    },
+    {
+      "id": "undp-dpi-playbook",
+      "name": "UNDP DPI Playbook",
+      "capability": "DPI discovery/design/deployment patterns",
+      "decision": "ADAPT",
+      "rupaykgLayer": "Platform strategy",
+      "evidenceRequired": [
+        "architecture cross-map",
+        "implementation decision"
+      ]
+    },
+    {
+      "id": "global-dpi-repository",
+      "name": "Global DPI Repository",
+      "capability": "Proven implementations and governance patterns",
+      "decision": "ADOPT",
+      "rupaykgLayer": "Reference intelligence",
+      "evidenceRequired": [
+        "source record",
+        "implementation pattern",
+        "maturity",
+        "contextual applicability"
+      ]
+    },
+    {
+      "id": "un-innovation-network",
+      "name": "UN Innovation Network",
+      "capability": "Public-sector innovation patterns",
+      "decision": "OBSERVE",
+      "rupaykgLayer": "Institutional adoption intelligence",
+      "evidenceRequired": [
+        "case evidence",
+        "relevance",
+        "validation"
+      ]
+    },
+    {
+      "id": "fair-forward-bmz",
+      "name": "FAIR Forward / BMZ",
+      "capability": "Open, interoperable and inclusive digital-development practices",
+      "decision": "ADAPT",
+      "rupaykgLayer": "Open infrastructure / responsible reuse",
+      "evidenceRequired": [
+        "practice mapping",
+        "applicability",
+        "local adaptation"
+      ]
+    },
+    {
+      "id": "indian-dpi-ecosystems",
+      "name": "Relevant Indian DPI ecosystems",
+      "capability": "India-specific interoperability, APIs, governance and deployment patterns",
+      "decision": "ADOPT/ADAPT",
+      "rupaykgLayer": "India interoperability boundary",
+      "evidenceRequired": [
+        "official source",
+        "legal basis",
+        "API/spec version",
+        "acceptance evidence"
+      ]
+    },
+    {
+      "id": "w3c-vc-2",
+      "name": "W3C Verifiable Credentials 2.0",
+      "capability": "Machine-verifiable cryptographically secured credentials",
+      "decision": "ADOPT-WHERE-JUSTIFIED",
+      "rupaykgLayer": "Environmental credentials",
+      "evidenceRequired": [
+        "signature verification",
+        "tamper rejection",
+        "issuer/holder/verifier tests",
+        "key lifecycle"
+      ]
+    },
+    {
+      "id": "w3c-data-integrity",
+      "name": "W3C Data Integrity",
+      "capability": "Cryptographic integrity proofs",
+      "decision": "ADOPT-WHERE-VC-USED",
+      "rupaykgLayer": "Credential/evidence integrity",
+      "evidenceRequired": [
+        "proof verification",
+        "tamper/negative tests"
+      ]
+    },
+    {
+      "id": "w3c-prov",
+      "name": "W3C PROV",
+      "capability": "Provenance entities, activities, agents and derivation",
+      "decision": "ADAPT",
+      "rupaykgLayer": "Evidence/MRV provenance",
+      "implementation": "apps/src/prov-interoperability.ts",
+      "evidenceRequired": [
+        "model mapping",
+        "end-to-end lineage tests",
+        "consumer validation"
+      ]
+    },
+    {
+      "id": "ogc-sensorthings",
+      "name": "OGC SensorThings API",
+      "capability": "IoT observation and sensor interoperability",
+      "decision": "ADAPT",
+      "rupaykgLayer": "MRV measurement interoperability",
+      "implementation": "apps/src/sensorthings-interoperability.ts; apps/src/sensorthings-routes.ts",
+      "evidenceRequired": [
+        "mapping tests",
+        "authentication",
+        "replay/duplicate tests",
+        "offline tests",
+        "consumer/conformance validation"
+      ]
+    },
+    {
+      "id": "ogc-api-features",
+      "name": "OGC API Features",
+      "capability": "Standard geospatial feature access",
+      "decision": "ADAPT",
+      "rupaykgLayer": "Site/facility/measurement-point geospatial access",
+      "evidenceRequired": [
+        "API contract",
+        "authorization tests",
+        "consumer validation"
+      ]
+    },
+    {
+      "id": "opentelemetry",
+      "name": "OpenTelemetry",
+      "capability": "Traces, metrics and logs",
+      "decision": "ADOPT",
+      "rupaykgLayer": "Operational assurance",
+      "implementation": "apps/src/observability.ts (transport-neutral foundation)",
+      "evidenceRequired": [
+        "trace correlation",
+        "exporter/collector validation",
+        "redaction",
+        "retention",
+        "incident reconstruction"
+      ]
+    },
+    {
+      "id": "cad-trust",
+      "name": "CAD Trust",
+      "capability": "Carbon data interoperability and registry transparency",
+      "decision": "ADAPT",
+      "rupaykgLayer": "Carbon registry interoperability",
+      "evidenceRequired": [
+        "data model mapping",
+        "lifecycle tests",
+        "double-counting controls",
+        "exchange tests"
+      ]
+    },
+    {
+      "id": "unfccc-article-6-4-patterns",
+      "name": "UNFCCC Article 6.4 registry patterns",
+      "capability": "Issuance/transfer/retirement/cancellation lifecycle",
+      "decision": "ADAPT-SUBJECT-TO-AUTHORITY",
+      "rupaykgLayer": "Carbon/environmental attribute registry",
+      "evidenceRequired": [
+        "legal applicability",
+        "lifecycle controls",
+        "external acceptance"
+      ]
+    },
+    {
+      "id": "openaq",
+      "name": "OpenAQ",
+      "capability": "Environmental observation data architecture",
+      "decision": "OBSERVE/ADAPT",
+      "rupaykgLayer": "Environmental measurement/data lineage",
+      "evidenceRequired": [
+        "source provenance",
+        "raw-to-derived lineage",
+        "quality controls"
+      ]
+    },
+    {
+      "id": "icvcm-ccp",
+      "name": "ICVCM Core Carbon Principles",
+      "capability": "Carbon-credit quality benchmark",
+      "decision": "ADAPT-NON-STATUTORY",
+      "rupaykgLayer": "Carbon integrity benchmark",
+      "evidenceRequired": [
+        "separate benchmark mapping",
+        "non-substitution for Indian law"
+      ]
+    },
+    {
+      "id": "gri",
+      "name": "GRI",
+      "capability": "Sustainability reporting/cross-mapping",
+      "decision": "ADAPT-COMPLEMENTARY",
+      "rupaykgLayer": "Reporting interoperability",
+      "evidenceRequired": [
+        "mapping version",
+        "applicability",
+        "disclosure evidence"
+      ]
+    },
+    {
+      "id": "aspi-policy-institute",
+      "name": "Asia Society Policy Institute (ASPI)",
+      "capability": "Asia-Pacific policy research and policy engagement; India CCTS/ETS design and climate-finance policy analysis",
+      "decision": "OBSERVE/ADAPT-AS-POLICY-INTELLIGENCE",
+      "rupaykgLayer": "Shakti policy intelligence / regulatory requirements discovery",
+      "implementation": "docs/reference-ecosystem/ASPI_POLICY_TO_ENGINEERING_CROSSWALK.md",
+      "evidenceRequired": [
+        "exact publication/source URL and date",
+        "current BEE competent-authority source snapshot and effective-date review",
+        "current approved methodology and verifier-scope check",
+        "policy-to-control mapping",
+        "legal/applicability review",
+        "engineering acceptance evidence"
+      ],
+      "boundaries": [
+        "policy research is not Indian law or regulatory instruction",
+        "ASPI is not a registry, verifier, issuer or technical certification authority",
+        "September 2024 CCTS paper remains historical policy analysis; current official BEE and Ministry of Power sources are recorded in the crosswalk as a dated snapshot",
+        "waste-sector CCTS offset eligibility must be checked against the exact approved methodology; BEE lists BM WA03.001, BM WA03.002 and BM WA03.003 for defined project scopes; ordinary waste collection, recycling, composting or general SWM activity is not presumed eligible"
+      ]
+    }
   ],
   "currentImplementationCrosswalk": [
-    {"referenceId":"w3c-prov","status":"IMPLEMENTED-PARTIAL","artifact":"apps/src/prov-interoperability.ts","remaining":["production consumer","external conformance","field validation"]},
-    {"referenceId":"ogc-sensorthings","status":"IMPLEMENTED-PARTIAL","artifact":"apps/src/sensorthings-interoperability.ts; apps/src/sensorthings-routes.ts","remaining":["actual consumer/conformance","production acceptance","field validation"]},
-    {"referenceId":"opentelemetry","status":"FOUNDATION-PARTIAL","artifact":"apps/src/observability.ts","remaining":["full SDK/exporter/collector acceptance","end-to-end production evidence"]},
-    {"referenceId":"govstack-information-mediator","status":"IMPLEMENTED-PARTIAL","artifact":"apps/src/external-integration-mediator.ts; apps/src/external-integration-adapter-registry.ts","remaining":["provider-specific connector","remote conformance","production acceptance"]},
-    {"referenceId":"tenant-isolation","status":"GATE-PENDING-LIVE-ACCEPTANCE","artifact":"ops/tenant-isolation/*; apps/src/tenant-db.ts","remaining":["target DB preflight","RLS activation","cross-tenant negative test","runtime acceptance evidence"]}
+    {
+      "referenceId": "w3c-prov",
+      "status": "IMPLEMENTED-PARTIAL",
+      "artifact": "apps/src/prov-interoperability.ts",
+      "remaining": [
+        "production consumer",
+        "external conformance",
+        "field validation"
+      ]
+    },
+    {
+      "referenceId": "ogc-sensorthings",
+      "status": "IMPLEMENTED-PARTIAL",
+      "artifact": "apps/src/sensorthings-interoperability.ts; apps/src/sensorthings-routes.ts",
+      "remaining": [
+        "actual consumer/conformance",
+        "production acceptance",
+        "field validation"
+      ]
+    },
+    {
+      "referenceId": "opentelemetry",
+      "status": "FOUNDATION-PARTIAL",
+      "artifact": "apps/src/observability.ts",
+      "remaining": [
+        "full SDK/exporter/collector acceptance",
+        "end-to-end production evidence"
+      ]
+    },
+    {
+      "referenceId": "govstack-information-mediator",
+      "status": "IMPLEMENTED-PARTIAL",
+      "artifact": "apps/src/external-integration-mediator.ts; apps/src/external-integration-adapter-registry.ts",
+      "remaining": [
+        "provider-specific connector",
+        "remote conformance",
+        "production acceptance"
+      ]
+    },
+    {
+      "referenceId": "tenant-isolation",
+      "status": "GATE-PENDING-LIVE-ACCEPTANCE",
+      "artifact": "ops/tenant-isolation/*; apps/src/tenant-db.ts",
+      "remaining": [
+        "target DB preflight",
+        "RLS activation",
+        "cross-tenant negative test",
+        "runtime acceptance evidence"
+      ]
+    }
   ],
   "nonNegotiableBoundaries": [
     "External reference is not automatically RupayKg authority.",
