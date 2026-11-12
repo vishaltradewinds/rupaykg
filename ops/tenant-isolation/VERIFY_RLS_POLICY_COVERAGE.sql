@@ -54,7 +54,6 @@ select 1 / case
           and pol.cmd in ('SELECT','ALL')
      )
   )
-  )
   and exists (
     select 1 from pg_policies pol
      where pol.schemaname = 'public'
