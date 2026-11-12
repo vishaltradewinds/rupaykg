@@ -252,9 +252,9 @@
         "docs/CARBON_METHODOLOGY_IMPLEMENTATION_STANDARD.md",
         "docs/CCTS_METHODOLOGY_REGISTRY_FOUNDATION.md"
       ],
-      "gap": "Current Indian regulatory-source refresh is required before any ASPI-derived policy observation becomes a normative product requirement; no ASPI institutional engagement or endorsement is evidenced.",
+      "gap": "A dated official-source snapshot is now recorded for BEE CCTS mechanisms, approved offset methodologies and accredited verifier register, plus Ministry of Power institutional roles. Legal applicability, project-specific methodology eligibility, customer/authority mandate and any ASPI institutional engagement remain unvalidated.",
       "decision": "OBSERVE/ADAPT-AS-POLICY-INTELLIGENCE",
-      "nextAction": "Use ASPI paper as a non-binding policy input; reconcile each proposed requirement to current BEE/MoEFCC/CPCB/other competent-authority sources, then link to existing controls and tests. Do not create a duplicate MRV or carbon subsystem."
+      "nextAction": "Before any CCTS-related workflow or customer claim, re-check the latest Gazette/BEE methodology and verifier registers, confirm the exact project and sector eligibility with the competent authority, then map the approved requirements to existing evidence, methodology and issuance gates. Do not create a duplicate MRV/carbon subsystem."
     }
   ],
   "priority": [
