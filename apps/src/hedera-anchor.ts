@@ -39,17 +39,18 @@ function mirrorEndpoint(network: string): string {
   return "https://testnet.mirrornode.hedera.com";
 }
 
-function boundedSetting(name: string, fallback: number, minimum: number, maximum: number): number {
-  const parsed = Number.parseInt(process.env[name] || String(fallback), 10);
+function boundedSetting(name: string, fallback: number, minimum: number, maximum: number, legacyName?: string): number {
+  const configured = process.env[name] ?? (legacyName ? process.env[legacyName] : undefined);
+  const parsed = Number.parseInt(configured ?? String(fallback), 10);
   return Number.isFinite(parsed) && parsed >= minimum && parsed <= maximum ? parsed : fallback;
 }
 
 function mirrorTimeoutMs(): number {
-  return boundedSetting("HEDERA_MIRROR_TIMEOUT_MS", 10000, 1000, 30000);
+  return boundedSetting("HEDERA_MIRROR_TIMEOUT_MS", 10000, 1000, 30000, "HEDERA_MIRROR_NODE_TIMEOUT_MS");
 }
 
 function mirrorMaxResponseBytes(): number {
-  return boundedSetting("HEDERA_MIRROR_MAX_RESPONSE_BYTES", 262144, 1024, 2_097_152);
+  return boundedSetting("HEDERA_MIRROR_MAX_RESPONSE_BYTES", 262144, 1024, 2_097_152, "HEDERA_MIRROR_NODE_MAX_RESPONSE_BYTES");
 }
 
 function mirrorMaxMessageBytes(): number {
