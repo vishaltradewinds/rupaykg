@@ -116,8 +116,19 @@ export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool |
         const verificationId = inserted.rows[0]?.id;
         if (!verificationId) throw new Error("Evidence verification was not recorded");
         const status = decision === "APPROVED" ? "VERIFIED" : "REJECTED";
-        await client.query("update evidence set status=$2 where id=$1", [evidenceId, status]);
-        return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, verification: { id: verificationId, evidenceId, activityId: row.activity_id, verifierIdentityId: auth.identityId, decision, scope, status } });
+        const updated = await client.query<{ status: string }>(
+          "update evidence set status=$2 where id=$1 returning status",
+          [evidenceId, status],
+        );
+        if (updated.rows[0]?.status !== status) {
+          throw new Error("Evidence verification status transition was not persisted");
+        }
+        return {
+          source: "postgresql",
+          syntheticData: false,
+          authoritativeMutation: true,
+          verification: { id: verificationId, evidenceId, activityId: row.activity_id, verifierIdentityId: auth.identityId, decision, scope, status },
+        };
       });
     } catch (error) {
       request.log.error(error);
