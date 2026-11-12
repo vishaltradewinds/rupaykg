@@ -1,7 +1,8 @@
 -- Controlled production activation wrapper.
 -- Run only after migration 101 is applied and all pre-activation gates pass.
--- The dedicated acceptance login must be NOBYPASSRLS and have SET ROLE
--- membership to rupaykg_ddl. The actual DDL runs as the table-owner role.
+-- The dedicated acceptance login must be LOGIN NOINHERIT NOBYPASSRLS and
+-- have direct SET ROLE memberships to rupaykg_ddl and rupaykg_app_runtime,
+-- with no ADMIN option or elevated-owner/provider-admin membership.
 \set ON_ERROR_STOP on
 
 select 1 / case
@@ -33,6 +34,12 @@ select 1 / case
      join pg_roles member_role on member_role.oid = membership.member
      where member_role.rolname = session_user
        and membership.admin_option
+   )
+   and (
+     select count(*) = 2
+       from pg_auth_members membership
+       join pg_roles member_role on member_role.oid = membership.member
+      where member_role.rolname = session_user
    )
    and not exists (
      select 1 from pg_roles elevated
