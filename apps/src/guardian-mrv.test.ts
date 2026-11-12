@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { executeGuardianMrv, guardianStatus } from "./guardian-mrv.js";
 
 const request = {
@@ -91,6 +92,86 @@ test("Guardian MRV accepts VERIFIED only with an authoritative execution id and 
   }
 });
 
+
+test("Guardian MRV exposes only allowlisted response fields and a response digest", async () => {
+  const previousUrl = process.env.GUARDIAN_MRV_SUBMIT_URL;
+  const previousFetch = globalThis.fetch;
+  const responseBody = JSON.stringify({
+    status: "VERIFIED",
+    executionId: "guardian-execution-safe",
+    policyId: "policy-1",
+    accessToken: "provider-secret-token",
+    email: "private@example.invalid",
+    nested: { rawPayload: "must-not-escape" },
+  });
+  process.env.GUARDIAN_MRV_SUBMIT_URL = "https://guardian.test/mrv";
+  globalThis.fetch = async () => new Response(responseBody, {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
+  try {
+    const result = await executeGuardianMrv(request);
+    assert.equal(result.status, "VERIFIED");
+    assert.equal(result.responseDigest, createHash("sha256").update(responseBody).digest("hex"));
+    assert.equal("raw" in result, false);
+    assert.equal(JSON.stringify(result).includes("provider-secret-token"), false);
+    assert.equal(JSON.stringify(result).includes("private@example.invalid"), false);
+    assert.equal(JSON.stringify(result).includes("must-not-escape"), false);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousUrl === undefined) delete process.env.GUARDIAN_MRV_SUBMIT_URL;
+    else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
+  }
+});
+
+test("Guardian MRV rejects malformed JSON without exposing the provider body", async () => {
+  const previousUrl = process.env.GUARDIAN_MRV_SUBMIT_URL;
+  const previousFetch = globalThis.fetch;
+  const responseBody = "{not-json-provider-secret";
+  process.env.GUARDIAN_MRV_SUBMIT_URL = "https://guardian.test/mrv";
+  globalThis.fetch = async () => new Response(responseBody, {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
+  try {
+    const result = await executeGuardianMrv(request);
+    assert.equal(result.status, "UNAVAILABLE");
+    assert.equal(result.responseDigest, createHash("sha256").update(responseBody).digest("hex"));
+    assert.equal(JSON.stringify(result).includes("provider-secret"), false);
+    assert.match(result.message, /invalid JSON/);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousUrl === undefined) delete process.env.GUARDIAN_MRV_SUBMIT_URL;
+    else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
+  }
+});
+
+test("Guardian MRV rejects an oversized provider response before parsing it", async () => {
+  const previousUrl = process.env.GUARDIAN_MRV_SUBMIT_URL;
+  const previousMax = process.env.GUARDIAN_MRV_MAX_RESPONSE_BYTES;
+  const previousFetch = globalThis.fetch;
+  process.env.GUARDIAN_MRV_SUBMIT_URL = "https://guardian.test/mrv";
+  process.env.GUARDIAN_MRV_MAX_RESPONSE_BYTES = "1024";
+  globalThis.fetch = async () => new Response(new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new Uint8Array(2048));
+      controller.close();
+    },
+  }), { status: 200, headers: { "content-type": "application/json" } });
+  try {
+    const result = await executeGuardianMrv(request);
+    assert.equal(result.status, "UNAVAILABLE");
+    assert.equal(result.responseDigest, null);
+    assert.match(result.message, /size limit/);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousUrl === undefined) delete process.env.GUARDIAN_MRV_SUBMIT_URL;
+    else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
+    if (previousMax === undefined) delete process.env.GUARDIAN_MRV_MAX_RESPONSE_BYTES;
+    else process.env.GUARDIAN_MRV_MAX_RESPONSE_BYTES = previousMax;
+  }
+});
+
 test("Guardian native DMRV accepts a published-policy block response", async () => {
   const previousUrl = process.env.GUARDIAN_MRV_SUBMIT_URL;
   const previousNative = process.env.GUARDIAN_MRV_NATIVE_DMRV;
@@ -114,6 +195,8 @@ test("Guardian native DMRV accepts a published-policy block response", async () 
     assert.equal(result.status, "VERIFIED");
     assert.equal(result.executionId, "guardian-block-result-1");
     assert.equal(result.policyId, "policy-1");
+    assert.match(result.responseDigest || "", /^[a-f0-9]{64}$/);
+    assert.equal("raw" in result, false);
   } finally {
     globalThis.fetch = previousFetch;
     if (previousUrl === undefined) delete process.env.GUARDIAN_MRV_SUBMIT_URL;
