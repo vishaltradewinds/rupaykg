@@ -199,7 +199,7 @@ begin
   v_insert_blocked := false;
   begin
     insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_status,hcs_status,integrity_hash,metadata)
-    values(v_activity_a,v_verification_a,v_evidence_a_mismatch,'same-tenant-mismatch-test','UNAVAILABLE','NOT_CONFIGURED','blocked-mismatch-'||v_suffix,'{\"fixture\":\"rollback-only\"}'::jsonb);
+    values(v_activity_a,v_verification_a,v_evidence_a_mismatch,'same-tenant-mismatch-test','UNAVAILABLE','NOT_CONFIGURED','blocked-mismatch-'||v_suffix,'{"fixture":"rollback-only"}'::jsonb);
   exception when insufficient_privilege then
     v_insert_blocked := true;
   end;
