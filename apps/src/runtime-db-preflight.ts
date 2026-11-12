@@ -23,6 +23,7 @@ const protectedTables = [
   "mrv_observations",
   "evidence_verification_requirements",
   "chain_of_custody_links",
+  "mrv_provenance_events",
 ];
 
 const connectionUrl = new URL(databaseUrl);
