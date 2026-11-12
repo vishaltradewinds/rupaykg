@@ -68,6 +68,35 @@ export const CAD_TRUST_STAKEHOLDER_FIELD_RULES: Readonly<Record<string, FieldRul
   cadTrustProjectId: { required: true, kind: "guid" },
 };
 
+/** Schema-pinned CAD Trust v2.0.2 user_input map. */
+export const CAD_TRUST_LABEL_FIELD_RULES: Readonly<Record<string, FieldRule>> = {
+  labelName: { required: true, kind: "string" },
+  labelType: { required: true, kind: "picklist", picklist: ["Article 6 - Authorisation","Article 6 - Endorsement","Article 6 - Letter of Approvals","Article 6 - Letter of Qualification","Certification","SDG 10 - Reduced inequalities"] },
+  labelLink: { required: false, kind: "url" },
+  labelDate: { required: false, kind: "date" },
+};
+
+/** Schema-pinned CAD Trust v2.0.2 user_input map. */
+export const CAD_TRUST_VALIDATION_FIELD_RULES: Readonly<Record<string, FieldRule>> = {
+  validationId: { required: true, kind: "string" },
+  validationType: { required: true, kind: "picklist", picklist: ["Validation of Post Registration Change","Validation of Project Design Document","Validation of Renewal of Credit Period"] },
+  validationBody: { required: true, kind: "picklist", picklist: ["350 Solutions","4K Earth Science Private Limited","AENOR International S.A.U.","Agri-Waste Technology Inc.","Ampere For Renewable Energy","Asociación de Normalización y Certificación A.C.","Aster Global Environmental Solutions Inc.","Bureau Veritas India Private Limited","CGN Certification","Carbon Check (India) Private Limited","China Building Material Test & Certification Group Co. Limited","China Certification Center Inc.","China Classification Society Certification Co. Limited","China Environmental United Certification Center Co. Limited","China Quality Certification Center","China Testing & Certification International Group Co. Limited","Colombian Institute for Technical Standards and Certification","Control Union Certifications Germany GmbH","Deloitte Tohmatsu Sustainability Co. Limited","Det Norske Veritas (U.S.A.) Inc.","Deutsche Certification Body","EPIC Sustainability Services Private Limited","ERM Certification and Verification Services Limited","Earthood Services Private Limited","EnergyLink Services","Enviance Services Private","Enviro-Accès Inc.","Environmental Services Inc.","First Environment Inc.","GHD Limited","GHD Services Inc.","Japan Quality Assurance Organisation","KBS Certification Services Private Limited","KPMG International Limited","Korea Energy Agency","Korea Testing & Research Institute","Korean Foundation for Quality","Korean Standards Association","LGAI Technological Center S.A.","PT Superintending Company of Indonesia (PT SUCOFINDO) - SBU Sertifikasi da Eco Framework (Sucofindo International Certification Services)","QSI Belgelendirme Muayene Ve Test Hizmetleri Limited Şti.","RINA Services S.p.A","Rainforest Alliance Inc.","Re Carbon Limited","Ruby Canyon Environmental Inc","S&A Carbon LLC","SCS Global Services","SQS (The Swiss Association for Quality and Management Systems)","Shenzhen CTI International Certification Co. Limited","The Earth Lab","TÜV Nord Cert GmbH","TÜV Rheinland (China) Limited","TÜV SÜD America Inc. - Ruby Canyon","TÜV SÜD South Asia Private Limited","VKU Certification Private Limited","Verico SCE","Verifit","Versa Expertos en Certificación"] },
+  validationDate: { required: false, kind: "date" },
+  validationCreditPeriodStartDate: { required: false, kind: "date" },
+  validationCreditPeriodEndDate: { required: false, kind: "date" },
+  cadTrustProjectId: { required: true, kind: "guid" },
+};
+
+/** Schema-pinned CAD Trust v2.0.2 user_input map. */
+export const CAD_TRUST_VERIFICATION_FIELD_RULES: Readonly<Record<string, FieldRule>> = {
+  verificationId: { required: true, kind: "string" },
+  verificationStartDate: { required: false, kind: "date" },
+  verificationEndDate: { required: false, kind: "date" },
+  verificationBody: { required: true, kind: "picklist", picklist: ["350 Solutions","4K Earth Science Private Limited","AENOR International S.A.U.","Agri-Waste Technology Inc.","Ampere For Renewable Energy","Asociación de Normalización y Certificación A.C.","Aster Global Environmental Solutions Inc.","Bureau Veritas India Private Limited","CGN Certification","Carbon Check (India) Private Limited","China Building Material Test & Certification Group Co. Limited","China Certification Center Inc.","China Classification Society Certification Co. Limited","China Environmental United Certification Center Co. Limited","China Quality Certification Center","China Testing & Certification International Group Co. Limited","Colombian Institute for Technical Standards and Certification","Control Union Certifications Germany GmbH","Deloitte Tohmatsu Sustainability Co. Limited","Det Norske Veritas (U.S.A.) Inc.","Deutsche Certification Body","EPIC Sustainability Services Private Limited","ERM Certification and Verification Services Limited","Earthood Services Private Limited","EnergyLink Services","Enviance Services Private","Enviro-Accès Inc.","Environmental Services Inc.","First Environment Inc.","GHD Limited","GHD Services Inc.","Japan Quality Assurance Organisation","KBS Certification Services Private Limited","KPMG International Limited","Korea Energy Agency","Korea Testing & Research Institute","Korean Foundation for Quality","Korean Standards Association","LGAI Technological Center S.A.","PT Superintending Company of Indonesia (PT SUCOFINDO) - SBU Sertifikasi da Eco Framework (Sucofindo International Certification Services)","QSI Belgelendirme Muayene Ve Test Hizmetleri Limited Şti.","RINA Services S.p.A","Rainforest Alliance Inc.","Re Carbon Limited","Ruby Canyon Environmental Inc","S&A Carbon LLC","SCS Global Services","SQS (The Swiss Association for Quality and Management Systems)","Shenzhen CTI International Certification Co. Limited","The Earth Lab","TÜV Nord Cert GmbH","TÜV Rheinland (China) Limited","TÜV SÜD America Inc. - Ruby Canyon","TÜV SÜD South Asia Private Limited","VKU Certification Private Limited","Verico SCE","Verifit","Versa Expertos en Certificación"] },
+  cadTrustProjectId: { required: true, kind: "guid" },
+  cadTrustValidationId: { required: false, kind: "guid" },
+};
+
 /** Values are pinned to CAD Trust schema v2.0.2 (generated 2026-06-30). */
 export const CAD_TRUST_PROJECT_FIELD_RULES: Readonly<Record<string, FieldRule>> = {
   projectRegistryName: { required: true, kind: "string" },
@@ -134,7 +163,13 @@ export function validateCadTrustProjection(projection: CadTrustProjection): CadT
     return { ok: false, code: "CADT_EXTERNAL_AUTHORITY_REQUIRED", error: "Issuance and unit records require external registry authority" };
   }
 
-  const fieldRules = projection.entityType === "stakeholder"
+  const fieldRules = projection.entityType === "label"
+    ? CAD_TRUST_LABEL_FIELD_RULES
+    : projection.entityType === "validation"
+      ? CAD_TRUST_VALIDATION_FIELD_RULES
+      : projection.entityType === "verification"
+        ? CAD_TRUST_VERIFICATION_FIELD_RULES
+        : projection.entityType === "stakeholder"
     ? CAD_TRUST_STAKEHOLDER_FIELD_RULES
     : projection.entityType === "program"
     ? CAD_TRUST_PROGRAM_FIELD_RULES
