@@ -7,11 +7,12 @@ import { Pool } from "pg";
 // This runner is deliberately separate from application startup. It requires
 // the database-owner migration connection and applies only the controlled
 // Shakti tenant-isolation batch (101-107).
-const databaseUrl = process.env.MIGRATION_DATABASE_URL ?? process.env.DATABASE_URL;
-if (!databaseUrl) throw new Error("MIGRATION_DATABASE_URL (or DATABASE_URL in CI) is required");
+const databaseUrl = process.env.MIGRATION_DATABASE_URL;
+if (!databaseUrl) throw new Error("MIGRATION_DATABASE_URL is required; do not use the application runtime connection for schema migrations");
 
 const ddlRole = process.env.RUPAYKG_MIGRATION_DDL_ROLE ?? "rupaykg_ddl";
 const securityDefinerRole = "rupaykg_security_definer";
+if (!/^[a-z_][a-z0-9_]*$/.test(ddlRole)) throw new Error("RUPAYKG_MIGRATION_DDL_ROLE must be a plain PostgreSQL role identifier");
 const pool = new Pool({
   connectionString: databaseUrl,
   max: 1,
