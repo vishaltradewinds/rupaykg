@@ -39,19 +39,42 @@ export async function authenticate(request: FastifyRequest, pool: Pool | null): 
   // bootstrap function is the explicit, narrowly scoped authentication
   // boundary and returns only verified memberships attached to this bearer
   // session.
-  const bootstrap = await pool.query<{
+  // The database login is intentionally distinct from the non-login
+  // application runtime role. Assume the narrowly granted runtime role only
+  // inside this transaction so the SECURITY DEFINER bootstrap ACL is effective
+  // without granting inherited privileges to the login session.
+  const bootstrapClient = await pool.connect();
+  let bootstrapRows: Array<{
     identity_id: string;
     organization_id: string;
     role_id: string;
     status: string;
     context_token: string;
-  }>(
-    `select identity_id, organization_id, role_id, status, context_token
-       from app.authenticate_bearer_session($1)`,
-    [hashToken(token)],
-  );
-  if (!bootstrap.rows[0]) return null;
-  const memberships = { rows: bootstrap.rows.filter((m) => m.status === "VERIFIED") };
+  }> = [];
+  try {
+    await bootstrapClient.query("begin");
+    await bootstrapClient.query("set local role rupaykg_app_runtime");
+    const bootstrap = await bootstrapClient.query<{
+      identity_id: string;
+      organization_id: string;
+      role_id: string;
+      status: string;
+      context_token: string;
+    }>(
+      `select identity_id, organization_id, role_id, status, context_token
+         from app.authenticate_bearer_session($1)`,
+      [hashToken(token)],
+    );
+    bootstrapRows = bootstrap.rows;
+    await bootstrapClient.query("commit");
+  } catch (error) {
+    try { await bootstrapClient.query("rollback"); } catch {}
+    throw error;
+  } finally {
+    bootstrapClient.release();
+  }
+  if (!bootstrapRows[0]) return null;
+  const memberships = { rows: bootstrapRows.filter((m) => m.status === "VERIFIED") };
   if (memberships.rows.length === 0) return null;
   if (requestedOrganizationId && !memberships.rows.some((m) => m.organization_id === requestedOrganizationId && m.status === "VERIFIED")) return null;
 
