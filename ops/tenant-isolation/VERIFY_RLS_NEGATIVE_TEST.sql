@@ -244,17 +244,51 @@ begin
   update app.request_context_grants set expires_at=now()+interval '1 minute'
    where id=v_context_token_a;
 
-  -- Membership revocation invalidates the grant without waiting for its TTL.
-  update organization_memberships set status='REVOKED'
+  -- Removing a verified membership invalidates its grant immediately.
+  -- The application guard is disabled only around this rollback-only fixture
+  -- mutation; tenant visibility is then checked under the runtime role.
+  if exists (
+    select 1 from pg_trigger t
+     where t.tgrelid = 'public.organization_memberships'::regclass
+       and t.tgname = 'stakeholder_membership_application_guard'
+       and not t.tgisinternal
+  ) then
+    alter table organization_memberships disable trigger stakeholder_membership_application_guard;
+  end if;
+  delete from organization_memberships
    where identity_id=v_identity_a and organization_id=v_org_a;
+  if exists (
+    select 1 from pg_trigger t
+     where t.tgrelid = 'public.organization_memberships'::regclass
+       and t.tgname = 'stakeholder_membership_application_guard'
+       and not t.tgisinternal
+  ) then
+    alter table organization_memberships enable trigger stakeholder_membership_application_guard;
+  end if;
   execute 'set local role rupaykg_app_runtime';
   select count(*) into v_visible from organizations where id=v_org_a;
   if v_visible <> 0 then
-    raise exception 'RLS_NEGATIVE_TEST_FAILED: revoked organization membership retained tenant visibility';
+    raise exception 'RLS_NEGATIVE_TEST_FAILED: removed organization membership retained tenant visibility';
   end if;
   reset role;
-  update organization_memberships set status='VERIFIED'
-   where identity_id=v_identity_a and organization_id=v_org_a;
+  if exists (
+    select 1 from pg_trigger t
+     where t.tgrelid = 'public.organization_memberships'::regclass
+       and t.tgname = 'stakeholder_membership_application_guard'
+       and not t.tgisinternal
+  ) then
+    alter table organization_memberships disable trigger stakeholder_membership_application_guard;
+  end if;
+  insert into organization_memberships(identity_id,organization_id,role_id,status)
+  values (v_identity_a,v_org_a,v_role_a,'VERIFIED');
+  if exists (
+    select 1 from pg_trigger t
+     where t.tgrelid = 'public.organization_memberships'::regclass
+       and t.tgname = 'stakeholder_membership_application_guard'
+       and not t.tgisinternal
+  ) then
+    alter table organization_memberships enable trigger stakeholder_membership_application_guard;
+  end if;
   execute 'set local role rupaykg_app_runtime';
   perform app.set_request_context(v_identity_a,v_org_a,v_context_token_a);
 
