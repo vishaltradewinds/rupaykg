@@ -72,7 +72,7 @@ begin
   execute 'alter function app.is_verified_org_member(uuid) owner to rupaykg_security_definer';
   execute 'revoke create on schema app from rupaykg_security_definer';
   execute format('revoke rupaykg_security_definer from %I', login_role);
-  execute $comment on role rupaykg_security_definer is 'NOLOGIN/NOBYPASSRLS isolated owner for narrowly scoped SECURITY DEFINER functions; no application runtime membership.'$;
+  execute 'comment on role rupaykg_security_definer is ''NOLOGIN/NOBYPASSRLS isolated owner for narrowly scoped SECURITY DEFINER functions; no application runtime membership.''';
 
   -- The DDL role is not allowed to inherit the function-owner role outside the
   -- controlled migration transaction. The runner enables this only temporarily.
@@ -113,5 +113,5 @@ where n.nspname='app'
 
 select
   pg_has_role('rupaykg_app_runtime','rupaykg_security_definer','MEMBER') as runtime_can_assume_security_definer,
-  pg_has_role('rupaykg_runtime_login','rupaykg_security_definer','MEMBER') as runtime_login_can_assume_security_definer,
+  coalesce((select pg_has_role(runtime_login.oid,'rupaykg_security_definer'::regrole,'MEMBER') from pg_roles runtime_login where runtime_login.rolname='rupaykg_runtime_login'), false) as runtime_login_can_assume_security_definer,
   has_schema_privilege('rupaykg_security_definer','app','CREATE') as isolated_owner_has_app_create;
