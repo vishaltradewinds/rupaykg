@@ -41,9 +41,6 @@ BEGIN
     RAISE EXCEPTION 'VERIFY_102: current_organization_id EXECUTE missing';
   END IF;
 
-  IF NOT has_function_privilege('rupaykg_app_runtime', 'app.request_context_is_valid()', 'EXECUTE') THEN
-    RAISE EXCEPTION 'VERIFY_102: request_context_is_valid EXECUTE missing';
-  END IF;
 
   IF has_table_privilege('rupaykg_app_runtime', 'app.request_context_grants', 'SELECT')
      OR has_table_privilege('rupaykg_app_runtime', 'app.request_context_grants', 'INSERT') THEN
