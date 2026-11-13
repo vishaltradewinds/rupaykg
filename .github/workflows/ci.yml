@@ -49,6 +49,10 @@ jobs:
           test "$(psql "$DATABASE_URL" -tAc "select rolbypassrls from pg_roles where rolname = 'rupaykg_app_runtime'")" = "f"
       - run: npm run validate:migrations
       - run: npm run migrate -w @rupaykg/api
+      - name: Reconcile controlled Shakti migration ownership
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f ops/tenant-isolation/PROVISION_SECURITY_DEFINER_OWNER.sql
+      - name: Apply controlled Shakti migrations with temporary DDL handoff
+        run: MIGRATION_DATABASE_URL="$DATABASE_URL" npm run migrate:shakti -w @rupaykg/api
       - name: Run SECURITY DEFINER boundary acceptance as runtime login
         run: |
           set -euo pipefail
