@@ -6,9 +6,10 @@
 with expected(function_name, identity_args) as (
   values
     ('app.set_request_context', 'p_identity_id uuid, p_organization_id uuid, p_context_token uuid'),
-    ('app.request_context_is_valid', ''),
     ('app.is_verified_org_member', 'target_organization_id uuid'),
-    ('app.authenticate_bearer_session', 'p_token_hash text')
+    ('app.authenticate_bearer_session', 'p_token_hash text'),
+    ('app.current_identity_id', ''),
+    ('app.current_organization_id', '')
 ),
 actual as (
   select
@@ -40,7 +41,15 @@ select
   has_function_privilege(current_user, 'app.authenticate_bearer_session(text)', 'EXECUTE')
     as bootstrap_runtime_execute,
   has_function_privilege('public', 'app.authenticate_bearer_session(text)', 'EXECUTE')
-    as bootstrap_public_execute;
+    as bootstrap_public_execute,
+  has_function_privilege(current_user, 'app.current_identity_id()', 'EXECUTE')
+    as current_identity_runtime_execute,
+  has_function_privilege('public', 'app.current_identity_id()', 'EXECUTE')
+    as current_identity_public_execute,
+  has_function_privilege(current_user, 'app.current_organization_id()', 'EXECUTE')
+    as current_organization_runtime_execute,
+  has_function_privilege('public', 'app.current_organization_id()', 'EXECUTE')
+    as current_organization_public_execute;
 
 select 1 / case
   when current_user <> 'rupaykg_app_runtime'
@@ -62,7 +71,7 @@ select 1 / case
        )
        and p.prosecdef
        and coalesce(p.proconfig::text, '') like '%search_path=pg_catalog, public, app%'
-   ) = 4
+   ) = 5
    and has_function_privilege(current_user, 'app.set_request_context(uuid,uuid,uuid)', 'EXECUTE')
    and has_function_privilege(current_user, 'app.is_verified_org_member(uuid)', 'EXECUTE')
    and has_function_privilege(current_user, 'app.authenticate_bearer_session(text)', 'EXECUTE')
