@@ -262,6 +262,84 @@ create policy shakti_mrv_provenance_tenant
 
 grant select, insert, update on public.mrv_provenance_events to rupaykg_app_runtime;
 
+-- Registry events are tenant-visible only to organizations named in the event.
+-- The SECURITY DEFINER owner receives a narrow read policy solely so the
+-- current-owner helper can resolve the latest owner without recursive RLS.
+alter table public.registry_events enable row level security;
+alter table public.registry_events force row level security;
+
+drop policy if exists shakti_registry_events_tenant on public.registry_events;
+create policy shakti_registry_events_tenant
+  on public.registry_events for all
+  to rupaykg_app_runtime
+  using (
+    app.is_verified_org_member(app.current_organization_id())
+    and (
+      from_owner_id = app.current_organization_id()
+      or to_owner_id = app.current_organization_id()
+    )
+  )
+  with check (
+    recorded_by_identity_id = app.current_identity_id()
+    and app.is_verified_org_member(app.current_organization_id())
+    and (
+      (event_type in ('ISSUED','ACTIVATED') and to_owner_id = app.current_organization_id())
+      or (event_type in ('TRANSFERRED','RETIRED') and from_owner_id = app.current_organization_id())
+    )
+  );
+
+drop policy if exists shakti_registry_events_owner_read on public.registry_events;
+create policy shakti_registry_events_owner_read
+  on public.registry_events for select
+  to rupaykg_security_definer
+  using (true);
+
+grant select, insert on public.registry_events to rupaykg_app_runtime;
+grant select on public.registry_events to rupaykg_security_definer;
+
+create or replace function app.current_credential_owner_id(target_credential_id uuid)
+returns uuid
+language sql
+stable
+security definer
+set search_path = pg_catalog, public, app
+as $function$
+  select coalesce(event_row.to_owner_id, event_row.from_owner_id)
+    from public.registry_events event_row
+   where event_row.credential_id = target_credential_id
+     and event_row.event_type in ('ISSUED','TRANSFERRED','RETIRED')
+   order by event_row.created_at desc, event_row.id desc
+   limit 1
+$function$;
+
+alter function app.current_credential_owner_id(uuid) owner to rupaykg_security_definer;
+revoke all on function app.current_credential_owner_id(uuid) from public;
+grant execute on function app.current_credential_owner_id(uuid) to rupaykg_app_runtime;
+
+-- A credential remains visible to its issuer and to its current registry owner.
+-- Historical former owners can read only events in which they participated.
+drop policy if exists shakti_credentials_tenant on public.credentials;
+create policy shakti_credentials_tenant
+  on public.credentials for all
+  to rupaykg_app_runtime
+  using (
+    (
+      issuer_organization_id = app.current_organization_id()
+      or app.current_credential_owner_id(id) = app.current_organization_id()
+    )
+    and app.is_verified_org_member(app.current_organization_id())
+  )
+  with check (
+    (
+      issuer_organization_id = app.current_organization_id()
+      or app.current_credential_owner_id(id) = app.current_organization_id()
+    )
+    and app.is_verified_org_member(app.current_organization_id())
+  );
+
+-- Methodology versions are global, read-only governance reference data.
+grant select on public.methodology_versions to rupaykg_app_runtime;
+
 comment on table public.field_sync_envelopes is
 'Shakti tenant boundary: field-sync envelopes are visible only to the verified device identity and active organization.';
 comment on table public.evidence_artifact_series is
