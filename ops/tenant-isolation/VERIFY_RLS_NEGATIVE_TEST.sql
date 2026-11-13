@@ -85,6 +85,7 @@ declare
   v_role_b uuid;
   v_visible integer;
   v_affected integer;
+  v_name text;
 begin
   select id into v_org_a
     from organizations
