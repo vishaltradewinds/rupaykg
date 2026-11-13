@@ -42,14 +42,41 @@ begin
     raise exception 'SECURITY_DEFINER_MEMBERSHIP_TEST_FAILED: membership into owner was not detected';
   end if;
 
-  -- Exact fail-closed predicate used by migration 104.
+  -- The owner must never inherit/SET another role, and no ordinary role may
+  -- assume it. The sole Neon platform-admin membership edge is allowed only
+  -- when it is non-inheriting and non-SET, so it cannot enter SECURITY DEFINER
+  -- ownership through role switching.
   if not exists (
-    select 1
-      from pg_auth_members
+    select 1 from pg_auth_members
      where member = owner_oid
-        or roleid = owner_oid
   ) then
-    raise exception 'SECURITY_DEFINER_MEMBERSHIP_TEST_FAILED: migration guard predicate did not reject membership';
+    raise exception 'SECURITY_DEFINER_MEMBERSHIP_TEST_FAILED: outbound owner membership was not rejected';
+  end if;
+  if not exists (
+    select 1 from pg_auth_members
+     where member = probe_oid
+       and roleid = owner_oid
+  ) then
+    raise exception 'SECURITY_DEFINER_MEMBERSHIP_TEST_FAILED: incoming probe membership was not rejected';
+  end if;
+
+  if exists (
+    select 1
+      from pg_auth_members membership
+      left join pg_roles member_role on member_role.oid = membership.member
+     where membership.member = owner_oid
+        or (
+          membership.roleid = owner_oid
+          and not (
+            member_role.rolname = 'rupaykg'
+            and pg_get_userbyid(membership.grantor) = 'cloud_admin'
+            and membership.admin_option
+            and not membership.inherit_option
+            and not membership.set_option
+          )
+        )
+  ) then
+    raise exception 'SECURITY_DEFINER_MEMBERSHIP_TEST_FAILED: unexpected owner membership remained';
   end if;
 end
 $test$;
