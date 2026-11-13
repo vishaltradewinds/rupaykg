@@ -62,12 +62,14 @@ select 1 / case
        and (
          (p.proname = 'set_request_context'
           and pg_get_function_identity_arguments(p.oid) = 'p_identity_id uuid, p_organization_id uuid, p_context_token uuid')
-         or (p.proname = 'request_context_is_valid'
-          and pg_get_function_identity_arguments(p.oid) = '')
          or (p.proname = 'is_verified_org_member'
           and pg_get_function_identity_arguments(p.oid) = 'target_organization_id uuid')
          or (p.proname = 'authenticate_bearer_session'
           and pg_get_function_identity_arguments(p.oid) = 'p_token_hash text')
+         or (p.proname = 'current_identity_id'
+          and pg_get_function_identity_arguments(p.oid) = '')
+         or (p.proname = 'current_organization_id'
+          and pg_get_function_identity_arguments(p.oid) = '')
        )
        and p.prosecdef
        and coalesce(p.proconfig::text, '') like '%search_path=pg_catalog, public, app%'
@@ -75,6 +77,10 @@ select 1 / case
    and has_function_privilege(current_user, 'app.set_request_context(uuid,uuid,uuid)', 'EXECUTE')
    and has_function_privilege(current_user, 'app.is_verified_org_member(uuid)', 'EXECUTE')
    and has_function_privilege(current_user, 'app.authenticate_bearer_session(text)', 'EXECUTE')
+   and has_function_privilege(current_user, 'app.current_identity_id()', 'EXECUTE')
+   and has_function_privilege(current_user, 'app.current_organization_id()', 'EXECUTE')
+   and not has_function_privilege('public', 'app.current_identity_id()', 'EXECUTE')
+   and not has_function_privilege('public', 'app.current_organization_id()', 'EXECUTE')
    and not has_function_privilege('public', 'app.set_request_context(uuid,uuid,uuid)', 'EXECUTE')
    and not has_function_privilege('public', 'app.is_verified_org_member(uuid)', 'EXECUTE')
    and not has_function_privilege('public', 'app.authenticate_bearer_session(text)', 'EXECUTE')
