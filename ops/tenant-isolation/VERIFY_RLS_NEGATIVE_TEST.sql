@@ -37,7 +37,7 @@ begin
     'evidence_verification_requirements','chain_of_custody_links',
     'evidence_artifact_series','evidence_artifact_versions','evidence_artifact_reviews',
     'field_sync_envelopes','field_sync_cursors','field_sync_conflicts','mrv_provenance_events','organization_geography_scopes','registry_events','settlement_events','environmental_attribute_claims',
-    'bwg_profiles','bwg_reporting_periods','esg_reporting_periods','cpcb_swm_stakeholder_workspaces',
+    'bwg_profiles','bwg_reporting_periods','esg_reporting_periods',
     'organization_bwg_assessments','organization_epr_applicability','organization_statutory_profiles','organization_verification_evidence'
   ] loop
     if not exists (
