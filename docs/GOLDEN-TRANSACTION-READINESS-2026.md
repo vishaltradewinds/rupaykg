@@ -31,3 +31,16 @@ Production Guardian credentials/endpoints and Hedera production configuration mu
 ## Deployment constraint
 
 All changes belong to `vishaltradewinds/rupaykg` on `main` and must use the existing free Render service `rupaykg`. No second service or paid resource is to be created.
+
+
+## 2026-11-13 production readiness evidence
+
+A read-only production Neon audit found only two VERIFIED `test_fixture` organizations; zero activities, resource flows, measurements, evidence, verifications, field devices, MRV provenance events, credentials, registry events or settlements. The only geography row is the source-versioned acceptance-fixture cluster `RUPAYKG-ACCEPTANCE-V1`; no source-versioned ULB/Ward/Block/Gram Panchayat/Village geography is present.
+
+Therefore:
+- Urban Golden Transaction: **NOT EXECUTED — no real ULB/Ward geography, real organization transaction or field evidence in production**.
+- Rural Golden Transaction: **NOT EXECUTED — no real Block/GP/Village geography, biomass activity, aggregation lineage or field evidence in production**.
+- CI acceptance seed: **SYNTHETIC TEST ONLY**, not site evidence and not a TRL claim.
+- Do not populate production with invented organizations, geography, measurements or evidence to make the checklist pass.
+
+Required field inputs remain the official site/ULB/GP authorization records, real participating Generator + Aggregator + Processor/Recycler identities and memberships, source-backed geography, actual weighbridge/device calibration and measurement records, evidence artifact(s), and authorized independent verification. Until then, keep both Golden Transactions blocked and the platform at pre-validation for SITE-JBP-01.
