@@ -329,13 +329,20 @@ begin
   perform set_config('app.identity_id', '', true);
   perform set_config('app.organization_id', '', true);
 
+  -- Keep the runtime no-context assertion exactly aligned with the
+  -- protected-table inventory above. Do not probe unrelated control-plane
+  -- tables here: lack of a runtime grant is an intentional boundary, not an
+  -- RLS failure.
   foreach v_name in array array[
-    'organizations','roles','activities','obligations','credentials',
-    'settlements','audit_events','resource_flows','field_devices',
-    'organization_memberships','measurements','evidence','verifications',
+    'organizations','roles','organization_memberships','activities',
+    'obligations','credentials','settlements','audit_events','resource_flows',
+    'field_devices','measurements','evidence','verifications',
     'carbon_calculations','mrv_observations',
     'evidence_verification_requirements','chain_of_custody_links',
-    'organization_geography_scopes'
+    'evidence_artifact_series','evidence_artifact_versions','evidence_artifact_reviews',
+    'field_sync_envelopes','field_sync_cursors','field_sync_conflicts',
+    'mrv_provenance_events','organization_geography_scopes','registry_events',
+    'settlement_events','environmental_attribute_claims'
   ] loop
     execute format('select count(*) from public.%I', v_name) into v_visible;
     if v_visible <> 0 then
