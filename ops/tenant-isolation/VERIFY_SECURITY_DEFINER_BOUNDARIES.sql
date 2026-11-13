@@ -10,7 +10,8 @@ with expected(function_name, identity_args) as (
     ('app.authenticate_bearer_session', 'p_token_hash text'),
     ('app.current_identity_id', ''),
     ('app.current_organization_id', ''),
-    ('app.current_credential_owner_id', 'target_credential_id uuid')
+    ('app.current_credential_owner_id', 'target_credential_id uuid'),
+    ('app.organization_has_verified_members', 'target_organization_id uuid')
 ),
 actual as (
   select
@@ -54,7 +55,11 @@ select
   has_function_privilege(current_user, 'app.current_credential_owner_id(uuid)', 'EXECUTE')
     as current_credential_owner_runtime_execute,
   (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.current_credential_owner_id(uuid)'::regprocedure)
-    as current_credential_owner_public_execute;
+    as current_credential_owner_public_execute,
+  has_function_privilege(current_user, 'app.organization_has_verified_members(uuid)', 'EXECUTE')
+    as organization_readiness_runtime_execute,
+  (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.organization_has_verified_members(uuid)'::regprocedure)
+    as organization_readiness_public_execute;
 
 select 1 / case
   when current_user <> 'rupaykg_app_runtime'
@@ -85,12 +90,14 @@ select 1 / case
    and has_function_privilege(current_user, 'app.current_identity_id()', 'EXECUTE')
    and has_function_privilege(current_user, 'app.current_organization_id()', 'EXECUTE')
    and has_function_privilege(current_user, 'app.current_credential_owner_id(uuid)', 'EXECUTE')
+   and has_function_privilege(current_user, 'app.organization_has_verified_members(uuid)', 'EXECUTE')
    and not (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.current_identity_id()'::regprocedure)
    and not (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.current_organization_id()'::regprocedure)
    and not (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.set_request_context(uuid,uuid,uuid)'::regprocedure)
    and not (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.is_verified_org_member(uuid)'::regprocedure)
    and not (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.authenticate_bearer_session(text)'::regprocedure)
    and not (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.current_credential_owner_id(uuid)'::regprocedure)
+   and not (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.organization_has_verified_members(uuid)'::regprocedure)
   then 1
   else 0
 end as security_definer_boundary_assertion;
@@ -114,7 +121,8 @@ where p.pronamespace = 'app'::regnamespace
     'authenticate_bearer_session',
     'current_identity_id',
     'current_organization_id',
-    'current_credential_owner_id'
+    'current_credential_owner_id',
+    'organization_has_verified_members'
   )
 order by p.proname, p.oid::regprocedure::text;
 
@@ -292,10 +300,11 @@ select 1 / case
               'authenticate_bearer_session',
               'current_identity_id',
               'current_organization_id',
-              'current_credential_owner_id'
+              'current_credential_owner_id',
+              'organization_has_verified_members'
             )
             and p.proowner = owner_role.oid
-       ) = 6
+       ) = 7
   )
   then 1
   else 0
