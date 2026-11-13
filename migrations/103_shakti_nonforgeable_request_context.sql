@@ -106,9 +106,9 @@ as $$
       join public.organization_memberships om
         on om.identity_id = g.identity_id
        and om.organization_id = g.organization_id
-     where g.id = nullif(current_setting('app.context_token', true), '')::uuid
-       and g.identity_id = nullif(current_setting('app.identity_id', true), '')::uuid
-       and g.organization_id = nullif(current_setting('app.organization_id', true), '')::uuid
+     where g.id = case when coalesce(current_setting('app.context_token', true), '') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then current_setting('app.context_token', true)::uuid else null end
+       and g.identity_id = case when coalesce(current_setting('app.identity_id', true), '') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then current_setting('app.identity_id', true)::uuid else null end
+       and g.organization_id = case when coalesce(current_setting('app.organization_id', true), '') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then current_setting('app.organization_id', true)::uuid else null end
        and g.expires_at > now()
        and s.revoked_at is null
        and s.expires_at > now()
@@ -117,7 +117,7 @@ as $$
        and o.status = 'VERIFIED'
        and om.status = 'VERIFIED'
   )
-  then nullif(current_setting('app.identity_id', true), '')::uuid
+  then case when coalesce(current_setting('app.identity_id', true), '') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then current_setting('app.identity_id', true)::uuid else null end
   else null end
 $$;
 
@@ -137,9 +137,9 @@ as $$
       join public.organization_memberships om
         on om.identity_id = g.identity_id
        and om.organization_id = g.organization_id
-     where g.id = nullif(current_setting('app.context_token', true), '')::uuid
-       and g.identity_id = nullif(current_setting('app.identity_id', true), '')::uuid
-       and g.organization_id = nullif(current_setting('app.organization_id', true), '')::uuid
+     where g.id = case when coalesce(current_setting('app.context_token', true), '') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then current_setting('app.context_token', true)::uuid else null end
+       and g.identity_id = case when coalesce(current_setting('app.identity_id', true), '') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then current_setting('app.identity_id', true)::uuid else null end
+       and g.organization_id = case when coalesce(current_setting('app.organization_id', true), '') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then current_setting('app.organization_id', true)::uuid else null end
        and g.expires_at > now()
        and s.revoked_at is null
        and s.expires_at > now()
@@ -148,7 +148,7 @@ as $$
        and o.status = 'VERIFIED'
        and om.status = 'VERIFIED'
   )
-  then nullif(current_setting('app.organization_id', true), '')::uuid
+  then case when coalesce(current_setting('app.organization_id', true), '') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then current_setting('app.organization_id', true)::uuid else null end
   else null end
 $$;
 
