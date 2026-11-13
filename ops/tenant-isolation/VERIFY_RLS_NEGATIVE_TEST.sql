@@ -335,9 +335,7 @@ begin
     'organization_memberships','measurements','evidence','verifications',
     'carbon_calculations','mrv_observations',
     'evidence_verification_requirements','chain_of_custody_links',
-    'bwg_profiles','bwg_reporting_periods','esg_reporting_periods','cpcb_swm_stakeholder_workspaces',
-    'organization_bwg_assessments','organization_epr_applicability','organization_geography_scopes',
-    'organization_statutory_profiles','organization_verification_evidence'
+    'organization_geography_scopes'
   ] loop
     execute format('select count(*) from public.%I', v_name) into v_visible;
     if v_visible <> 0 then
