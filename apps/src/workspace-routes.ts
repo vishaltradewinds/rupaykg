@@ -88,27 +88,44 @@ export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool |
     const auth = await requireAuth(app, pool, request, reply);
     if (!auth || !pool) return;
     const { evidenceId } = request.params as { evidenceId: string };
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(evidenceId)) return reply.code(400).send({ error: "evidenceId must be a UUID", code: "INVALID_EVIDENCE_ID" });
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(evidenceId)) {
+      return reply.code(400).send({ error: "evidenceId must be a UUID", code: "INVALID_EVIDENCE_ID" });
+    }
     const body = request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {};
     const decision = typeof body.decision === "string" ? body.decision.trim().toUpperCase() : "";
     const scope = typeof body.scope === "string" ? body.scope.trim() : "";
     const rationale = typeof body.rationale === "string" ? body.rationale.trim() : "";
-    if ((decision !== "APPROVED" && decision !== "REJECTED") || !scope || scope.length > 100 || rationale.length < 5 || rationale.length > 2000) return reply.code(400).send({ error: "decision, scope and 5–2000 character rationale are required", code: "INVALID_VERIFICATION" });
+    if ((decision !== "APPROVED" && decision !== "REJECTED") || !scope || scope.length > 100 || rationale.length < 5 || rationale.length > 2000) {
+      return reply.code(400).send({ error: "decision, scope and 5–2000 character rationale are required", code: "INVALID_VERIFICATION" });
+    }
     try {
-      return await withTenantTransaction(pool, auth, async client => {
+      const outcome = await withTenantTransaction(pool, auth, async client => {
         const q = await client.query<{ activity_id: string; organization_id: string; geography_id: string | null; actor_identity_id: string; captured_by_identity_id: string | null; status: string }>(
           "select e.activity_id,a.organization_id,a.geography_id,a.actor_identity_id,e.captured_by_identity_id,e.status::text status from evidence e join activities a on a.id=e.activity_id where e.id=$1 for update of e",
           [evidenceId],
         );
         const row = q.rows[0];
-        if (!row) return reply.code(404).send({ error: "Evidence not found", code: "EVIDENCE_NOT_FOUND" });
-        if (!row.geography_id || !canActForOrganization(auth, row.organization_id)) return reply.code(404).send({ error: "Evidence not found", code: "EVIDENCE_NOT_FOUND" });
-        const geography = await client.query<{ ok: boolean }>("select organization_has_geography_scope($1::uuid,$2::uuid) as ok", [row.organization_id, row.geography_id]);
-        if (!geography.rows[0]?.ok) return reply.code(403).send({ error: "Evidence geography is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
-        if (row.actor_identity_id === auth.identityId || row.captured_by_identity_id === auth.identityId) return reply.code(403).send({ error: "Evidence creator cannot verify its own evidence", code: "EVIDENCE_SELF_REVIEW_FORBIDDEN" });
+        if (!row) return { statusCode: 404, body: { error: "Evidence not found", code: "EVIDENCE_NOT_FOUND" } };
+        if (!row.geography_id || !canActForOrganization(auth, row.organization_id)) {
+          return { statusCode: 404, body: { error: "Evidence not found", code: "EVIDENCE_NOT_FOUND" } };
+        }
+        const geography = await client.query<{ ok: boolean }>(
+          "select organization_has_geography_scope($1::uuid,$2::uuid) as ok",
+          [row.organization_id, row.geography_id],
+        );
+        if (!geography.rows[0]?.ok) {
+          return { statusCode: 403, body: { error: "Evidence geography is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" } };
+        }
+        if (row.actor_identity_id === auth.identityId || row.captured_by_identity_id === auth.identityId) {
+          return { statusCode: 403, body: { error: "Evidence creator cannot verify its own evidence", code: "EVIDENCE_SELF_REVIEW_FORBIDDEN" } };
+        }
         const permissions = ["VERIFY_EVIDENCE", "verification:approve", "verification.approve"];
-        if (!await hasOrganizationPermission(client, auth, row.organization_id, permissions) || !await canVerifyEvidence(client, auth.identityId, evidenceId)) return reply.code(403).send({ error: "Explicit verification permission required", code: "VERIFY_EVIDENCE_FORBIDDEN" });
-        if (row.status !== "CAPTURED") return reply.code(409).send({ error: "Only captured evidence can be verified; reviewed evidence is immutable", code: "EVIDENCE_ALREADY_REVIEWED" });
+        if (!await hasOrganizationPermission(client, auth, row.organization_id, permissions) || !await canVerifyEvidence(client, auth.identityId, evidenceId)) {
+          return { statusCode: 403, body: { error: "Explicit verification permission required", code: "VERIFY_EVIDENCE_FORBIDDEN" } };
+        }
+        if (row.status !== "CAPTURED") {
+          return { statusCode: 409, body: { error: "Only captured evidence can be verified; reviewed evidence is immutable", code: "EVIDENCE_ALREADY_REVIEWED" } };
+        }
         const inserted = await client.query<{ id: string }>(
           "insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,$4,$5,$6) returning id",
           [evidenceId, row.activity_id, auth.identityId, decision, scope, rationale],
@@ -120,16 +137,18 @@ export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool |
           "update evidence set status=$2 where id=$1 returning status",
           [evidenceId, status],
         );
-        if (updated.rows[0]?.status !== status) {
-          throw new Error("Evidence verification status transition was not persisted");
-        }
+        if (updated.rows[0]?.status !== status) throw new Error("Evidence verification status transition was not persisted");
         return {
-          source: "postgresql",
-          syntheticData: false,
-          authoritativeMutation: true,
-          verification: { id: verificationId, evidenceId, activityId: row.activity_id, verifierIdentityId: auth.identityId, decision, scope, status },
+          statusCode: 201,
+          body: {
+            source: "postgresql",
+            syntheticData: false,
+            authoritativeMutation: true,
+            verification: { id: verificationId, evidenceId, activityId: row.activity_id, verifierIdentityId: auth.identityId, decision, scope, status },
+          },
         };
       });
+      return reply.code(outcome.statusCode).send(outcome.body);
     } catch (error) {
       request.log.error(error);
       return reply.code(503).send({ error: "Evidence verification unavailable", code: "VERIFICATION_UNAVAILABLE", syntheticData: false });
