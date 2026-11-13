@@ -11,11 +11,11 @@ const roleId = "323e4567-e89b-42d3-a456-426614174000";
 function fakePool(isSuperAdmin: boolean): Pool {
   return {
     query: async (sql: string) => {
-      if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
-      if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+      if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }] };
+      if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }] };
       if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
       if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) {
-        return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+        return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }] };
       }
       if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: isSuperAdmin }] };
       if (sql.includes('as "verifiedIdentities"')) return { rows: [{
@@ -145,9 +145,9 @@ test("membership grant cannot be used for self-escalation", async () => {
 test("dual-control access requests cannot be approved by their requester", async () => {
   const pool = {
     query: async (sql: string) => {
-      if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+      if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }] };
       if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
-      if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+      if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }] };
       if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: true }] };
       throw new Error("Unexpected pool SQL in dual-control self-approval test: " + sql);
     },
@@ -186,9 +186,9 @@ test("dual-control access requests cannot be approved by their requester", async
 test("dual-control access targets cannot approve their own reserved-role grant", async () => {
   const pool = {
     query: async (sql: string) => {
-      if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+      if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }] };
       if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
-      if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+      if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }] };
       if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: true }] };
       throw new Error("Unexpected pool SQL in dual-control self-approval test: " + sql);
     },
@@ -227,10 +227,10 @@ test("dual-control access targets cannot approve their own reserved-role grant",
 test("the last active Super Admin membership cannot be revoked", async () => {
   const pool = {
     query: async (sql: string) => {
-      if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+      if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }] };
       if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
       if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) {
-        return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+        return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }] };
       }
       if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: true }] };
       throw new Error(`Unexpected pool SQL in last-admin test: ${sql}`);
@@ -274,10 +274,10 @@ test("identity suspension revokes active sessions and records an audit event tra
   const statements: string[] = [];
   const pool = {
     query: async (sql: string) => {
-      if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+      if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }] };
       if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
       if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) {
-        return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+        return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }] };
       }
       if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: true }] };
       throw new Error(`Unexpected pool SQL in identity-suspension test: ${sql}`);
@@ -325,9 +325,9 @@ test("identity suspension revokes active sessions and records an audit event tra
 test("platform_admin membership cannot be restored through the generic membership endpoint", async () => {
   const pool = {
     query: async (sql: string) => {
-      if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+      if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }] };
       if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
-      if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+      if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }] };
       if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: true }] };
       throw new Error("Unexpected pool SQL in reserved-role restore test: " + sql);
     },
@@ -368,10 +368,10 @@ test("platform-reserved administrators cannot be suspended through the generic i
   const statements: string[] = [];
   const pool = {
     query: async (sql: string) => {
-      if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+      if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }] };
       if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
       if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) {
-        return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+        return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }] };
       }
       if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: true }] };
       throw new Error(`Unexpected pool SQL in reserved-admin test: ${sql}`);
