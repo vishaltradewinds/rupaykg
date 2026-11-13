@@ -147,6 +147,18 @@ begin
 
   reset role;
 
+  -- A caller must not obtain tenant visibility by setting only the
+  -- organization GUC. The policy must also require a verified identity
+  -- membership; custom PostgreSQL GUCs are directly settable by the runtime.
+  execute 'set local role rupaykg_app_runtime';
+  perform set_config('app.identity_id', '', true);
+  perform set_config('app.organization_id', v_org_a::text, true);
+  select count(*) into v_visible from organizations where id=v_org_a;
+  if v_visible <> 0 then
+    raise exception 'RLS_NEGATIVE_TEST_FAILED: organization-only GUC forged tenant context without verified identity';
+  end if;
+  reset role;
+
   -- Fail-closed check: with no tenant context, the runtime must see zero
   -- rows from every protected tenant table. This prevents accidental
   -- context omission from becoming cross-tenant visibility.
