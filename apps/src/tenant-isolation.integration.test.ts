@@ -57,12 +57,23 @@ test("Shakti tenant context rejects cross-organization context switching", { ski
       "insert into identity_sessions(identity_id,expires_at,token_hash) values($1,now()+interval '5 minutes',$2) returning id",
       [identityId, tokenHash],
     )).rows[0]!.id;
-    const grant = await pool.query<{ context_token: string }>(
-      "select context_token from app.authenticate_bearer_session($1) where organization_id=$2",
-      [tokenHash, organizationA],
-    );
-    contextToken = grant.rows[0]?.context_token ?? "";
-    assert.ok(contextToken, "bearer-session bootstrap must issue a tenant context grant");
+    const bootstrapClient = await pool.connect();
+    try {
+      await bootstrapClient.query("begin");
+      await bootstrapClient.query("set local role rupaykg_app_runtime");
+      const grant = await bootstrapClient.query<{ context_token: string }>(
+        "select context_token from app.authenticate_bearer_session($1) where organization_id=$2",
+        [tokenHash, organizationA],
+      );
+      contextToken = grant.rows[0]?.context_token ?? "";
+      await bootstrapClient.query("commit");
+    } catch (error) {
+      try { await bootstrapClient.query("rollback"); } catch {}
+      throw error;
+    } finally {
+      bootstrapClient.release();
+    }
+    assert.ok(contextToken, "non-BYPASSRLS runtime bootstrap must issue a tenant context grant");
 
     const authA: AuthContext = {
       identityId,
