@@ -67,13 +67,13 @@ begin
        and o.status = 'VERIFIED'
   ),
   issued_grants as (
-    insert into app.request_context_grants (
+    insert into app.request_context_grants as grant_row (
       identity_id, organization_id, session_id, expires_at
     )
     select vm.identity_id, vm.organization_id, vm.session_id,
            least(vm.session_expires_at, now() + interval '2 minutes')
       from verified_memberships vm
-    returning id, identity_id, organization_id
+    returning grant_row.id, grant_row.identity_id, grant_row.organization_id
   )
   select vm.identity_id, vm.organization_id, vm.role_id, vm.status, ig.id
     from verified_memberships vm
