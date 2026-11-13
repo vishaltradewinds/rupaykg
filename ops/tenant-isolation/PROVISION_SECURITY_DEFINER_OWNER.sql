@@ -37,6 +37,11 @@ select 1 / case
       and not rolcreaterole
       and not rolreplication
   )
+    and not exists (
+      select 1 from pg_auth_members membership
+       where membership.member = 'rupaykg_security_definer'::regrole
+          or membership.roleid = 'rupaykg_security_definer'::regrole
+    )
   then 1
   else 0
 end as isolated_owner_role_preflight;
@@ -46,4 +51,9 @@ select
   pg_has_role('rupaykg_app_runtime', 'rupaykg_security_definer', 'MEMBER')
     as app_runtime_can_assume_security_definer,
   pg_has_role('rupaykg_runtime_login', 'rupaykg_security_definer', 'MEMBER')
-    as runtime_login_can_assume_security_definer;
+    as runtime_login_can_assume_security_definer,
+  exists (
+    select 1 from pg_auth_members membership
+     where membership.member = 'rupaykg_security_definer'::regrole
+        or membership.roleid = 'rupaykg_security_definer'::regrole
+  ) as isolated_owner_has_any_role_membership;
