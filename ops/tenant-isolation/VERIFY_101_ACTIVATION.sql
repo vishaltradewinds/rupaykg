@@ -43,16 +43,22 @@ select 1 / case
        and not c.relrowsecurity
    )
    and not exists (
-     select 1 from pg_policies
-     where schemaname='public'
-       and tablename in (
-         'organizations','roles','activities','obligations','audit_events',
-         'field_devices','resource_flows','organization_memberships',
-         'measurements','evidence','verifications','carbon_calculations',
-         'mrv_observations','evidence_verification_requirements',
-         'credentials','chain_of_custody_links','settlements'
-       )
-       and polcmd is null
+     with protected(table_name) as (
+       values
+         ('organizations'),('roles'),('activities'),('obligations'),('audit_events'),
+         ('field_devices'),('resource_flows'),('organization_memberships'),
+         ('measurements'),('evidence'),('verifications'),('carbon_calculations'),
+         ('mrv_observations'),('evidence_verification_requirements'),
+         ('credentials'),('chain_of_custody_links'),('settlements')
+     )
+     select 1
+     from protected p
+     where not exists (
+       select 1 from pg_policies pol
+       where pol.schemaname='public'
+         and pol.tablename=p.table_name
+         and pol.cmd in ('SELECT','*')
+     )
    )
   then 1 else 0
 end as shakti_101_activation_assertion;
