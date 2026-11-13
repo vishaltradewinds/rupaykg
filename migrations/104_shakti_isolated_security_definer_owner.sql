@@ -25,18 +25,32 @@ begin
     raise exception 'RUPAYKG_SECURITY_DEFINER_OWNER_UNSAFE: owner must be NOLOGIN, NOINHERIT, NOSUPERUSER, NOBYPASSRLS, NOCREATEDB, NOCREATEROLE and NOREPLICATION';
   end if;
 
-  -- The isolated owner must have no role memberships in either direction:
-  -- it cannot inherit/SET ROLE into another role, and no other role can assume it.
+  -- Neon-managed CREATEROLE provisioning records one platform-granted,
+  -- non-inheriting, non-SET membership edge from the privileged database
+  -- owner login. That edge cannot assume the owner role and is accepted only
+  -- for the named owner/grantor tuple. No outbound memberships or runtime
+  -- membership edges are permitted.
   if exists (
     select 1
       from pg_auth_members membership
+      left join pg_roles member_role on member_role.oid = membership.member
      where membership.member = 'rupaykg_security_definer'::regrole
-        or membership.roleid = 'rupaykg_security_definer'::regrole
+        or (
+          membership.roleid = 'rupaykg_security_definer'::regrole
+          and not (
+            member_role.rolname = 'rupaykg'
+            and pg_get_userbyid(membership.grantor) = 'cloud_admin'
+            and membership.admin_option
+            and not membership.inherit_option
+            and not membership.set_option
+          )
+        )
   ) then
-    raise exception 'RUPAYKG_SECURITY_DEFINER_OWNER_HAS_ROLE_MEMBERSHIPS';
+    raise exception 'RUPAYKG_SECURITY_DEFINER_OWNER_HAS_UNSAFE_ROLE_MEMBERSHIPS';
   end if;
 
-  if pg_has_role('rupaykg_app_runtime', 'rupaykg_security_definer', 'MEMBER') then
+  if pg_has_role('rupaykg_app_runtime', 'rupaykg_security_definer', 'MEMBER')
+     or pg_has_role('rupaykg_runtime_login', 'rupaykg_security_definer', 'MEMBER') then
     raise exception 'RUPAYKG_RUNTIME_CAN_ASSUME_SECURITY_DEFINER_OWNER';
   end if;
 end
