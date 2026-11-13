@@ -9,7 +9,7 @@ const organizationId = "223e4567-e89b-42d3-a456-426614174000";
 const roleId = "323e4567-e89b-42d3-a456-426614174000";
 
 function fakePool(isSuperAdmin: boolean): Pool {
-  const query = async (sql: string) => {
+  const query = async (sql: string, _params?: unknown[]) => {
       if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }] };
       if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }] };
       if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
