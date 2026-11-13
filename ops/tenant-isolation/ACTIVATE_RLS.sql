@@ -36,7 +36,7 @@ begin
         ('settlements'),('audit_events'),('resource_flows'),('field_devices'),
         ('organization_memberships'),('measurements'),('evidence'),('verifications'),
         ('carbon_calculations'),('mrv_observations'),
-        ('evidence_verification_requirements'),('chain_of_custody_links')
+        ('evidence_verification_requirements'),('chain_of_custody_links'),('evidence_artifact_series'),('evidence_artifact_versions'),('evidence_artifact_reviews'),('field_sync_envelopes'),('field_sync_cursors'),('field_sync_conflicts'),('mrv_provenance_events')
     )
     select 1
       from protected p
@@ -61,10 +61,12 @@ begin
          'settlements','audit_events','resource_flows','field_devices',
          'organization_memberships','measurements','evidence','verifications',
          'carbon_calculations','mrv_observations',
-         'evidence_verification_requirements','chain_of_custody_links'
+         'evidence_verification_requirements','chain_of_custody_links',
+         'evidence_artifact_series','evidence_artifact_versions','evidence_artifact_reviews',
+         'field_sync_envelopes','field_sync_cursors','field_sync_conflicts','mrv_provenance_events'
        )
        and pg_get_userbyid(c.relowner) = current_user
-  ) <> 17 then
+  ) <> 24 then
     raise exception 'TENANT_ISOLATION_ACTIVATION_BLOCKED: current DDL role does not own all protected tenant tables';
   end if;
 end $shakti$;
@@ -86,6 +88,13 @@ alter table carbon_calculations enable row level security;
 alter table mrv_observations enable row level security;
 alter table evidence_verification_requirements enable row level security;
 alter table chain_of_custody_links enable row level security;
+alter table evidence_artifact_series enable row level security;
+alter table evidence_artifact_versions enable row level security;
+alter table evidence_artifact_reviews enable row level security;
+alter table field_sync_envelopes enable row level security;
+alter table field_sync_cursors enable row level security;
+alter table field_sync_conflicts enable row level security;
+alter table mrv_provenance_events enable row level security;
 
 select
   c.relname as table_name,
