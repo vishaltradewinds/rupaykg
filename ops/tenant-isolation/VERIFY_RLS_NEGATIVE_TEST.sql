@@ -219,6 +219,45 @@ begin
   execute 'set local role rupaykg_app_runtime';
   perform app.set_request_context(v_identity_a,v_org_a,v_context_token_a);
 
+  -- Session revocation invalidates an already-issued context grant immediately.
+  reset role;
+  update identity_sessions set revoked_at=now()
+   where token_hash='shakti-rls-a:'||v_suffix;
+  execute 'set local role rupaykg_app_runtime';
+  select count(*) into v_visible from organizations where id=v_org_a;
+  if v_visible <> 0 then
+    raise exception 'RLS_NEGATIVE_TEST_FAILED: revoked bearer session retained tenant visibility';
+  end if;
+  reset role;
+  update identity_sessions set revoked_at=null
+   where token_hash='shakti-rls-a:'||v_suffix;
+
+  -- Expiry invalidates a grant even while the underlying session remains live.
+  update app.request_context_grants set expires_at=now()-interval '1 second'
+   where id=v_context_token_a;
+  execute 'set local role rupaykg_app_runtime';
+  select count(*) into v_visible from organizations where id=v_org_a;
+  if v_visible <> 0 then
+    raise exception 'RLS_NEGATIVE_TEST_FAILED: expired context grant retained tenant visibility';
+  end if;
+  reset role;
+  update app.request_context_grants set expires_at=now()+interval '1 minute'
+   where id=v_context_token_a;
+
+  -- Membership revocation invalidates the grant without waiting for its TTL.
+  update organization_memberships set status='REVOKED'
+   where identity_id=v_identity_a and organization_id=v_org_a;
+  execute 'set local role rupaykg_app_runtime';
+  select count(*) into v_visible from organizations where id=v_org_a;
+  if v_visible <> 0 then
+    raise exception 'RLS_NEGATIVE_TEST_FAILED: revoked organization membership retained tenant visibility';
+  end if;
+  reset role;
+  update organization_memberships set status='VERIFIED'
+   where identity_id=v_identity_a and organization_id=v_org_a;
+  execute 'set local role rupaykg_app_runtime';
+  perform app.set_request_context(v_identity_a,v_org_a,v_context_token_a);
+
   -- A tenant must not create a row in another tenant's organization scope.
   begin
     insert into organizations(id,name,organization_type,status)
