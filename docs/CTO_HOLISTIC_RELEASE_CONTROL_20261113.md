@@ -195,3 +195,31 @@ A release candidate may be called **production-ready** only when every material 
 - PR #355 remains open and unmerged. Canonical Render production remains on `main`; the candidate has not been deployed.
 - Production Neon remains untouched: migrations 101/102 are not applied, and no production DDL/DML, role, credential, or deployment-setting changes were made.
 - Updated release decision: **candidate CI PASS; production release HOLD** pending exact Render runtime identity proof, full-table tenant-isolation coverage and controlled production acceptance, Urban/Rural golden transactions, and operational recovery gates.
+
+
+## 2026-11-13 CTO convergence batch — full-table inventory and context-authenticity finding
+
+### Production inventory
+- Read-only catalog audit confirms 67 public tables: 17 RLS-enabled, 50 RLS-disabled, and 0 with FORCE ROW LEVEL SECURITY enabled.
+- The 50 unprotected tables span tenant-owned BWG/EPR/ESG/CPCB workflows, evidence vault, field-sync, provenance, registry/settlement events, stakeholder onboarding, identity/authentication control plane, shared regulatory/methodology/geography catalogues, and platform integrity.
+- These tables cannot safely receive a generic `organization_id` policy. The new evidence document classifies them into tenant-direct, tenant-child, multi-party, identity/control-plane, global reference/configuration, and platform-integrity groups; per-table FK and route review remains required.
+
+### New P0/P1 security finding — request-context authenticity
+- A read-only live test as `rupaykg_runtime_login` directly set both custom GUCs `app.identity_id` and `app.organization_id` in a single SELECT statement without calling `app.set_request_context(uuid,uuid)`; RLS then exposed the selected valid organization row (1 row).
+- A mismatched identity/organization pair remained blocked (0 rows), so the current policy checks membership consistency. However, the GUC pair is not cryptographically/session-bound to the bearer token; a compromised runtime DB session or SQL-injection path could choose a known valid identity/organization pair.
+- This is now an explicit release blocker. Membership validation alone is not sufficient proof of authenticated context authenticity. A session-bound, non-forgeable context hand-off must be designed and tested before tenant isolation is called robust.
+- Evidence: `docs/audit/evidence/2026-11-13-cto-tenant-boundary-context-authenticity.md`.
+
+### Candidate migration/test corrections
+- Corrected migration 101's new permissive policies to include `app.is_verified_org_member(...)` predicates. Without this, its weaker organization-GUC-only policies could OR-combine with and weaken the migration 099 policy foundation.
+- Extended the rollback-only negative-test harness to assert that setting only the organization GUC with no identity yields zero visible organization rows.
+- This regression test does not resolve the separate direct spoof of a valid identity/organization pair. Current CI is required before treating the correction as accepted.
+
+### Updated release decision
+- Candidate CI run 6822: PASS for the prior candidate only; new migration/test corrections require a fresh run.
+- Production inventory: 17/67 RLS; 0 FORCE RLS.
+- Context authenticity: OPEN / RELEASE BLOCKER.
+- Full 67-table policy map and write-denial acceptance: OPEN.
+- Migrations 101/102: NOT APPLIED.
+- Urban/Rural real Golden Transactions: OPEN.
+- Production release: HOLD.
