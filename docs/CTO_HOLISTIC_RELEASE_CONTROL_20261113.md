@@ -19,12 +19,12 @@ Urban, rural, peri-urban, industrial and regional deployments are controlled con
 
 | Gate | Required evidence | Current decision |
 |---|---|---|
-| Current HEAD CI | Successful CI on current release candidate | OPEN |
-| Migration reconciliation | Read-only production/staging comparison | OPEN |
+| Current HEAD CI | Successful CI on current release candidate | **PASS** — CI run 6808 on `ec4ce27f...` completed successfully |
+| Migration reconciliation | Read-only production/staging comparison | **PARTIAL / OPEN** — production schema_migrations reaches `20261021`; repository head contains migrations through `100` plus dated migrations |
 | Runtime identity | Verified identity + active membership | OPEN |
-| Runtime DB role | Non-BYPASSRLS runtime role | OPEN |
-| RLS | Enabled and tested in target runtime | OPEN |
-| Cross-tenant negative tests | Tenant A cannot read/write tenant B | OPEN |
+| Runtime DB role | Non-BYPASSRLS runtime role | **OPEN** — current production connection role `rupaykg` reports `rolbypassrls=true`; dedicated `rupaykg_app_runtime` exists in schema |
+| RLS | Enabled and tested in target runtime | **PARTIAL / OPEN** — 17 public tables currently report RLS enabled; 50 remain disabled; no production acceptance claim |
+| Cross-tenant negative tests | Tenant A cannot read/write tenant B | **OPEN** — repository has a controlled negative-test script, but authoritative production acceptance evidence is not yet recorded |
 | Urban Golden Transaction | Real end-to-end acceptance evidence | OPEN |
 | Rural Golden Transaction | Real end-to-end acceptance evidence | OPEN |
 | Physical measurement | Authenticated measurement/evidence | OPEN |
