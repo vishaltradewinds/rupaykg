@@ -223,3 +223,34 @@ A release candidate may be called **production-ready** only when every material 
 - Migrations 101/102: NOT APPLIED.
 - Urban/Rural real Golden Transactions: OPEN.
 - Production release: HOLD.
+
+
+## 2026-11-13 CTO convergence batch — session-bound context and remaining-table map
+
+### Request-context authenticity remediation
+- Added candidate migration `103_shakti_nonforgeable_request_context.sql`: the SECURITY DEFINER bearer-session bootstrap now mints short-lived opaque context grants; the request-context setter requires the matching grant; RLS context readers validate the grant against the live session, verified identity and current verified membership.
+- The runtime role has no direct access to the private `app.request_context_grants` table. The API authentication layer carries the opaque grant internally; `withTenantTransaction` passes it to the setter.
+- Removed the pre-context `organization_memberships` SELECT from `withTenantTransaction`. That query would be denied by the very RLS policy being established when the real non-BYPASSRLS runtime role connects. The bootstrap and grant setter now perform the authoritative checks before any tenant-scoped query.
+- Expanded the integration test to SET ROLE `rupaykg_app_runtime` before calling the authentication bootstrap, before setting context, and for tenant-scoped reads. It also tests direct identity+organization GUC spoof without a context grant and cross-organization grant reuse.
+- CI run 6843 completed SUCCESS on candidate SHA `aa82c3456fc8f230e73c0bbdfaaff51faa81c13c` (includes migration 103, auth token plumbing, migration/test typecheck/build and PostgreSQL integration suite; this run preceded the final non-BYPASSRLS transaction-wrapper test).
+- CI run 6845 has passed dependency audit, runtime-role assertion, migration validation/execution, typecheck, build, browser smoke and disposable PostgreSQL acceptance with the non-BYPASSRLS transaction-wrapper test. Production-container build is still in progress at the time of this update. Run 6845 is on SHA `84599aacf20829b32969bca6189fe52a0045d102`; the subsequent commit that explicitly runs bearer bootstrap as runtime role requires its own fresh run.
+- Earlier intermediate failures were used to fix the PL/pgSQL enum-to-text return cast and update test doubles to return the new context token. Do not count those failed runs as passing evidence.
+
+### Remaining 50-table classification
+- Added `docs/audit/evidence/2026-11-13-cto-tenant-policy-map-50-tables.md`, based on production catalog columns and FK targets. All 50 tables now have a candidate class: tenant-direct, tenant-child, multi-party, identity/control-plane, global reference, or platform-integrity.
+- The map highlights unresolved semantics: bilateral EPR credit/transfer/allocation visibility; registry owner/recipient event scope; settlement-event payer/payee scope; pre-membership stakeholder application review; identity-secret access; and `operation_sync_envelopes.device_id` lacking an observed FK to `field_devices`.
+- This is a classification, not policy implementation. RLS remains disabled on these 50 tables; each still needs code-path, operation-level and negative-test acceptance.
+
+### Urban/Rural real-data readiness
+- Read-only production inventory found two VERIFIED organizations, both `test_fixture`; zero activities, resource flows, measurements, evidence, verifications, field devices, MRV provenance events, credentials, registry events or settlements.
+- The only geography row is the versioned acceptance-fixture cluster. No source-versioned ULB/Ward/Block/Gram Panchayat/Village records exist in the inspected production geography table.
+- Urban and Rural Golden Transactions therefore remain NOT EXECUTED. CI fixtures are synthetic tests, not field/site evidence. SITE-JBP-01 remains pre-validation pending official site/ULB/GP records, authorized Generator + Aggregator + Processor/Recycler participation, source-backed geography, real calibrated measurement, evidence and independent verification.
+
+### Updated release decision
+- Session-bound context hardening: candidate implementation and tests underway; no production migration applied.
+- Production table coverage: 17/67 RLS enabled, 50/67 disabled, 0 FORCE RLS in the inspected snapshot.
+- Remaining 50 table policies: classified, not implemented.
+- Real Urban/Rural transactions: not executed; production has no operational rows or source-backed ULB/GP geography.
+- Migrations 101/102/103: NOT APPLIED to production.
+- PR #355: OPEN / UNMERGED.
+- Production release: HOLD.
