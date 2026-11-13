@@ -36,7 +36,9 @@ begin
     'carbon_calculations','mrv_observations',
     'evidence_verification_requirements','chain_of_custody_links',
     'evidence_artifact_series','evidence_artifact_versions','evidence_artifact_reviews',
-    'field_sync_envelopes','field_sync_cursors','field_sync_conflicts','mrv_provenance_events','organization_geography_scopes','registry_events','settlement_events','environmental_attribute_claims'
+    'field_sync_envelopes','field_sync_cursors','field_sync_conflicts','mrv_provenance_events','organization_geography_scopes','registry_events','settlement_events','environmental_attribute_claims',
+    'bwg_profiles','bwg_reporting_periods','esg_reporting_periods','cpcb_swm_stakeholder_workspaces',
+    'organization_bwg_assessments','organization_epr_applicability','organization_statutory_profiles','organization_verification_evidence'
   ] loop
     if not exists (
       select 1 from pg_class c
@@ -332,7 +334,10 @@ begin
     'settlements','audit_events','resource_flows','field_devices',
     'organization_memberships','measurements','evidence','verifications',
     'carbon_calculations','mrv_observations',
-    'evidence_verification_requirements','chain_of_custody_links'
+    'evidence_verification_requirements','chain_of_custody_links',
+    'bwg_profiles','bwg_reporting_periods','esg_reporting_periods','cpcb_swm_stakeholder_workspaces',
+    'organization_bwg_assessments','organization_epr_applicability','organization_geography_scopes',
+    'organization_statutory_profiles','organization_verification_evidence'
   ] loop
     execute format('select count(*) from public.%I', v_name) into v_visible;
     if v_visible <> 0 then
