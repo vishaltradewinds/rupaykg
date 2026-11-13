@@ -39,3 +39,18 @@ Before any further production RLS/role mutation:
 ## Safety decision
 
 No production SQL, role, ownership, RLS, credential, or deployment changes were made during this audit.
+
+## Controlled rehearsal evidence discovered
+
+Existing Neon rehearsal branch `rupaykg-tenant-isolation-lab-20261101` was inspected read-only. It reports:
+
+- `rupaykg_app_runtime`: non-superuser, non-BYPASSRLS.
+- The rehearsal branch has 22 RLS-enabled public tables.
+- Tenant policies on the inspected protected tables target `rupaykg_app_runtime` and use `app.current_organization_id()`.
+- The production/default branch remains at 17 RLS-enabled public tables.
+- The rehearsal branch's `rupaykg` owner/login remains BYPASSRLS; this does not constitute application-runtime acceptance.
+- The rehearsal branch therefore provides useful policy/runtime-role evidence, but not proof that the current production deployment is correctly configured.
+
+## Current blocker sharpened
+
+The missing production gate is now specifically the **runtime deployment credential + complete policy coverage + transactional cross-tenant acceptance**. The runtime role itself exists and is correctly non-BYPASSRLS, but it is currently `NOLOGIN` on production. No credential or role mutation was performed.
