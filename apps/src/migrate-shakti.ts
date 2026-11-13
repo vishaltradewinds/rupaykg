@@ -19,15 +19,16 @@ const pool = new Pool({
   ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
 });
 
-const controlledMigrations = new Set([
+const controlledMigrationOrder = [
   "101_shakti_tenant_isolation_activation.sql",
   "102_shakti_runtime_auth_handoff.sql",
   "103_shakti_nonforgeable_request_context.sql",
   "104_shakti_isolated_security_definer_owner.sql",
+  // This date-prefixed file is logical migration 105; keep it before 106/107.
   "20261113_shakti_field_sync_evidence_mrv_rls.sql",
   "106_credential_lifecycle_verification_boundary.sql",
   "107_shakti_tenant_direct_domain_activation.sql",
-]);
+];
 
 try {
   const identity = await pool.query<{ session_user: string; current_user: string }>(
@@ -60,13 +61,10 @@ try {
   const migrationDir = candidates.find((candidate) => existsSync(candidate));
   if (!migrationDir) throw new Error(`Migration directory not found. Checked: ${candidates.join(", ")}`);
 
-  const files = (await readdir(migrationDir))
-    .filter((name) => controlledMigrations.has(name))
-    .sort();
-  if (files.length !== controlledMigrations.size) {
-    const missing = [...controlledMigrations].filter((name) => !files.includes(name));
-    throw new Error(`Controlled Shakti migration set is incomplete: ${missing.join(", ")}`);
-  }
+  const availableFiles = new Set(await readdir(migrationDir));
+  const missing = controlledMigrationOrder.filter((name) => !availableFiles.has(name));
+  if (missing.length) throw new Error(`Controlled Shakti migration set is incomplete: ${missing.join(", ")}`);
+  const files = controlledMigrationOrder;
 
   const prefixCounts = new Map<string, number>();
   for (const filename of files) {
