@@ -56,6 +56,8 @@ declare
   v_org_b uuid;
   v_identity_a uuid;
   v_identity_b uuid;
+  v_context_token_a uuid;
+  v_context_token_b uuid;
   v_role_a uuid;
   v_role_b uuid;
   v_visible integer;
@@ -100,6 +102,24 @@ begin
     (v_identity_a,v_org_a,v_role_a,'VERIFIED'),
     (v_identity_b,v_org_b,v_role_b,'VERIFIED');
 
+  -- Mint opaque context grants only through the verified bearer-session
+  -- bootstrap. Fixture token hashes are synthetic and transaction-local.
+  insert into identity_sessions(identity_id,expires_at,token_hash)
+  values
+    (v_identity_a, now()+interval '5 minutes', 'shakti-rls-a:'||v_suffix),
+    (v_identity_b, now()+interval '5 minutes', 'shakti-rls-b:'||v_suffix);
+
+  select context_token into v_context_token_a
+    from app.authenticate_bearer_session('shakti-rls-a:'||v_suffix)
+   where organization_id=v_org_a;
+  select context_token into v_context_token_b
+    from app.authenticate_bearer_session('shakti-rls-b:'||v_suffix)
+   where organization_id=v_org_b;
+
+  if v_context_token_a is null or v_context_token_b is null then
+    raise exception 'RLS_NEGATIVE_TEST_FAILED: bearer bootstrap did not issue context grants';
+  end if;
+
   if exists (
     select 1 from pg_trigger t
      where t.tgrelid = 'public.organization_memberships'::regclass
@@ -111,7 +131,7 @@ begin
 
   execute 'set local role rupaykg_app_runtime';
 
-  perform app.set_request_context(v_identity_a,v_org_a);
+  perform app.set_request_context(v_identity_a,v_org_a,v_context_token_a);
 
   select count(*) into v_visible from organizations where id=v_org_a;
   if v_visible <> 1 then
@@ -134,6 +154,21 @@ begin
   if v_affected <> 0 then
     raise exception 'RLS_NEGATIVE_TEST_FAILED: tenant A deleted organization B';
   end if;
+
+  -- A caller-selected identity/organization pair without the opaque
+  -- bearer-session grant must not satisfy RLS, even if both values are valid.
+  reset role;
+  execute 'set local role rupaykg_app_runtime';
+  perform set_config('app.identity_id', v_identity_a::text, true);
+  perform set_config('app.organization_id', v_org_a::text, true);
+  perform set_config('app.context_token', '', true);
+  select count(*) into v_visible from organizations where id=v_org_a;
+  if v_visible <> 0 then
+    raise exception 'RLS_NEGATIVE_TEST_FAILED: direct identity/organization GUC spoof bypassed context grant';
+  end if;
+  reset role;
+  execute 'set local role rupaykg_app_runtime';
+  perform app.set_request_context(v_identity_a,v_org_a,v_context_token_a);
 
   -- A tenant must not create a row in another tenant's organization scope.
   begin
