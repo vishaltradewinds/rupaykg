@@ -70,6 +70,13 @@ begin
   execute 'alter function app.current_identity_id() owner to rupaykg_security_definer';
   execute 'alter function app.current_organization_id() owner to rupaykg_security_definer';
   execute 'alter function app.is_verified_org_member(uuid) owner to rupaykg_security_definer';
+
+  -- Preserve the existing authentication path during the short bootstrap-to-
+  -- migration interval. Migration 104 resets and reasserts this exact surface.
+  execute 'grant select (id, status, suspended_at) on public.identities to rupaykg_security_definer';
+  execute 'grant select (id, identity_id, token_hash, expires_at, revoked_at) on public.identity_sessions to rupaykg_security_definer';
+  execute 'grant select (identity_id, organization_id, role_id, status) on public.organization_memberships to rupaykg_security_definer';
+  execute 'grant select (id, status) on public.organizations to rupaykg_security_definer';
   execute 'revoke create on schema app from rupaykg_security_definer';
   execute format('revoke rupaykg_security_definer from %I', login_role);
   execute 'comment on role rupaykg_security_definer is ''NOLOGIN/NOBYPASSRLS isolated owner for narrowly scoped SECURITY DEFINER functions; no application runtime membership.''';
