@@ -353,6 +353,87 @@ as $function$
 $function$;
 
 alter function app.is_verified_organization(uuid) owner to rupaykg_security_definer;
+
+-- Narrow, boolean-only cross-tenant integrity checks used by the credential
+-- scope trigger. The isolated owner sees only the required columns.
+grant select (id, organization_id, geography_id) on public.activities to rupaykg_security_definer;
+grant select (organization_id, geography_id, status) on public.organization_geography_scopes to rupaykg_security_definer;
+
+drop policy if exists shakti_security_definer_activities_read on public.activities;
+create policy shakti_security_definer_activities_read
+  on public.activities for select
+  to rupaykg_security_definer
+  using (true);
+
+drop policy if exists shakti_security_definer_organization_geography_scopes_read on public.organization_geography_scopes;
+create policy shakti_security_definer_organization_geography_scopes_read
+  on public.organization_geography_scopes for select
+  to rupaykg_security_definer
+  using (true);
+
+create or replace function app.activity_belongs_to_organization(target_activity_id uuid, target_organization_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = pg_catalog, public, app
+as $function$
+  select exists (
+    select 1
+      from public.activities activity_row
+     where activity_row.id = target_activity_id
+       and activity_row.organization_id = target_organization_id
+  )
+$function$;
+
+alter function app.activity_belongs_to_organization(uuid, uuid) owner to rupaykg_security_definer;
+revoke all on function app.activity_belongs_to_organization(uuid, uuid) from public;
+grant execute on function app.activity_belongs_to_organization(uuid, uuid) to rupaykg_app_runtime;
+
+create or replace function app.activity_has_verified_geography_scope(target_activity_id uuid, target_organization_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = pg_catalog, public, app
+as $function$
+  select exists (
+    select 1
+      from public.activities activity_row
+      join public.organization_geography_scopes scope_row
+        on scope_row.organization_id = target_organization_id
+       and scope_row.geography_id = activity_row.geography_id
+       and scope_row.status = 'VERIFIED'
+     where activity_row.id = target_activity_id
+       and activity_row.organization_id = target_organization_id
+       and activity_row.geography_id is not null
+  )
+$function$;
+
+alter function app.activity_has_verified_geography_scope(uuid, uuid) owner to rupaykg_security_definer;
+revoke all on function app.activity_has_verified_geography_scope(uuid, uuid) from public;
+grant execute on function app.activity_has_verified_geography_scope(uuid, uuid) to rupaykg_app_runtime;
+
+create or replace function public.prevent_credential_out_of_scope_issue()
+returns trigger
+language plpgsql
+set search_path = pg_catalog, public, app
+as $trigger$
+begin
+  if new.status in ('ISSUED','ACTIVE','TRANSFERRED','RETIRED') then
+    if not app.activity_belongs_to_organization(new.activity_id, new.issuer_organization_id) then
+      raise exception 'credential activity must belong to issuer organization';
+    end if;
+
+    if not app.activity_has_verified_geography_scope(new.activity_id, new.issuer_organization_id) then
+      raise exception 'credential activity geography is outside issuer organization authorization scope';
+    end if;
+  end if;
+
+  return new;
+end;
+$trigger$;
+
 revoke create on schema app from rupaykg_security_definer;
 revoke all on function app.organization_has_verified_members(uuid) from public;
 grant execute on function app.organization_has_verified_members(uuid) to rupaykg_app_runtime;
@@ -385,7 +466,7 @@ end;
 $trigger$;
 
 comment on role rupaykg_security_definer is
-'NOLOGIN/NOBYPASSRLS owner for narrowly scoped authentication, tenant-context, registry current-owner, organization-readiness and organization-verification SECURITY DEFINER functions; never grant membership to application roles.';
+'NOLOGIN/NOBYPASSRLS owner for narrowly scoped authentication, tenant-context, registry current-owner, organization-readiness, organization-verification and credential-scope SECURITY DEFINER functions; never grant membership to application roles.';
 
 -- A credential remains visible to its issuer and to its current registry owner.
 -- Historical former owners can read only events in which they participated.
