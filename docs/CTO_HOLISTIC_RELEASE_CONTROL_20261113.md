@@ -280,3 +280,31 @@ A release candidate may be called **production-ready** only when every material 
 - Run 6849/6850 exposed an undeclared `v_name` variable in the rollback-only negative-test block; it is now declared in that DO block.
 - Run 6850 was executed against prior SHA `49f5cb04f768c4789e0132a7991898e785007576`, before the loop-variable correction. Its failure is therefore not the result for current PR head.
 - Current PR head at this document update: `5c0a8c43e71bae9e797f5b371a511d086b5a41af`. No workflow run was associated with this exact SHA at the time checked; fresh CI remains required.
+
+## 13 November 2026 — CTO candidate-branch checkpoint
+
+Canonical repository: `vishaltradewinds/rupaykg`. Work is confined to the candidate branch `cto/20261113-holistic-release-convergence` and PR #355. No production Neon migration, role provisioning, RLS activation, credential mutation, or deployment has been performed.
+
+### Candidate database security work
+
+- Runtime authentication and tenant transactions explicitly switch to the non-BYPASSRLS `rupaykg_app_runtime` role before establishing the authenticated request context.
+- The candidate RLS activation and acceptance inventory now covers 28 tables (17 previously enabled plus 11 additional tenant-scoped tables). This is candidate SQL only; the inspected production snapshot remains 17/67 RLS-enabled.
+- The candidate adds 12 narrowly scoped SECURITY DEFINER boolean helpers owned by the NOLOGIN/NOBYPASSRLS `rupaykg_security_definer` role. The helpers cover request context, verified membership, current registry owner, destination readiness, organization verification, activity/geography scope, acceptance-fixture exclusion and exact MRV provenance.
+- The isolated owner receives column-level SELECT grants only for the required fields in activities, geography scopes, organizations, memberships, evidence, verifications, MRV provenance and registry events. It receives no runtime membership and no BYPASSRLS.
+- Registry events and settlements are append-only/tenant-scoped. Credential access follows issuer and current owner; former owners retain access only to event rows in which they participated.
+- Credential issuance, transfer and retirement preserve Guardian/Hedera/Mirror Node proof, acceptance-fixture exclusion, verified destination organization and verified geography constraints.
+
+### Verification status
+
+- Migration validation, disposable PostgreSQL migration execution, SECURITY DEFINER boundary checks and typecheck/build/browser smoke have passed on recent candidate runs.
+- The full disposable PostgreSQL acceptance suite is still being iterated. A current-owner retirement path exposed that the MRV proof trigger queried issuer-owned provenance under the new owner's RLS context. The candidate now routes that exact proof check through a bounded helper; the latest CI run is pending.
+- Do not label the candidate fully green until the full suite and rollback-only tenant-isolation negative acceptance both pass on the exact PR head.
+
+### Release blockers retained
+
+1. Verify the actual production database login and controlled DDL ownership-transfer capability before any production migration.
+2. Complete tenant RLS policy design and negative tests for all remaining tables; 28 candidate-covered tables do not equal full-platform isolation.
+3. Refactor or explicitly gate platform-admin control-plane queries so they do not depend on elevated application database credentials.
+4. Complete exact-head CI, migration rehearsal, rollback review and runtime identity acceptance.
+5. Complete authenticated Guardian policy execution, HCS/Mirror Node provenance acceptance and field validation at SITE-JBP-01.
+6. Production Neon remains READ-ONLY/HOLD. No production deployment or TRL 9 claim is authorized by this checkpoint.
