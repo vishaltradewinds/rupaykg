@@ -85,6 +85,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
   app.post("/api/v1/mrv/activities/:activityId/submit", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const activityId = (request.params as { activityId: string }).activityId;
+    if (!auth.activeOrganizationId) return reply.code(403).send({ error: "Active organization is required for Guardian MRV submission", code: "MRV_ORGANIZATION_REQUIRED" });
     const body = bodyOf(request as never);
     const verificationId = str(body, "verificationId");
     const evidenceId = str(body, "evidenceId");
@@ -105,7 +106,8 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       const tenantTransaction = async <T>(fn: (client: PoolClient) => Promise<T>): Promise<T> => {
         await lockClient!.query("begin");
         try {
-          await lockClient!.query("select app.set_request_context($1,$2)", [auth.identityId, auth.activeOrganizationId]);
+          await lockClient!.query("set local role rupaykg_app_runtime");
+          await lockClient!.query("select app.set_request_context($1,$2,$3)", [auth.identityId, auth.activeOrganizationId, auth.contextToken]);
           const result = await fn(lockClient!);
           await lockClient!.query("commit");
           return result;
@@ -242,10 +244,10 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       return await withTenantTransaction(pool, auth, async client => {
       const owner = await client.query<{ organization_id: string }>("select organization_id from activities where id=$1", [activityId]);
       if (!owner.rows[0] || !canActForOrganization(auth, owner.rows[0].organization_id)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
-      if (!await requirePermission(pool, auth, owner.rows[0].organization_id, ["guardian:read"])) return reply.code(403).send({ error: "Guardian read permission required", code: "MRV_PERMISSION_REQUIRED" });
-      if (!await activityInAuthorizedGeography(pool, auth, activityId, owner.rows[0].organization_id)) return reply.code(403).send({ error: "Activity geography is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
+      if (!await requirePermission(client, auth, owner.rows[0].organization_id, ["guardian:read"])) return reply.code(403).send({ error: "Guardian read permission required", code: "MRV_PERMISSION_REQUIRED" });
+      if (!await activityInAuthorizedGeography(client, auth, activityId, owner.rows[0].organization_id)) return reply.code(403).send({ error: "Activity geography is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
       const rows = await client.query("select * from mrv_provenance_events where activity_id=$1 order by created_at desc", [activityId]);
-      const acceptanceFixture = await isAcceptanceFixture(pool, activityId);
+      const acceptanceFixture = await isAcceptanceFixture(client, activityId);
       return {
         source: "postgresql",
         syntheticData: false,
