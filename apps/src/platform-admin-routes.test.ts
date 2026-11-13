@@ -9,8 +9,7 @@ const organizationId = "223e4567-e89b-42d3-a456-426614174000";
 const roleId = "323e4567-e89b-42d3-a456-426614174000";
 
 function fakePool(isSuperAdmin: boolean): Pool {
-  return {
-    query: async (sql: string) => {
+  const query = async (sql: string) => {
       if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }] };
       if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }] };
       if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
@@ -27,7 +26,16 @@ function fakePool(isSuperAdmin: boolean): Pool {
         anchoredMrvRecords: "4",
       }] };
       throw new Error(`Unexpected SQL in platform-admin test: ${sql}`);
-    },
+  };
+  return {
+    query,
+    connect: async () => ({
+      query: async (sql: string, params?: unknown[]) => {
+        if (["begin", "commit", "rollback", "set local role rupaykg_app_runtime"].includes(sql.trim().toLowerCase())) return { rows: [] };
+        return query(sql, params);
+      },
+      release: () => {},
+    }),
   } as unknown as Pool;
 }
 
