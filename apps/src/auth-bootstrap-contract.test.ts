@@ -19,12 +19,16 @@ function request(authorization = "Bearer token", organizationId?: string): any {
 
 function poolWith(rows: any[]) {
   const calls: string[] = [];
+  const client = {
+    query: async (sql: string, _params?: unknown[]) => {
+      calls.push(sql);
+      return /app\\.authenticate_bearer_session/.test(sql) ? { rows } : { rows: [] };
+    },
+    release: () => {},
+  };
   return {
     calls,
-    query: async (sql: string, _params: unknown[]) => {
-      calls.push(sql);
-      return { rows };
-    },
+    connect: async () => client,
   } as any;
 }
 
@@ -34,7 +38,10 @@ test("authentication bootstrap uses the governed database function rather than a
   assert.equal(auth?.identityId, identityId);
   assert.equal(auth?.activeOrganizationId, orgA);
   assert.equal(auth?.contextToken, "test-context-token");
-  assert.match(pool.calls[0], /app\.authenticate_bearer_session/);
+  assert.equal(pool.calls[0], "begin");
+  assert.equal(pool.calls[1], "set local role rupaykg_app_runtime");
+  assert.match(pool.calls[2], /app\.authenticate_bearer_session/);
+  assert.equal(pool.calls[3], "commit");
   assert.doesNotMatch(pool.calls[0], /from\s+organization_memberships/i);
 });
 
