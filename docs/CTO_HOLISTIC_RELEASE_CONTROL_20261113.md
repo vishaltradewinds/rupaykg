@@ -308,3 +308,25 @@ Canonical repository: `vishaltradewinds/rupaykg`. Work is confined to the candid
 4. Complete exact-head CI, migration rehearsal, rollback review and runtime identity acceptance.
 5. Complete authenticated Guardian policy execution, HCS/Mirror Node provenance acceptance and field validation at SITE-JBP-01.
 6. Production Neon remains READ-ONLY/HOLD. No production deployment or TRL 9 claim is authorized by this checkpoint.
+
+
+## 2026-11-13 CTO convergence batch — exact-head RLS increment accepted
+
+- Exact PR head for this batch: `3ae62212ea5d53c5f37d9dcfb1c7b996a97c1db4`.
+- CI run `43451009351` / run number `6940` completed **SUCCESS** on the PR merge candidate. All 17 execution stages passed, including migration validation/execution, SECURITY DEFINER boundary acceptance, typecheck, build, browser smoke, disposable PostgreSQL acceptance, rollback-only tenant-isolation negative acceptance, and production-container build.
+- The first attempted batch exposed repository/CI schema drift: `cpcb_swm_stakeholder_workspaces` was present in the read-only production catalogue but absent from the repository's disposable schema. That table was removed from the candidate migration rather than inventing a compatibility table. The batch was then narrowed to the verified repository table `organization_geography_scopes`.
+- Migration `107_shakti_tenant_direct_domain_activation.sql` now enables and **FORCE RLS** for `organization_geography_scopes`, requires verified tenant membership, grants only the protected runtime DML surface, and remains unapplied to production.
+- The rollback-only negative acceptance was aligned with the exact activated table set and passed on the exact PR head.
+- This is a **candidate security increment**, not production activation. Production remains READ-ONLY/HOLD; migrations 101/102/103/107 remain unapplied, and full 67-table tenant isolation is still not proven.
+
+## Current exact-head release decision
+
+- Candidate CI: **PASS** on `3ae62212ea5d53c5f37d9dcfb1c7b996a97c1db4`.
+- Candidate migration 107: **REHEARSED IN DISPOSABLE CI; NOT APPLIED TO PRODUCTION**.
+- Tenant isolation: **IMPROVED / STILL PARTIAL**. The candidate protected domain is incrementally expanding; full 67-table coverage remains open.
+- Urban Golden Transaction: **OPEN / NOT EXECUTED**.
+- Rural Golden Transaction: **OPEN / NOT EXECUTED**.
+- Physical measurement: **OPEN**.
+- Guardian/Hedera authoritative execution: **OPEN**.
+- Backup/restore and operational rollback evidence: **OPEN**.
+- Production release: **BLOCKED / HOLD**.
