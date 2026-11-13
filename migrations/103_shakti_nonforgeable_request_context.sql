@@ -75,7 +75,7 @@ begin
       from verified_memberships vm
     returning grant_row.id, grant_row.identity_id, grant_row.organization_id
   )
-  select vm.identity_id, vm.organization_id, vm.role_id, vm.status, ig.id
+  select vm.identity_id, vm.organization_id, vm.role_id, vm.status::text, ig.id
     from verified_memberships vm
     join issued_grants ig
       on ig.identity_id = vm.identity_id
