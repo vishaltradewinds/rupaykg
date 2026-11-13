@@ -22,7 +22,7 @@ export async function registerRegistryRoutes(app:FastifyInstance,pool:Pool|null)
     const activityId=str(b,"activityId"),trustRootId=str(b,"trustRootId"),verificationId=str(b,"verificationId"),issuerOrganizationId=str(b,"issuerOrganizationId"),quantity=positive(b,"quantity"),unit=str(b,"unit");
     if(!activityId||!trustRootId||!verificationId||!issuerOrganizationId||quantity===null||!unit)return reply.code(400).send({error:"activityId, trustRootId, verificationId, issuerOrganizationId, positive quantity and unit are required"});
     if(!canActForOrganization(auth,issuerOrganizationId))return reply.code(403).send({error:"Issuer organization access denied",code:"ORG_FORBIDDEN"});
-    if(!await canPerformHighRiskActionInDatabase(pool,auth,issuerOrganizationId,"ISSUE_CREDENTIAL"))return reply.code(403).send({error:"Explicit ISSUE_CREDENTIAL permission is required",code:"HIGH_RISK_PERMISSION_REQUIRED"});
+    if(auth.activeOrganizationId!==issuerOrganizationId)return reply.code(403).send({error:"Credential issuance must use the authenticated issuer organization",code:"ISSUER_ORGANIZATION_FORBIDDEN"}); if(!await withTenantTransaction(pool,auth,client=>canPerformHighRiskActionInDatabase(client,auth,issuerOrganizationId,"ISSUE_CREDENTIAL")))return reply.code(403).send({error:"Explicit ISSUE_CREDENTIAL permission is required",code:"HIGH_RISK_PERMISSION_REQUIRED"});
     try{return reply.code(201).send({source:"postgresql",syntheticData:false,credential:await trace.getTracer("rupaykg-registry").startActiveSpan("rupaykg.registry.credential_issuance", async span => {
       span.setAttribute("rupaykg.operation", "credential_issuance");
       span.setAttribute("rupaykg.authoritative_mutation", true);
