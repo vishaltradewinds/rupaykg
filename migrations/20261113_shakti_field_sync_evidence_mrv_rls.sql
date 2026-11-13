@@ -381,27 +381,39 @@ create policy shakti_environmental_attribute_claims_tenant
   on public.environmental_attribute_claims for all
   to rupaykg_app_runtime
   using (
-    exists (
-      select 1 from public.credentials c
-       where c.id = environmental_attribute_claims.credential_id
-         and (
-           c.issuer_organization_id = app.current_organization_id()
-           or app.current_credential_owner_id(c.id) = app.current_organization_id()
-         )
-         and app.is_verified_org_member(app.current_organization_id())
+    organization_id = app.current_organization_id()
+    and app.is_verified_org_member(organization_id)
+    and exists (
+      select 1 from public.activities a
+       where a.id = environmental_attribute_claims.activity_id
+         and a.organization_id = environmental_attribute_claims.organization_id
+    )
+    and exists (
+      select 1 from public.evidence e
+       where e.id = environmental_attribute_claims.evidence_id
+         and e.activity_id = environmental_attribute_claims.activity_id
     )
   )
   with check (
-    exists (
-      select 1 from public.credentials c
-       where c.id = environmental_attribute_claims.credential_id
-         and (
-           c.issuer_organization_id = app.current_organization_id()
-           or app.current_credential_owner_id(c.id) = app.current_organization_id()
-         )
-         and app.is_verified_org_member(app.current_organization_id())
+    organization_id = app.current_organization_id()
+    and app.is_verified_org_member(organization_id)
+    and exists (
+      select 1 from public.activities a
+       where a.id = environmental_attribute_claims.activity_id
+         and a.organization_id = environmental_attribute_claims.organization_id
+    )
+    and exists (
+      select 1 from public.evidence e
+       where e.id = environmental_attribute_claims.evidence_id
+         and e.activity_id = environmental_attribute_claims.activity_id
+    )
+    and exists (
+      select 1 from public.verifications v
+       where v.activity_id = environmental_attribute_claims.activity_id
+         and v.evidence_id = environmental_attribute_claims.evidence_id
     )
   );
+
 grant select, insert on public.environmental_attribute_claims to rupaykg_app_runtime;
 
 comment on table public.field_sync_envelopes is
