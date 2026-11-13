@@ -14,7 +14,6 @@ begin
     'bwg_profiles',
     'bwg_reporting_periods',
     'esg_reporting_periods',
-    'cpcb_swm_stakeholder_workspaces',
     'organization_bwg_assessments',
     'organization_epr_applicability',
     'organization_geography_scopes',
@@ -148,7 +147,6 @@ grant select, insert, update, delete on
   public.bwg_profiles,
   public.bwg_reporting_periods,
   public.esg_reporting_periods,
-  public.cpcb_swm_stakeholder_workspaces,
   public.organization_bwg_assessments,
   public.organization_epr_applicability,
   public.organization_geography_scopes,
@@ -163,8 +161,6 @@ comment on table public.bwg_profiles is
 comment on table public.bwg_reporting_periods is
 'Shakti tenant boundary: organization-owned runtime rows require verified membership.';
 comment on table public.esg_reporting_periods is
-'Shakti tenant boundary: organization-owned runtime rows require verified membership.';
-comment on table public.cpcb_swm_stakeholder_workspaces is
 'Shakti tenant boundary: organization-owned runtime rows require verified membership.';
 comment on table public.organization_bwg_assessments is
 'Shakti tenant boundary: organization-owned runtime rows require verified membership.';
