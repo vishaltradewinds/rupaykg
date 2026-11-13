@@ -240,13 +240,13 @@ begin
   perform set_config('app.identity_id', '', true);
   perform set_config('app.organization_id', '', true);
 
-  for v_name in select unnest(array[
+  foreach v_name in array array[
     'organizations','roles','activities','obligations','credentials',
     'settlements','audit_events','resource_flows','field_devices',
     'organization_memberships','measurements','evidence','verifications',
     'carbon_calculations','mrv_observations',
     'evidence_verification_requirements','chain_of_custody_links'
-  ]) loop
+  ] loop
     execute format('select count(*) from public.%I', v_name) into v_visible;
     if v_visible <> 0 then
       raise exception 'RLS_NEGATIVE_TEST_FAILED: no-context runtime can see % rows from protected table %', v_visible, v_name;
