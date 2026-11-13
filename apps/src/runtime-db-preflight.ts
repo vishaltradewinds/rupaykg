@@ -195,7 +195,7 @@ try {
     owner_safe: boolean;
     runtime_can_assume_owner: boolean;
     runtime_login_can_assume_owner: boolean;
-    owner_has_memberships: boolean;
+    owner_has_unsafe_memberships: boolean;
   }>(
     `select
        exists (select 1 from pg_roles where rolname = 'rupaykg_security_definer') as owner_exists,
@@ -207,10 +207,21 @@ try {
        pg_has_role('rupaykg_app_runtime', 'rupaykg_security_definer', 'MEMBER') as runtime_can_assume_owner,
        pg_has_role(session_user, 'rupaykg_security_definer', 'MEMBER') as runtime_login_can_assume_owner,
        exists (
-         select 1 from pg_auth_members membership
+         select 1
+           from pg_auth_members membership
+           left join pg_roles member_role on member_role.oid = membership.member
           where membership.member = 'rupaykg_security_definer'::regrole
-             or membership.roleid = 'rupaykg_security_definer'::regrole
-       ) as owner_has_memberships`,
+             or (
+               membership.roleid = 'rupaykg_security_definer'::regrole
+               and not (
+                 member_role.rolname = 'rupaykg'
+                 and pg_get_userbyid(membership.grantor) = 'cloud_admin'
+                 and membership.admin_option
+                 and not membership.inherit_option
+                 and not membership.set_option
+               )
+             )
+       ) as owner_has_unsafe_memberships`,
   );
   const boundary = ownerBoundary.rows[0];
   if (
@@ -218,7 +229,7 @@ try {
     !boundary.owner_safe ||
     boundary.runtime_can_assume_owner ||
     boundary.runtime_login_can_assume_owner ||
-    boundary.owner_has_memberships
+    boundary.owner_has_unsafe_memberships
   ) {
     throw new Error(
       `RUPAYKG_RUNTIME_DB_PREFLIGHT_FAILED: isolated SECURITY DEFINER owner role is unsafe: ${JSON.stringify(boundary)}`,
