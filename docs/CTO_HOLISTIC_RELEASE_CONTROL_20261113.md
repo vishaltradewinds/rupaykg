@@ -19,7 +19,7 @@ Urban, rural, peri-urban, industrial and regional deployments are controlled con
 
 | Gate | Required evidence | Current decision |
 |---|---|---|
-| Current HEAD CI | Successful CI on current release candidate | **PASS** — CI run 6808 on `ec4ce27f...` completed successfully |
+| Candidate CI | Successful CI on the tested code candidate; documentation-only head changes separately identified | **PASS** — run `43410574693` on code commit `754f44b...`; all 14 execution steps passed. PR head `840fd78...` contains documentation-only changes after that candidate; no separate CI run was returned for the docs-only head. |
 | Migration reconciliation | Read-only production/staging comparison | **PARTIAL / OPEN** — production schema_migrations reaches `20261021`; repository head contains migrations through `100` plus dated migrations |
 | Runtime identity | Verified identity + active membership | **PARTIAL PASS** — two existing verified identity/membership contexts were exercised transactionally; invalid bearer-token hash returned zero auth rows |
 | Runtime DB role | Non-BYPASSRLS runtime role | **PARTIAL PASS** — `rupaykg_runtime_login` exists, is LOGIN/non-BYPASSRLS, inherits `rupaykg_app_runtime`, and connected successfully; `rupaykg_app_runtime` remains NOLOGIN/non-BYPASSRLS. Admin role `rupaykg` remains BYPASSRLS |
@@ -153,3 +153,33 @@ A release candidate may be called **production-ready** only when every material 
 - Migrations 101/102 remain unapplied. Production data/schema/roles were not mutated; only read-only queries and transaction-local request-context settings were used.
 
 - The new candidate CI run 6820 for commit `754f44b...` was observed in progress at the time of this update; run 6808 remains the previously verified successful baseline, not evidence that the latest candidate is green.
+
+
+## 2026-11-13 CTO convergence batch — CI completion and application connection-path audit
+
+### CI result
+- GitHub Actions run `43410574693` completed successfully on candidate code commit `754f44b386fee9d3467e76d13e9bf6db90983484`.
+- All 14 execution steps passed, including dependency audit, disposable non-BYPASSRLS runtime-role assertion, migration validation and disposable migration execution, typecheck, build, browser smoke, PostgreSQL acceptance tests, and production-container build.
+- The current PR head `840fd78cb3834320ffb3d9db91db2f185fa0e8b2` is a documentation-only descendant of that code candidate. No separate workflow run was returned for the documentation-only head. The successful CI result is therefore attributed to the tested code SHA, not overstated as a new run on the later docs commit.
+
+### Application connection-path audit
+- Static path traced: `production-server.ts` reads the validated production configuration and propagates `DATABASE_URL`/TLS settings; `auth.ts` uses the configured pool for SECURITY DEFINER bearer-session bootstrap; `tenant-db.ts` establishes a transaction and calls `app.set_request_context(identity, organization)` before tenant-scoped work; `runtime-db-preflight.ts` checks the connected role and protected-table posture before startup.
+- Render inspection found canonical production service `rupaykg` still configured to deploy from `main`, with latest live deploy at `385c75174579ba35e5f0bdd928be690e78f03438`. The candidate PR branch is not deployed to that service.
+- The Render service configuration references externally supplied `DATABASE_URL`; its secret value was not retrieved or exposed. Consequently, the exact live application database login identity is **not verified** from the available deployment metadata. The separate `rupaykg_runtime_login` role was directly tested in read-only Neon checks, but that does not prove Render currently uses it.
+- Candidate startup preflight is fail-closed for privileged roles, protected-table RLS/ownership gaps, and the governed SECURITY DEFINER boundary. This safeguard is not proof that production has already passed it.
+
+### Test-scope review
+- The existing tenant integration test creates fixture organizations/identity/role/membership, validates transaction context and rejects an identity/organization mismatch. Its fixture setup/cleanup uses ordinary integration-test database operations and is intended for the disposable CI database; it is not a production-safe test harness.
+- `VERIFY_RLS_NEGATIVE_TEST.sql` is explicitly transactional and rolls back fixtures. It checks the two-tenant organization read boundary, cross-tenant organization UPDATE/DELETE row-count denial, and zero rows across the 17 protected tables with no request context.
+- That SQL harness has **not** been executed against production. It also does not yet prove every protected child-table write path, cross-tenant INSERT denial, or the full 67-table platform boundary. Those remain acceptance gaps.
+- No production data, schema, roles, credentials, or deployment settings were changed in this batch.
+
+### Updated release decision
+- Candidate code CI: PASS for `754f44b...`.
+- Canonical Render production deploy of PR #355: NOT DEPLOYED.
+- Exact production Render-to-Neon runtime login: NOT VERIFIED.
+- Live production tenant read-isolation: PARTIAL PASS for two organization contexts only.
+- Cross-tenant mutation denial and full-table coverage: OPEN.
+- Migrations 101/102: NOT APPLIED.
+- Urban/Rural real Golden Transactions: OPEN.
+- Production release: HOLD.
