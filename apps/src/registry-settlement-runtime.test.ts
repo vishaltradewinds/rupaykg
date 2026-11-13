@@ -59,7 +59,7 @@ before(async () => {
   } catch (error) { await c.query("rollback"); throw error; } finally { c.release(); }
   server = spawn(process.execPath, ["dist/src/server.js"], { cwd: process.cwd(), env: { ...process.env, PORT: String(port), HOST: "127.0.0.1", DATABASE_URL: databaseUrl, DATABASE_SSL: "false" }, stdio: ["ignore", "pipe", "pipe"] });
   server.stdout?.setEncoding("utf8");
-  server.stdout?.on("data", (chunk: string) => { serverStdout = (serverStdout + chunk).slice(-20000); });
+  server.stdout?.on("data", (chunk: string) => { serverStdout = (serverStdout + chunk).slice(-100000); });
   server.stderr?.setEncoding("utf8");
   server.stderr?.on("data", (chunk: string) => { serverStderr = (serverStderr + chunk).slice(-20000); });
   await waitFor(`${baseUrl}/health`, 200);
