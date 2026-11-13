@@ -11,7 +11,8 @@ with expected(function_name, identity_args) as (
     ('app.current_identity_id', ''),
     ('app.current_organization_id', ''),
     ('app.current_credential_owner_id', 'target_credential_id uuid'),
-    ('app.organization_has_verified_members', 'target_organization_id uuid')
+    ('app.organization_has_verified_members', 'target_organization_id uuid'),
+    ('app.is_verified_organization', 'target_organization_id uuid')
 ),
 actual as (
   select
@@ -59,7 +60,11 @@ select
   has_function_privilege(current_user, 'app.organization_has_verified_members(uuid)', 'EXECUTE')
     as organization_readiness_runtime_execute,
   (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.organization_has_verified_members(uuid)'::regprocedure)
-    as organization_readiness_public_execute;
+    as organization_readiness_public_execute,
+  has_function_privilege(current_user, 'app.is_verified_organization(uuid)', 'EXECUTE')
+    as verified_organization_runtime_execute,
+  (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.is_verified_organization(uuid)'::regprocedure)
+    as verified_organization_public_execute;
 
 select 1 / case
   when current_user <> 'rupaykg_app_runtime'
@@ -84,10 +89,12 @@ select 1 / case
           and pg_get_function_identity_arguments(p.oid) = 'target_credential_id uuid')
          or (p.proname = 'organization_has_verified_members'
           and pg_get_function_identity_arguments(p.oid) = 'target_organization_id uuid')
+         or (p.proname = 'is_verified_organization'
+          and pg_get_function_identity_arguments(p.oid) = 'target_organization_id uuid')
        )
        and p.prosecdef
        and coalesce(p.proconfig::text, '') like '%search_path=pg_catalog, public, app%'
-   ) = 7
+   ) = 8
    and has_function_privilege(current_user, 'app.set_request_context(uuid,uuid,uuid)', 'EXECUTE')
    and has_function_privilege(current_user, 'app.is_verified_org_member(uuid)', 'EXECUTE')
    and has_function_privilege(current_user, 'app.authenticate_bearer_session(text)', 'EXECUTE')
@@ -95,6 +102,7 @@ select 1 / case
    and has_function_privilege(current_user, 'app.current_organization_id()', 'EXECUTE')
    and has_function_privilege(current_user, 'app.current_credential_owner_id(uuid)', 'EXECUTE')
    and has_function_privilege(current_user, 'app.organization_has_verified_members(uuid)', 'EXECUTE')
+   and has_function_privilege(current_user, 'app.is_verified_organization(uuid)', 'EXECUTE')
    and not (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.current_identity_id()'::regprocedure)
    and not (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.current_organization_id()'::regprocedure)
    and not (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.set_request_context(uuid,uuid,uuid)'::regprocedure)
@@ -102,6 +110,7 @@ select 1 / case
    and not (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.authenticate_bearer_session(text)'::regprocedure)
    and not (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.current_credential_owner_id(uuid)'::regprocedure)
    and not (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.organization_has_verified_members(uuid)'::regprocedure)
+   and not (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.is_verified_organization(uuid)'::regprocedure)
   then 1
   else 0
 end as security_definer_boundary_assertion;
@@ -126,7 +135,8 @@ where p.pronamespace = 'app'::regnamespace
     'current_identity_id',
     'current_organization_id',
     'current_credential_owner_id',
-    'organization_has_verified_members'
+    'organization_has_verified_members',
+    'is_verified_organization'
   )
 order by p.proname, p.oid::regprocedure::text;
 
@@ -305,10 +315,11 @@ select 1 / case
               'current_identity_id',
               'current_organization_id',
               'current_credential_owner_id',
-              'organization_has_verified_members'
+              'organization_has_verified_members',
+              'is_verified_organization'
             )
             and p.proowner = owner_role.oid
-       ) = 7
+       ) = 8
   )
   then 1
   else 0
