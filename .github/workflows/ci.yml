@@ -48,6 +48,14 @@ jobs:
           test "$(psql "$DATABASE_URL" -tAc "select rolbypassrls from pg_roles where rolname = 'rupaykg_app_runtime'")" = "f"
       - run: npm run validate:migrations
       - run: npm run migrate -w @rupaykg/api
+      - name: Apply exact candidate verification migration as disposable fixture
+        run: psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --file=scripts/fixtures/20261104_verification_authorization_tenant_binding.sql
+      - name: Prove candidate migration against actual schema as non-owner API role
+        run: psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --file=scripts/test-verification-actual-schema-role.sql
+      - name: Prove actual-schema SECURITY DEFINER helper and tenant-context boundary
+        run: psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --file=scripts/test-verification-actual-schema-definer-role.sql
+      - name: Prove least-privilege verification guard role on disposable PostgreSQL
+        run: psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --file=scripts/test-verification-guard-role.sql
       - run: npm run typecheck
       - run: npm run build
       - name: Browser smoke test production web build
