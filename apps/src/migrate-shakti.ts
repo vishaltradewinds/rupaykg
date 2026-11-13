@@ -95,6 +95,9 @@ try {
       // grants before assuming the non-login DDL role.
       await client.query(`grant usage on schema app, public to ${securityDefinerRole}`);
       await client.query(`grant create on schema app to ${securityDefinerRole}`);
+      // These global catalogues remain owned by the database owner, not the
+      // DDL role. Grant their read-only runtime surface before SET ROLE.
+      await client.query("grant select on public.geography, public.methodology_versions to rupaykg_app_runtime");
       await client.query(`alter role ${ddlRole} inherit`);
       await client.query(`grant ${securityDefinerRole} to ${ddlRole}`);
       await client.query(`set local role ${ddlRole}`);
