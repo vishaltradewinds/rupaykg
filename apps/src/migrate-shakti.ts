@@ -90,9 +90,6 @@ try {
   } else if (existing.size > 0) {
     throw new Error("Partial Shakti migration ledger detected. Refusing to mix old and new migration execution paths; reconcile the ledger before retrying.");
   } else {
-    const migrationSql = await Promise.all(
-      controlledMigrationOrder.map((filename) => readFile(path.join(migrationDir, filename), "utf8")),
-    );
     const client = await pool.connect();
     try {
       await client.query("begin");
@@ -111,9 +108,10 @@ try {
       await client.query(`grant ${securityDefinerRole} to ${ddlRole}`);
       await client.query(`set local role ${ddlRole}`);
 
-      for (let index = 0; index < controlledMigrationOrder.length; index += 1) {
-        await client.query(migrationSql[index]);
-        console.log(`Executed controlled migration ${controlledMigrationOrder[index]}`);
+      for (const filename of controlledMigrationOrder) {
+        const sql = await readFile(path.join(migrationDir, filename), "utf8");
+        await client.query(sql);
+        console.log(`Executed controlled migration ${filename}`);
       }
 
       await client.query("reset role");
