@@ -35,7 +35,7 @@ before(async () => {
   try {
     await c.query("begin");
     ownerOrgId = (await c.query<{ id: string }>("insert into organizations(name,organization_type) values($1,'COLLECTOR') returning id", [`runtime-registry-owner-${suffix}`])).rows[0]!.id;
-    destinationOrgId = (await c.query<{ id: string }>("insert into organizations(name,organization_type) values($1,'PROCESSOR') returning id", [`runtime-registry-destination-${suffix}`])).rows[0]!.id;
+    destinationOrgId = (await c.query<{ id: string }>("insert into organizations(name,organization_type,status) values($1,'PROCESSOR','VERIFIED') returning id", [`runtime-registry-destination-${suffix}`])).rows[0]!.id;
     geographyId = (await c.query<{ id: string }>("insert into geography(kind,code,name) values('STATE_UT',$1,$2) returning id", [`REGISTRY-${suffix}`, `Registry Runtime ${suffix}`])).rows[0]!.id;
     await c.query("insert into organization_geography_scopes(organization_id,geography_id) values($1,$2)", [ownerOrgId, geographyId]);
     actorId = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`runtime-registry-actor-${suffix}`, "Registry Runtime Actor"])).rows[0]!.id;
