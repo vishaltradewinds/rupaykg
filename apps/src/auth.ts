@@ -4,6 +4,7 @@ import type { Pool, PoolClient } from "pg";
 
 export type AuthContext = {
   identityId: string;
+  contextToken: string;
   memberships: Array<{ organization_id: string; role_id: string; status: string }>;
   activeOrganizationId?: string;
   bilateralOrganizationScope?: boolean;
@@ -43,8 +44,9 @@ export async function authenticate(request: FastifyRequest, pool: Pool | null): 
     organization_id: string;
     role_id: string;
     status: string;
+    context_token: string;
   }>(
-    `select identity_id, organization_id, role_id, status
+    `select identity_id, organization_id, role_id, status, context_token
        from app.authenticate_bearer_session($1)`,
     [hashToken(token)],
   );
@@ -58,12 +60,15 @@ export async function authenticate(request: FastifyRequest, pool: Pool | null): 
   // authorize an action. A single-organization identity is safely scoped implicitly.
   if (memberships.rows.length > 1 && !requestedOrganizationId) return null;
   const activeOrganizationId = requestedOrganizationId ?? memberships.rows[0]?.organization_id;
+  const activeMembership = memberships.rows.find((m) => m.organization_id === activeOrganizationId);
+  if (!activeMembership?.context_token) return null;
   const requestPath = ((request.url ?? "").split("?", 1)[0]) ?? "";
   const bilateralOrganizationScope = requestPath === "/api/v1/settlements"
     || requestPath.startsWith("/api/v1/settlements/");
   return {
-    identityId: bootstrap.rows[0].identity_id,
-    memberships: memberships.rows,
+    identityId: activeMembership.identity_id,
+    contextToken: activeMembership.context_token,
+    memberships: memberships.rows.map(({ organization_id, role_id, status }) => ({ organization_id, role_id, status })),
     ...(activeOrganizationId ? { activeOrganizationId } : {}),
     ...(bilateralOrganizationScope ? { bilateralOrganizationScope: true } : {}),
   };
