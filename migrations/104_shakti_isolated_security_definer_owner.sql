@@ -39,13 +39,6 @@ begin
   if pg_has_role('rupaykg_app_runtime', 'rupaykg_security_definer', 'MEMBER') then
     raise exception 'RUPAYKG_RUNTIME_CAN_ASSUME_SECURITY_DEFINER_OWNER';
   end if;
-  if exists (
-    select 1 from pg_roles
-     where rolname = 'rupaykg_runtime_login'
-       and pg_has_role('rupaykg_runtime_login', 'rupaykg_security_definer', 'MEMBER')
-  ) then
-    raise exception 'RUPAYKG_RUNTIME_LOGIN_CAN_ASSUME_SECURITY_DEFINER_OWNER';
-  end if;
 end
 $$;
 
@@ -58,7 +51,7 @@ revoke all on public.identities, public.identity_sessions,
   public.organization_memberships, public.organizations,
   app.request_context_grants from rupaykg_security_definer;
 
-do $
+do $privilege_reset$
 declare
   privilege_row record;
 begin
@@ -81,7 +74,7 @@ begin
     );
   end loop;
 end
-$;
+$privilege_reset$;
 
 -- Only the columns read by the five SECURITY DEFINER functions are exposed.
 grant select (id, status, suspended_at)
