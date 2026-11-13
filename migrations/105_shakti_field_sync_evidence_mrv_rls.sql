@@ -25,7 +25,7 @@ grant select on public.geography to rupaykg_app_runtime;
 
 -- The Evidence Vault routes already target these authoritative relational
 -- records. Define their schema before applying the tenant policies below.
-create table if not exists public.evidence_artifact_series (
+create table if not exists evidence_artifact_series (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete restrict,
   activity_id uuid not null references public.activities(id) on delete restrict,
@@ -36,9 +36,9 @@ create table if not exists public.evidence_artifact_series (
 );
 
 create index if not exists evidence_artifact_series_org_activity_idx
-  on public.evidence_artifact_series (organization_id, activity_id, created_at desc);
+  on evidence_artifact_series (organization_id, activity_id, created_at desc);
 
-create table if not exists public.evidence_artifact_versions (
+create table if not exists evidence_artifact_versions (
   id uuid primary key default gen_random_uuid(),
   series_id uuid not null references public.evidence_artifact_series(id) on delete restrict,
   evidence_id uuid not null references public.evidence(id) on delete restrict,
@@ -294,9 +294,9 @@ comment on table public.mrv_provenance_events is
 );
 
 create index if not exists evidence_artifact_versions_evidence_idx
-  on public.evidence_artifact_versions (evidence_id, created_at desc);
+  on evidence_artifact_versions (evidence_id, created_at desc);
 
-create table if not exists public.evidence_artifact_reviews (
+create table if not exists evidence_artifact_reviews (
   id uuid primary key default gen_random_uuid(),
   evidence_id uuid not null references public.evidence(id) on delete restrict,
   artifact_version_id uuid not null references public.evidence_artifact_versions(id) on delete restrict,
@@ -308,7 +308,7 @@ create table if not exists public.evidence_artifact_reviews (
 );
 
 create index if not exists evidence_artifact_reviews_evidence_idx
-  on public.evidence_artifact_reviews (evidence_id, created_at desc);
+  on evidence_artifact_reviews (evidence_id, created_at desc);
 
 -- Field-sync records inherit tenant and device identity from field_devices.
 alter table public.field_sync_envelopes enable row level security;
