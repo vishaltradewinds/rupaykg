@@ -135,6 +135,16 @@ begin
     raise exception 'RLS_NEGATIVE_TEST_FAILED: tenant A deleted organization B';
   end if;
 
+  -- A tenant must not create a row in another tenant's organization scope.
+  begin
+    insert into organizations(id,name,organization_type,status)
+    values (gen_random_uuid(), 'SHakti-RLS-cross-tenant-insert-'||v_suffix, 'test_fixture', 'VERIFIED');
+    raise exception 'RLS_NEGATIVE_TEST_FAILED: tenant A inserted an organization outside its own scope';
+  exception
+    when insufficient_privilege then
+      null; -- expected PostgreSQL RLS WITH CHECK denial (SQLSTATE 42501)
+  end;
+
   reset role;
 
   -- Fail-closed check: with no tenant context, the runtime must see zero
