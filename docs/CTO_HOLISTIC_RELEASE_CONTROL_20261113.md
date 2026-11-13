@@ -21,10 +21,10 @@ Urban, rural, peri-urban, industrial and regional deployments are controlled con
 |---|---|---|
 | Current HEAD CI | Successful CI on current release candidate | **PASS** — CI run 6808 on `ec4ce27f...` completed successfully |
 | Migration reconciliation | Read-only production/staging comparison | **PARTIAL / OPEN** — production schema_migrations reaches `20261021`; repository head contains migrations through `100` plus dated migrations |
-| Runtime identity | Verified identity + active membership | OPEN |
-| Runtime DB role | Non-BYPASSRLS runtime role | **OPEN** — current production connection role `rupaykg` reports `rolbypassrls=true`; dedicated `rupaykg_app_runtime` exists and is non-BYPASSRLS but currently NOLOGIN |
-| RLS | Enabled and tested in target runtime | **PARTIAL / OPEN** — 17 public tables currently report RLS enabled; 50 remain disabled; no production acceptance claim |
-| Cross-tenant negative tests | Tenant A cannot read/write tenant B | **OPEN** — repository has a controlled negative-test script, but authoritative production acceptance evidence is not yet recorded |
+| Runtime identity | Verified identity + active membership | **PARTIAL PASS** — two existing verified identity/membership contexts were exercised transactionally; invalid bearer-token hash returned zero auth rows |
+| Runtime DB role | Non-BYPASSRLS runtime role | **PARTIAL PASS** — `rupaykg_runtime_login` exists, is LOGIN/non-BYPASSRLS, inherits `rupaykg_app_runtime`, and connected successfully; `rupaykg_app_runtime` remains NOLOGIN/non-BYPASSRLS. Admin role `rupaykg` remains BYPASSRLS |
+| RLS | Enabled and tested in target runtime | **PARTIAL PASS / OPEN** — 17/67 public tables have RLS enabled; tested non-BYPASSRLS runtime sees its own tenant organization and zero rows for the other tested tenant in both contexts; 50 remain disabled and enabled tables do not yet FORCE RLS |
+| Cross-tenant negative tests | Tenant A cannot read/write tenant B | **PARTIAL PASS / OPEN** — live two-tenant SELECT isolation passed; cross-tenant INSERT/UPDATE/DELETE denial and full protected-table coverage remain untested |
 | Urban Golden Transaction | Real end-to-end acceptance evidence | OPEN |
 | Rural Golden Transaction | Real end-to-end acceptance evidence | OPEN |
 | Physical measurement | Authenticated measurement/evidence | OPEN |
@@ -140,3 +140,13 @@ A release candidate may be called **production-ready** only when every material 
 - Added read-only `VERIFY_102_RUNTIME_AUTH_HANDOFF.sql` which fails closed if the runtime role is privileged, receives LOGIN, or lacks the required EXECUTE privileges.
 - This closes the **database privilege handoff design** gate in the repository; it does **not** close production runtime acceptance because migration 102 has not been applied and the application still needs a verified runtime login/connection path.
 - Production Neon remains untouched.
+
+
+## 2026-11-13 CTO convergence batch — live production runtime read-isolation acceptance
+
+- Discovered and connected as the existing `rupaykg_runtime_login` role; it is LOGIN, non-SUPERUSER, non-BYPASSRLS, and inherits `rupaykg_app_runtime`. The application runtime role itself remains NOLOGIN/non-BYPASSRLS.
+- Used two existing verified identity/organization membership pairs. Within one transaction, Tenant A saw exactly its own organization and zero rows for Tenant B; Tenant B saw exactly its own organization and zero rows for Tenant A.
+- Invalid bearer-token hash returned zero authentication rows.
+- Evidence is recorded in `docs/audit/evidence/2026-11-13-cto-tenant-isolation-live-runtime-acceptance.md`.
+- This is a **partial production read-isolation PASS**, not full tenant isolation. Cross-tenant write denial, no-context fail-closed behavior across the protected domain, 67-table RLS coverage, FORCE RLS, and application deployment connection-path verification remain OPEN.
+- Migrations 101/102 remain unapplied. Production data/schema/roles were not mutated; only read-only queries and transaction-local request-context settings were used.
