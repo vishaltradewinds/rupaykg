@@ -5,7 +5,8 @@
 
 with expected(function_name, identity_args) as (
   values
-    ('app.set_request_context', 'p_identity_id uuid, p_organization_id uuid'),
+    ('app.set_request_context', 'p_identity_id uuid, p_organization_id uuid, p_context_token uuid'),
+    ('app.request_context_is_valid', ''),
     ('app.is_verified_org_member', 'target_organization_id uuid'),
     ('app.authenticate_bearer_session', 'p_token_hash text')
 ),
@@ -20,7 +21,7 @@ actual as (
   left join pg_proc p
     on p.pronamespace = 'app'::regnamespace
    and p.proname = split_part(e.function_name, '.', 2)
-   and pg_get_function_identity_arguments(p.oid) = e.identity_args
+   and (e.identity_args = '' or pg_get_function_identity_arguments(p.oid) = e.identity_args)
   group by e.function_name, e.identity_args
 )
 select *
@@ -28,9 +29,9 @@ from actual
 order by function_name;
 
 select
-  has_function_privilege(current_user, 'app.set_request_context(uuid,uuid)', 'EXECUTE')
+  has_function_privilege(current_user, 'app.set_request_context(uuid,uuid,uuid)', 'EXECUTE')
     as set_context_runtime_execute,
-  has_function_privilege('public', 'app.set_request_context(uuid,uuid)', 'EXECUTE')
+  has_function_privilege('public', 'app.set_request_context(uuid,uuid,uuid)', 'EXECUTE')
     as set_context_public_execute,
   has_function_privilege(current_user, 'app.is_verified_org_member(uuid)', 'EXECUTE')
     as membership_runtime_execute,
@@ -51,7 +52,9 @@ select 1 / case
      where p.pronamespace = 'app'::regnamespace
        and (
          (p.proname = 'set_request_context'
-          and pg_get_function_identity_arguments(p.oid) = 'p_identity_id uuid, p_organization_id uuid')
+          and pg_get_function_identity_arguments(p.oid) = 'p_identity_id uuid, p_organization_id uuid, p_context_token uuid')
+         or (p.proname = 'request_context_is_valid'
+          and pg_get_function_identity_arguments(p.oid) = '')
          or (p.proname = 'is_verified_org_member'
           and pg_get_function_identity_arguments(p.oid) = 'target_organization_id uuid')
          or (p.proname = 'authenticate_bearer_session'
@@ -59,11 +62,11 @@ select 1 / case
        )
        and p.prosecdef
        and coalesce(p.proconfig::text, '') like '%search_path=pg_catalog, public, app%'
-   ) = 3
-   and has_function_privilege(current_user, 'app.set_request_context(uuid,uuid)', 'EXECUTE')
+   ) = 4
+   and has_function_privilege(current_user, 'app.set_request_context(uuid,uuid,uuid)', 'EXECUTE')
    and has_function_privilege(current_user, 'app.is_verified_org_member(uuid)', 'EXECUTE')
    and has_function_privilege(current_user, 'app.authenticate_bearer_session(text)', 'EXECUTE')
-   and not has_function_privilege('public', 'app.set_request_context(uuid,uuid)', 'EXECUTE')
+   and not has_function_privilege('public', 'app.set_request_context(uuid,uuid,uuid)', 'EXECUTE')
    and not has_function_privilege('public', 'app.is_verified_org_member(uuid)', 'EXECUTE')
    and not has_function_privilege('public', 'app.authenticate_bearer_session(text)', 'EXECUTE')
   then 1
