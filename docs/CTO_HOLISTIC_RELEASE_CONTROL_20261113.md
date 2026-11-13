@@ -254,3 +254,22 @@ A release candidate may be called **production-ready** only when every material 
 - Migrations 101/102/103: NOT APPLIED to production.
 - PR #355: OPEN / UNMERGED.
 - Production release: HOLD.
+
+
+## 2026-11-13 CTO convergence batch — context-grant integration CI completed
+
+- CI run 6845 completed **SUCCESS** on SHA `84599aacf20829b32969bca6189fe52a0045d102`: all 14 execution stages passed, including the disposable PostgreSQL suite and production-container build.
+- CI run 6846 completed **SUCCESS** on SHA `1bf50ab4620241af3fbc6e570a32de9a1358e9af`: this includes the additional integration test that executes `app.authenticate_bearer_session` as `rupaykg_app_runtime`, then establishes tenant context as that role before the first tenant-scoped query; all 14 stages passed.
+- CI run 6847 completed **SUCCESS** on docs descendant SHA `f15e6242e5c240dae2d2d9d76277fd3c5e1cde15`; all stages passed.
+- Added a dedicated rollback-only SQL negative acceptance step to the main CI workflow after run 6847. It now checks FORCE RLS, protected-table ownership, no direct runtime access to context grants, both tenant directions, cross-tenant mutation denial, direct GUC spoof denial and no-context zero visibility. This workflow update is commit `eca9cff3867d33d94e0ab128ed63bb8e994b6e80`; a fresh CI run on that workflow change is required and was not yet returned at this update.
+- The new SQL harness remains a 17-table acceptance suite, not proof of all 67 public tables.
+
+### Current candidate status
+- Migration 103 + auth code + runtime transaction order: candidate integration CI PASS on run 6846.
+- Full rollback-only SQL negative suite in main CI: newly wired, fresh run pending.
+- 50 remaining public tables: candidate classification documented, policies not yet implemented.
+- Production Neon migrations 101/102/103: NOT APPLIED.
+- Render-to-Neon production connection identity: NOT VERIFIED.
+- Real Urban/Rural Golden Transactions: NOT EXECUTED; production has only test fixtures and no operational MRV/evidence/device/settlement rows.
+- PR #355: OPEN / UNMERGED.
+- Production release: HOLD.
