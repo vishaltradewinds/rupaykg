@@ -23,6 +23,20 @@ $preflight$;
 -- activity policies; the application runtime receives read-only access only.
 grant select on public.geography to rupaykg_app_runtime;
 
+-- Organization geography scopes are authorization anchors, not global data.
+alter table public.organization_geography_scopes enable row level security;
+alter table public.organization_geography_scopes force row level security;
+drop policy if exists shakti_organization_geography_scopes_tenant_read on public.organization_geography_scopes;
+create policy shakti_organization_geography_scopes_tenant_read
+  on public.organization_geography_scopes for select
+  to rupaykg_app_runtime
+  using (
+    organization_id = app.current_organization_id()
+    and status = 'VERIFIED'
+    and app.is_verified_org_member(organization_id)
+  );
+grant select on public.organization_geography_scopes to rupaykg_app_runtime;
+
 -- Field-sync records inherit tenant and device identity from field_devices.
 alter table public.field_sync_envelopes enable row level security;
 alter table public.field_sync_envelopes force row level security;
