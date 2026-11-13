@@ -48,6 +48,8 @@ jobs:
           test "$(psql "$DATABASE_URL" -tAc "select rolbypassrls from pg_roles where rolname = 'rupaykg_app_runtime'")" = "f"
       - run: npm run validate:migrations
       - run: npm run migrate -w @rupaykg/api
+      - name: Prove least-privilege verification guard role on disposable PostgreSQL
+        run: psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --file=scripts/test-verification-guard-role.sql
       - run: npm run typecheck
       - run: npm run build
       - name: Browser smoke test production web build
