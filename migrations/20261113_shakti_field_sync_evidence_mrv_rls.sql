@@ -356,7 +356,7 @@ alter function app.is_verified_organization(uuid) owner to rupaykg_security_defi
 
 -- Narrow, boolean-only cross-tenant integrity checks used by the credential
 -- scope trigger. The isolated owner sees only the required columns.
-grant select (id, organization_id, geography_id) on public.activities to rupaykg_security_definer;
+grant select (id, organization_id, geography_id, metadata) on public.activities to rupaykg_security_definer;
 grant select (organization_id, geography_id, status) on public.organization_geography_scopes to rupaykg_security_definer;
 
 drop policy if exists shakti_security_definer_activities_read on public.activities;
@@ -421,7 +421,8 @@ grant select (
   guardian_execution_id, hcs_topic_id, hcs_transaction_id,
   hcs_consensus_timestamp, integrity_hash, mirror_node_verified_at
 ) on public.mrv_provenance_events to rupaykg_security_definer;
-grant select (id, evidence_id) on public.verifications to rupaykg_security_definer;
+grant select (id, activity_id, evidence_id) on public.verifications to rupaykg_security_definer;
+grant select (id, activity_id, metadata) on public.evidence to rupaykg_security_definer;
 
 drop policy if exists shakti_security_definer_mrv_provenance_read on public.mrv_provenance_events;
 create policy shakti_security_definer_mrv_provenance_read
@@ -432,6 +433,12 @@ create policy shakti_security_definer_mrv_provenance_read
 drop policy if exists shakti_security_definer_verifications_read on public.verifications;
 create policy shakti_security_definer_verifications_read
   on public.verifications for select
+  to rupaykg_security_definer
+  using (true);
+
+drop policy if exists shakti_security_definer_evidence_read on public.evidence;
+create policy shakti_security_definer_evidence_read
+  on public.evidence for select
   to rupaykg_security_definer
   using (true);
 
@@ -449,8 +456,15 @@ as $function$
         on verification.id = target_verification_id
      where provenance.activity_id = target_activity_id
        and provenance.verification_id = target_verification_id
+       and verification.activity_id = provenance.activity_id
        and provenance.evidence_id = verification.evidence_id
        and verification.evidence_id = provenance.evidence_id
+       and exists (
+         select 1
+           from public.evidence evidence_row
+          where evidence_row.id = provenance.evidence_id
+            and evidence_row.activity_id = provenance.activity_id
+       )
        and provenance.guardian_status = 'VERIFIED'
        and provenance.hcs_status = 'CONSENSUS_CONFIRMED'
        and provenance.guardian_execution_id is not null
@@ -471,6 +485,36 @@ alter function app.credential_has_verified_mrv_provenance(uuid, uuid) owner to r
 revoke all on function app.credential_has_verified_mrv_provenance(uuid, uuid) from public;
 grant execute on function app.credential_has_verified_mrv_provenance(uuid, uuid) to rupaykg_app_runtime;
 
+create or replace function app.credential_is_acceptance_fixture(target_activity_id uuid, target_verification_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = pg_catalog, public, app
+as $function$
+  select
+    exists (
+      select 1
+        from public.activities activity_row
+       where activity_row.id = target_activity_id
+         and activity_row.metadata->>'acceptanceFixture' = 'true'
+    )
+    or exists (
+      select 1
+        from public.evidence evidence_row
+        join public.verifications verification
+          on verification.evidence_id = evidence_row.id
+       where evidence_row.activity_id = target_activity_id
+         and verification.activity_id = target_activity_id
+         and verification.id = target_verification_id
+         and evidence_row.metadata->>'acceptanceFixture' = 'true'
+    )
+$function$;
+
+alter function app.credential_is_acceptance_fixture(uuid, uuid) owner to rupaykg_security_definer;
+revoke all on function app.credential_is_acceptance_fixture(uuid, uuid) from public;
+grant execute on function app.credential_is_acceptance_fixture(uuid, uuid) to rupaykg_app_runtime;
+
 revoke create on schema app from rupaykg_security_definer;
 
 create or replace function public.require_guardian_hcs_mrv_for_credential()
@@ -480,6 +524,10 @@ set search_path = pg_catalog, public, app
 as $trigger$
 begin
   if new.status in ('ISSUED','ACTIVE','TRANSFERRED','RETIRED') then
+    if app.credential_is_acceptance_fixture(new.activity_id, new.verification_id) then
+      raise exception 'ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE: acceptance fixture activity/evidence cannot back an issued registry credential';
+    end if;
+
     if not app.credential_has_verified_mrv_provenance(new.activity_id, new.verification_id) then
       raise exception 'CREDENTIAL_MRV_REQUIRED: credential issuance requires Guardian VERIFIED, Hedera HCS consensus, and persisted Mirror Node verification bound to the verified evidence';
     end if;
