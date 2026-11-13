@@ -14,7 +14,8 @@ with expected(function_name, identity_args) as (
     ('app.organization_has_verified_members', 'target_organization_id uuid'),
     ('app.is_verified_organization', 'target_organization_id uuid'),
     ('app.activity_belongs_to_organization', 'target_activity_id uuid, target_organization_id uuid'),
-    ('app.activity_has_verified_geography_scope', 'target_activity_id uuid, target_organization_id uuid')
+    ('app.activity_has_verified_geography_scope', 'target_activity_id uuid, target_organization_id uuid'),
+    ('app.credential_has_verified_mrv_provenance', 'target_activity_id uuid, target_verification_id uuid')
 ),
 actual as (
   select
@@ -74,7 +75,11 @@ select
   has_function_privilege(current_user, 'app.activity_has_verified_geography_scope(uuid,uuid)', 'EXECUTE')
     as activity_geography_runtime_execute,
   (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.activity_has_verified_geography_scope(uuid,uuid)'::regprocedure)
-    as activity_geography_public_execute;
+    as activity_geography_public_execute,
+  has_function_privilege(current_user, 'app.credential_has_verified_mrv_provenance(uuid,uuid)', 'EXECUTE')
+    as credential_mrv_runtime_execute,
+  (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.credential_has_verified_mrv_provenance(uuid,uuid)'::regprocedure)
+    as credential_mrv_public_execute;
 
 select 1 / case
   when current_user <> 'rupaykg_app_runtime'
@@ -105,10 +110,12 @@ select 1 / case
           and pg_get_function_identity_arguments(p.oid) = 'target_activity_id uuid, target_organization_id uuid')
          or (p.proname = 'activity_has_verified_geography_scope'
           and pg_get_function_identity_arguments(p.oid) = 'target_activity_id uuid, target_organization_id uuid')
+         or (p.proname = 'credential_has_verified_mrv_provenance'
+          and pg_get_function_identity_arguments(p.oid) = 'target_activity_id uuid, target_verification_id uuid')
        )
        and p.prosecdef
        and coalesce(p.proconfig::text, '') like '%search_path=pg_catalog, public, app%'
-   ) = 10
+   ) = 11
    and has_function_privilege(current_user, 'app.set_request_context(uuid,uuid,uuid)', 'EXECUTE')
    and has_function_privilege(current_user, 'app.is_verified_org_member(uuid)', 'EXECUTE')
    and has_function_privilege(current_user, 'app.authenticate_bearer_session(text)', 'EXECUTE')
@@ -119,6 +126,7 @@ select 1 / case
    and has_function_privilege(current_user, 'app.is_verified_organization(uuid)', 'EXECUTE')
    and has_function_privilege(current_user, 'app.activity_belongs_to_organization(uuid,uuid)', 'EXECUTE')
    and has_function_privilege(current_user, 'app.activity_has_verified_geography_scope(uuid,uuid)', 'EXECUTE')
+   and has_function_privilege(current_user, 'app.credential_has_verified_mrv_provenance(uuid,uuid)', 'EXECUTE')
    and not (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.current_identity_id()'::regprocedure)
    and not (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.current_organization_id()'::regprocedure)
    and not (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.set_request_context(uuid,uuid,uuid)'::regprocedure)
@@ -129,6 +137,7 @@ select 1 / case
    and not (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.is_verified_organization(uuid)'::regprocedure)
    and not (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.activity_belongs_to_organization(uuid,uuid)'::regprocedure)
    and not (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.activity_has_verified_geography_scope(uuid,uuid)'::regprocedure)
+   and not (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.credential_has_verified_mrv_provenance(uuid,uuid)'::regprocedure)
   then 1
   else 0
 end as security_definer_boundary_assertion;
@@ -156,7 +165,8 @@ where p.pronamespace = 'app'::regnamespace
     'organization_has_verified_members',
     'is_verified_organization',
     'activity_belongs_to_organization',
-    'activity_has_verified_geography_scope'
+    'activity_has_verified_geography_scope',
+    'credential_has_verified_mrv_provenance'
   )
 order by p.proname, p.oid::regprocedure::text;
 
@@ -258,6 +268,21 @@ select 1 / case
        and has_column_privilege(owner_role.oid, 'public.organization_geography_scopes', 'organization_id', 'SELECT')
        and has_column_privilege(owner_role.oid, 'public.organization_geography_scopes', 'geography_id', 'SELECT')
        and has_column_privilege(owner_role.oid, 'public.organization_geography_scopes', 'status', 'SELECT')
+       and not has_table_privilege(owner_role.oid, 'public.mrv_provenance_events', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'public.mrv_provenance_events', 'activity_id', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'public.mrv_provenance_events', 'verification_id', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'public.mrv_provenance_events', 'evidence_id', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'public.mrv_provenance_events', 'guardian_status', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'public.mrv_provenance_events', 'hcs_status', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'public.mrv_provenance_events', 'guardian_execution_id', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'public.mrv_provenance_events', 'hcs_topic_id', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'public.mrv_provenance_events', 'hcs_transaction_id', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'public.mrv_provenance_events', 'hcs_consensus_timestamp', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'public.mrv_provenance_events', 'integrity_hash', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'public.mrv_provenance_events', 'mirror_node_verified_at', 'SELECT')
+       and not has_table_privilege(owner_role.oid, 'public.verifications', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'public.verifications', 'id', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'public.verifications', 'evidence_id', 'SELECT')
        and not has_table_privilege(owner_role.oid, 'app.request_context_grants', 'SELECT')
        and not has_table_privilege(owner_role.oid, 'app.request_context_grants', 'INSERT')
        and not has_table_privilege(owner_role.oid, 'app.request_context_grants', 'UPDATE')
@@ -346,10 +371,11 @@ select 1 / case
               'organization_has_verified_members',
               'is_verified_organization',
               'activity_belongs_to_organization',
-              'activity_has_verified_geography_scope'
+              'activity_has_verified_geography_scope',
+              'credential_has_verified_mrv_provenance'
             )
             and p.proowner = owner_role.oid
-       ) = 10
+       ) = 11
   )
   then 1
   else 0
