@@ -10,7 +10,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "migrate": "tsx src/migrate.ts",
     "test": "npm run build && node --test \"dist/**/*.test.js\"",
-    "runtime-db-preflight": "tsx src/runtime-db-preflight.ts"
+    "runtime-db-preflight": "tsx src/runtime-db-preflight.ts",
+    "migrate:shakti": "tsx src/migrate-shakti.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.0.0",

@@ -10,6 +10,9 @@ export async function withTenantTransaction<T>(
   if (!auth.activeOrganizationId) {
     throw Object.assign(new Error("Active organization is required for tenant-scoped database access"), { code: "TENANT_CONTEXT_REQUIRED" });
   }
+  if (!auth.contextToken) {
+    throw Object.assign(new Error("Authenticated request context grant is required"), { code: "TENANT_CONTEXT_GRANT_REQUIRED" });
+  }
   const tracer = trace.getTracer("rupaykg-db");
   return tracer.startActiveSpan("rupaykg.db.tenant_transaction", async span => {
     span.setAttribute("db.system", "postgresql");
@@ -17,13 +20,16 @@ export async function withTenantTransaction<T>(
     const client = await pool.connect();
     try {
     await client.query("begin");
+    // Switch to the non-BYPASSRLS application role inside the transaction.
+    // The database login receives SET-only membership, not inherited grants.
+    await client.query("set local role rupaykg_app_runtime");
     const membershipOk = auth.memberships.some((m) => m.status === "VERIFIED" && m.organization_id === auth.activeOrganizationId);
     if (!membershipOk) throw Object.assign(new Error("Verified organization membership is required"), { code: "TENANT_MEMBERSHIP_REQUIRED" });
-    const membership = await client.query<{ ok: boolean }>(`select exists (select 1 from organization_memberships om
-       join organizations o on o.id = om.organization_id and o.status = 'VERIFIED'
-       where om.identity_id = $1 and om.organization_id = $2 and om.status = 'VERIFIED') as ok`, [auth.identityId, auth.activeOrganizationId]);
-    if (!membership.rows[0]?.ok) throw Object.assign(new Error("Verified organization membership is required"), { code: "TENANT_MEMBERSHIP_REQUIRED" });
-    await client.query("select app.set_request_context($1,$2)", [auth.identityId, auth.activeOrganizationId]);
+    // Do not query organization_memberships before establishing tenant context:
+    // its RLS policy correctly returns no rows without an authenticated context.
+    // The bearer-session bootstrap and the opaque-grant setter already revalidate
+    // the live session, identity and verified membership before tenant SQL begins.
+    await client.query("select app.set_request_context($1,$2,$3)", [auth.identityId, auth.activeOrganizationId, auth.contextToken]);
     const result = await fn(client);
     await client.query("commit");
     span.setAttribute("db.transaction.status", "committed");

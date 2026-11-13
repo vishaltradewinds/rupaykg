@@ -36,7 +36,7 @@ begin
         ('settlements'),('audit_events'),('resource_flows'),('field_devices'),
         ('organization_memberships'),('measurements'),('evidence'),('verifications'),
         ('carbon_calculations'),('mrv_observations'),
-        ('evidence_verification_requirements'),('chain_of_custody_links')
+        ('evidence_verification_requirements'),('chain_of_custody_links'),('evidence_artifact_series'),('evidence_artifact_versions'),('evidence_artifact_reviews'),('field_sync_envelopes'),('field_sync_cursors'),('field_sync_conflicts'),('mrv_provenance_events'),('organization_geography_scopes'),('registry_events'),('settlement_events'),('environmental_attribute_claims')
     )
     select 1
       from protected p
@@ -61,31 +61,72 @@ begin
          'settlements','audit_events','resource_flows','field_devices',
          'organization_memberships','measurements','evidence','verifications',
          'carbon_calculations','mrv_observations',
-         'evidence_verification_requirements','chain_of_custody_links'
+         'evidence_verification_requirements','chain_of_custody_links',
+         'evidence_artifact_series','evidence_artifact_versions','evidence_artifact_reviews',
+         'field_sync_envelopes','field_sync_cursors','field_sync_conflicts','mrv_provenance_events','organization_geography_scopes','registry_events','settlement_events','environmental_attribute_claims'
        )
        and pg_get_userbyid(c.relowner) = current_user
-  ) <> 17 then
+  ) <> 28 then
     raise exception 'TENANT_ISOLATION_ACTIVATION_BLOCKED: current DDL role does not own all protected tenant tables';
   end if;
 end $shakti$;
 
 alter table organizations enable row level security;
+alter table organizations force row level security;
 alter table roles enable row level security;
+alter table roles force row level security;
 alter table activities enable row level security;
+alter table activities force row level security;
 alter table obligations enable row level security;
+alter table obligations force row level security;
 alter table credentials enable row level security;
+alter table credentials force row level security;
 alter table settlements enable row level security;
+alter table settlements force row level security;
 alter table audit_events enable row level security;
+alter table audit_events force row level security;
 alter table resource_flows enable row level security;
+alter table resource_flows force row level security;
 alter table field_devices enable row level security;
+alter table field_devices force row level security;
 alter table organization_memberships enable row level security;
+alter table organization_memberships force row level security;
 alter table measurements enable row level security;
+alter table measurements force row level security;
 alter table evidence enable row level security;
+alter table evidence force row level security;
 alter table verifications enable row level security;
+alter table verifications force row level security;
 alter table carbon_calculations enable row level security;
+alter table carbon_calculations force row level security;
 alter table mrv_observations enable row level security;
+alter table mrv_observations force row level security;
 alter table evidence_verification_requirements enable row level security;
+alter table evidence_verification_requirements force row level security;
 alter table chain_of_custody_links enable row level security;
+alter table chain_of_custody_links force row level security;
+alter table evidence_artifact_series enable row level security;
+alter table evidence_artifact_series force row level security;
+alter table evidence_artifact_versions enable row level security;
+alter table evidence_artifact_versions force row level security;
+alter table evidence_artifact_reviews enable row level security;
+alter table evidence_artifact_reviews force row level security;
+alter table field_sync_envelopes enable row level security;
+alter table field_sync_envelopes force row level security;
+alter table field_sync_cursors enable row level security;
+alter table field_sync_cursors force row level security;
+alter table field_sync_conflicts enable row level security;
+alter table field_sync_conflicts force row level security;
+alter table mrv_provenance_events enable row level security;
+alter table mrv_provenance_events force row level security;
+alter table organization_geography_scopes enable row level security;
+alter table organization_geography_scopes force row level security;
+alter table registry_events enable row level security;
+alter table registry_events force row level security;
+alter table settlement_events enable row level security;
+alter table settlement_events force row level security;
+alter table environmental_attribute_claims enable row level security;
+alter table environmental_attribute_claims force row level security;
 
 select
   c.relname as table_name,

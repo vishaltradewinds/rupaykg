@@ -167,8 +167,8 @@ describe("runtime acceptance", () => {
     const mismatch = await request("/api/v1/carbon/calculations", { method: "POST", body: JSON.stringify({ activityId: otherActivityId, methodologyCode: `RUNTIME-${suffix}`, methodologyVersion: "1", evidenceId, baselineTco2e: 100, projectTco2e: 40, leakageTco2e: 5, uncertaintyTco2e: 2 }) }, actorToken);
     assert.equal(mismatch.status, 409); assert.equal((await body(mismatch)).code, "EVIDENCE_ACTIVITY_MISMATCH");
     const calculated = await request("/api/v1/carbon/calculations", { method: "POST", body: JSON.stringify({ activityId, methodologyCode: `RUNTIME-${suffix}`, methodologyVersion: "1", evidenceId, baselineTco2e: 100, projectTco2e: 40, leakageTco2e: 5, uncertaintyTco2e: 2 }) }, actorToken);
-    assert.equal(calculated.status, 201);
     const result = await body(calculated);
+    assert.equal(calculated.status, 201, JSON.stringify(result));
     assert.equal(result.syntheticData, false);
     assert.equal(result.calculation.provenance_version, "1");
     assert.match(result.calculation.dataset_hash, /^[a-f0-9]{64}$/);

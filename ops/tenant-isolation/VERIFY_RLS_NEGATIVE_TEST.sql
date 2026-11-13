@@ -34,18 +34,47 @@ begin
     'obligations','credentials','settlements','audit_events','resource_flows',
     'field_devices','measurements','evidence','verifications',
     'carbon_calculations','mrv_observations',
-    'evidence_verification_requirements','chain_of_custody_links'
+    'evidence_verification_requirements','chain_of_custody_links',
+    'evidence_artifact_series','evidence_artifact_versions','evidence_artifact_reviews',
+    'field_sync_envelopes','field_sync_cursors','field_sync_conflicts',
+    'mrv_provenance_events','organization_geography_scopes','registry_events',
+    'settlement_events','environmental_attribute_claims'
   ] loop
     if not exists (
       select 1 from pg_class c
       join pg_namespace n on n.oid=c.relnamespace
-      where n.nspname='public' and c.relname=v_name and c.relrowsecurity
+      where n.nspname='public' and c.relname=v_name and c.relrowsecurity and c.relforcerowsecurity
     ) then
       v_missing := array_append(v_missing, v_name);
     end if;
   end loop;
   if cardinality(v_missing) > 0 then
-    raise exception 'RLS_NEGATIVE_TEST_BLOCKED: RLS is not enabled on %', array_to_string(v_missing, ', ');
+    raise exception 'RLS_NEGATIVE_TEST_BLOCKED: RLS or FORCE RLS is not enabled on %', array_to_string(v_missing, ', ');
+  end if;
+
+  if exists (
+    select 1 from pg_class c
+    join pg_namespace n on n.oid=c.relnamespace
+    where n.nspname='public'
+      and c.relname = any(array[
+        'organizations','roles','organization_memberships','activities',
+        'obligations','credentials','settlements','audit_events','resource_flows',
+        'field_devices','measurements','evidence','verifications',
+        'carbon_calculations','mrv_observations',
+        'evidence_verification_requirements','chain_of_custody_links',
+        'evidence_artifact_series','evidence_artifact_versions','evidence_artifact_reviews',
+        'field_sync_envelopes','field_sync_cursors','field_sync_conflicts','mrv_provenance_events','organization_geography_scopes','registry_events','settlement_events','environmental_attribute_claims'
+      ])
+      and pg_get_userbyid(c.relowner) = 'rupaykg_app_runtime'
+  ) then
+    raise exception 'RLS_NEGATIVE_TEST_BLOCKED: runtime role owns a protected table';
+  end if;
+
+  if has_table_privilege('rupaykg_app_runtime','app.request_context_grants','SELECT')
+     or has_table_privilege('rupaykg_app_runtime','app.request_context_grants','INSERT')
+     or has_table_privilege('rupaykg_app_runtime','app.request_context_grants','UPDATE')
+     or has_table_privilege('rupaykg_app_runtime','app.request_context_grants','DELETE') then
+    raise exception 'RLS_NEGATIVE_TEST_BLOCKED: runtime role has direct access to private request-context grants';
   end if;
 end $shakti$;
 
@@ -56,10 +85,13 @@ declare
   v_org_b uuid;
   v_identity_a uuid;
   v_identity_b uuid;
+  v_context_token_a uuid;
+  v_context_token_b uuid;
   v_role_a uuid;
   v_role_b uuid;
   v_visible integer;
   v_affected integer;
+  v_name text;
 begin
   select id into v_org_a
     from organizations
@@ -100,6 +132,24 @@ begin
     (v_identity_a,v_org_a,v_role_a,'VERIFIED'),
     (v_identity_b,v_org_b,v_role_b,'VERIFIED');
 
+  -- Mint opaque context grants only through the verified bearer-session
+  -- bootstrap. Fixture token hashes are synthetic and transaction-local.
+  insert into identity_sessions(identity_id,expires_at,token_hash)
+  values
+    (v_identity_a, now()+interval '5 minutes', 'shakti-rls-a:'||v_suffix),
+    (v_identity_b, now()+interval '5 minutes', 'shakti-rls-b:'||v_suffix);
+
+  select context_token into v_context_token_a
+    from app.authenticate_bearer_session('shakti-rls-a:'||v_suffix)
+   where organization_id=v_org_a;
+  select context_token into v_context_token_b
+    from app.authenticate_bearer_session('shakti-rls-b:'||v_suffix)
+   where organization_id=v_org_b;
+
+  if v_context_token_a is null or v_context_token_b is null then
+    raise exception 'RLS_NEGATIVE_TEST_FAILED: bearer bootstrap did not issue context grants';
+  end if;
+
   if exists (
     select 1 from pg_trigger t
      where t.tgrelid = 'public.organization_memberships'::regclass
@@ -111,7 +161,7 @@ begin
 
   execute 'set local role rupaykg_app_runtime';
 
-  perform app.set_request_context(v_identity_a,v_org_a);
+  perform app.set_request_context(v_identity_a,v_org_a,v_context_token_a);
 
   select count(*) into v_visible from organizations where id=v_org_a;
   if v_visible <> 1 then
@@ -122,6 +172,22 @@ begin
   if v_visible <> 0 then
     raise exception 'RLS_NEGATIVE_TEST_FAILED: tenant A can read organization B';
   end if;
+
+  -- Independently prove tenant B receives only its own organization scope.
+  reset role;
+  execute 'set local role rupaykg_app_runtime';
+  perform app.set_request_context(v_identity_b,v_org_b,v_context_token_b);
+  select count(*) into v_visible from organizations where id=v_org_b;
+  if v_visible <> 1 then
+    raise exception 'RLS_NEGATIVE_TEST_FAILED: organization B not visible to tenant B';
+  end if;
+  select count(*) into v_visible from organizations where id=v_org_a;
+  if v_visible <> 0 then
+    raise exception 'RLS_NEGATIVE_TEST_FAILED: tenant B can read organization A';
+  end if;
+  reset role;
+  execute 'set local role rupaykg_app_runtime';
+  perform app.set_request_context(v_identity_a,v_org_a,v_context_token_a);
 
   update organizations set name=name where id=v_org_b;
   get diagnostics v_affected = row_count;
@@ -135,6 +201,138 @@ begin
     raise exception 'RLS_NEGATIVE_TEST_FAILED: tenant A deleted organization B';
   end if;
 
+  -- A caller-selected identity/organization pair without the opaque
+  -- bearer-session grant must not satisfy RLS, even if both values are valid.
+  reset role;
+  execute 'set local role rupaykg_app_runtime';
+  perform set_config('app.identity_id', v_identity_a::text, true);
+  perform set_config('app.organization_id', v_org_a::text, true);
+  perform set_config('app.context_token', '', true);
+  select count(*) into v_visible from organizations where id=v_org_a;
+  if v_visible <> 0 then
+    raise exception 'RLS_NEGATIVE_TEST_FAILED: direct identity/organization GUC spoof bypassed context grant';
+  end if;
+
+  -- Malformed caller-controlled UUID GUCs must fail closed as zero visibility,
+  -- not raise a cast error that can disrupt request processing.
+  perform set_config('app.context_token', 'not-a-uuid', true);
+  select count(*) into v_visible from organizations where id=v_org_a;
+  if v_visible <> 0 then
+    raise exception 'RLS_NEGATIVE_TEST_FAILED: malformed context token exposed tenant rows';
+  end if;
+
+  reset role;
+  execute 'set local role rupaykg_app_runtime';
+  perform app.set_request_context(v_identity_a,v_org_a,v_context_token_a);
+
+  -- Session revocation invalidates an already-issued context grant immediately.
+  reset role;
+  update identity_sessions set revoked_at=now()
+   where token_hash='shakti-rls-a:'||v_suffix;
+  execute 'set local role rupaykg_app_runtime';
+  select count(*) into v_visible from organizations where id=v_org_a;
+  if v_visible <> 0 then
+    raise exception 'RLS_NEGATIVE_TEST_FAILED: revoked bearer session retained tenant visibility';
+  end if;
+  reset role;
+  update identity_sessions set revoked_at=null
+   where token_hash='shakti-rls-a:'||v_suffix;
+
+  -- Expiry invalidates a grant even while the underlying session remains live.
+  update app.request_context_grants set expires_at=now()-interval '1 second'
+   where id=v_context_token_a;
+  execute 'set local role rupaykg_app_runtime';
+  select count(*) into v_visible from organizations where id=v_org_a;
+  if v_visible <> 0 then
+    raise exception 'RLS_NEGATIVE_TEST_FAILED: expired context grant retained tenant visibility';
+  end if;
+  reset role;
+  update app.request_context_grants set expires_at=now()+interval '1 minute'
+   where id=v_context_token_a;
+
+  -- Removing a verified membership invalidates its grant immediately.
+  -- The application guard is disabled only around this rollback-only fixture
+  -- mutation; tenant visibility is then checked under the runtime role.
+  if exists (
+    select 1 from pg_trigger t
+     where t.tgrelid = 'public.organization_memberships'::regclass
+       and t.tgname = 'stakeholder_membership_application_guard'
+       and not t.tgisinternal
+  ) then
+    alter table organization_memberships disable trigger stakeholder_membership_application_guard;
+  end if;
+  delete from organization_memberships
+   where identity_id=v_identity_a and organization_id=v_org_a;
+  if exists (
+    select 1 from pg_trigger t
+     where t.tgrelid = 'public.organization_memberships'::regclass
+       and t.tgname = 'stakeholder_membership_application_guard'
+       and not t.tgisinternal
+  ) then
+    alter table organization_memberships enable trigger stakeholder_membership_application_guard;
+  end if;
+  execute 'set local role rupaykg_app_runtime';
+  select count(*) into v_visible from organizations where id=v_org_a;
+  if v_visible <> 0 then
+    raise exception 'RLS_NEGATIVE_TEST_FAILED: removed organization membership retained tenant visibility';
+  end if;
+  reset role;
+  if exists (
+    select 1 from pg_trigger t
+     where t.tgrelid = 'public.organization_memberships'::regclass
+       and t.tgname = 'stakeholder_membership_application_guard'
+       and not t.tgisinternal
+  ) then
+    alter table organization_memberships disable trigger stakeholder_membership_application_guard;
+  end if;
+  insert into organization_memberships(identity_id,organization_id,role_id,status)
+  values (v_identity_a,v_org_a,v_role_a,'VERIFIED');
+  if exists (
+    select 1 from pg_trigger t
+     where t.tgrelid = 'public.organization_memberships'::regclass
+       and t.tgname = 'stakeholder_membership_application_guard'
+       and not t.tgisinternal
+  ) then
+    alter table organization_memberships enable trigger stakeholder_membership_application_guard;
+  end if;
+  execute 'set local role rupaykg_app_runtime';
+  perform app.set_request_context(v_identity_a,v_org_a,v_context_token_a);
+
+  -- Suspending an identity invalidates an already-issued context grant.
+  reset role;
+  update identities set suspended_at=now() where id=v_identity_a;
+  execute 'set local role rupaykg_app_runtime';
+  select count(*) into v_visible from organizations where id=v_org_a;
+  if v_visible <> 0 then
+    raise exception 'RLS_NEGATIVE_TEST_FAILED: suspended identity retained tenant visibility';
+  end if;
+  reset role;
+  update identities set suspended_at=null where id=v_identity_a;
+  execute 'set local role rupaykg_app_runtime';
+  perform app.set_request_context(v_identity_a,v_org_a,v_context_token_a);
+
+  -- A tenant must not create a row in another tenant's organization scope.
+  begin
+    insert into organizations(id,name,organization_type,status)
+    values (gen_random_uuid(), 'SHakti-RLS-cross-tenant-insert-'||v_suffix, 'test_fixture', 'VERIFIED');
+    raise exception 'RLS_NEGATIVE_TEST_FAILED: tenant A inserted an organization outside its own scope';
+  exception
+    when insufficient_privilege then
+      null; -- expected PostgreSQL RLS WITH CHECK denial (SQLSTATE 42501)
+  end;
+
+  reset role;
+
+  -- A caller must not obtain tenant visibility by setting only the
+  -- organization GUC. The policy must also require a verified identity
+  -- membership; custom PostgreSQL GUCs are directly settable by the runtime.
+  execute 'set local role rupaykg_app_runtime';
+  perform set_config('app.identity_id', '', true);
+  perform set_config('app.organization_id', v_org_a::text, true);
+  select count(*) into v_visible from organizations where id=v_org_a;
+  if v_visible <> 0 then
+    raise exception 'RLS_NEGATIVE_TEST_FAILED: organization-only GUC forged tenant context without verified identity';
+  end if;
   reset role;
 
   -- Fail-closed check: with no tenant context, the runtime must see zero
@@ -144,13 +342,21 @@ begin
   perform set_config('app.identity_id', '', true);
   perform set_config('app.organization_id', '', true);
 
-  for v_name in select unnest(array[
-    'organizations','roles','activities','obligations','credentials',
-    'settlements','audit_events','resource_flows','field_devices',
-    'organization_memberships','measurements','evidence','verifications',
+  -- Keep the runtime no-context assertion exactly aligned with the
+  -- protected-table inventory above. Do not probe unrelated control-plane
+  -- tables here: lack of a runtime grant is an intentional boundary, not an
+  -- RLS failure.
+  foreach v_name in array array[
+    'organizations','roles','organization_memberships','activities',
+    'obligations','credentials','settlements','audit_events','resource_flows',
+    'field_devices','measurements','evidence','verifications',
     'carbon_calculations','mrv_observations',
-    'evidence_verification_requirements','chain_of_custody_links'
-  ]) loop
+    'evidence_verification_requirements','chain_of_custody_links',
+    'evidence_artifact_series','evidence_artifact_versions','evidence_artifact_reviews',
+    'field_sync_envelopes','field_sync_cursors','field_sync_conflicts',
+    'mrv_provenance_events','organization_geography_scopes','registry_events',
+    'settlement_events','environmental_attribute_claims'
+  ] loop
     execute format('select count(*) from public.%I', v_name) into v_visible;
     if v_visible <> 0 then
       raise exception 'RLS_NEGATIVE_TEST_FAILED: no-context runtime can see % rows from protected table %', v_visible, v_name;
