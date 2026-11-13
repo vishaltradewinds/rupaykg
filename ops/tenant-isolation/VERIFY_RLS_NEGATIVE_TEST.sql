@@ -39,13 +39,36 @@ begin
     if not exists (
       select 1 from pg_class c
       join pg_namespace n on n.oid=c.relnamespace
-      where n.nspname='public' and c.relname=v_name and c.relrowsecurity
+      where n.nspname='public' and c.relname=v_name and c.relrowsecurity and c.relforcerowsecurity
     ) then
       v_missing := array_append(v_missing, v_name);
     end if;
   end loop;
   if cardinality(v_missing) > 0 then
-    raise exception 'RLS_NEGATIVE_TEST_BLOCKED: RLS is not enabled on %', array_to_string(v_missing, ', ');
+    raise exception 'RLS_NEGATIVE_TEST_BLOCKED: RLS or FORCE RLS is not enabled on %', array_to_string(v_missing, ', ');
+  end if;
+
+  if exists (
+    select 1 from pg_class c
+    join pg_namespace n on n.oid=c.relnamespace
+    where n.nspname='public'
+      and c.relname = any(array[
+        'organizations','roles','organization_memberships','activities',
+        'obligations','credentials','settlements','audit_events','resource_flows',
+        'field_devices','measurements','evidence','verifications',
+        'carbon_calculations','mrv_observations',
+        'evidence_verification_requirements','chain_of_custody_links'
+      ])
+      and pg_get_userbyid(c.relowner) = 'rupaykg_app_runtime'
+  ) then
+    raise exception 'RLS_NEGATIVE_TEST_BLOCKED: runtime role owns a protected table';
+  end if;
+
+  if has_table_privilege('rupaykg_app_runtime','app.request_context_grants','SELECT')
+     or has_table_privilege('rupaykg_app_runtime','app.request_context_grants','INSERT')
+     or has_table_privilege('rupaykg_app_runtime','app.request_context_grants','UPDATE')
+     or has_table_privilege('rupaykg_app_runtime','app.request_context_grants','DELETE') then
+    raise exception 'RLS_NEGATIVE_TEST_BLOCKED: runtime role has direct access to private request-context grants';
   end if;
 end $shakti$;
 
@@ -142,6 +165,22 @@ begin
   if v_visible <> 0 then
     raise exception 'RLS_NEGATIVE_TEST_FAILED: tenant A can read organization B';
   end if;
+
+  -- Independently prove tenant B receives only its own organization scope.
+  reset role;
+  execute 'set local role rupaykg_app_runtime';
+  perform app.set_request_context(v_identity_b,v_org_b,v_context_token_b);
+  select count(*) into v_visible from organizations where id=v_org_b;
+  if v_visible <> 1 then
+    raise exception 'RLS_NEGATIVE_TEST_FAILED: organization B not visible to tenant B';
+  end if;
+  select count(*) into v_visible from organizations where id=v_org_a;
+  if v_visible <> 0 then
+    raise exception 'RLS_NEGATIVE_TEST_FAILED: tenant B can read organization A';
+  end if;
+  reset role;
+  execute 'set local role rupaykg_app_runtime';
+  perform app.set_request_context(v_identity_a,v_org_a,v_context_token_a);
 
   update organizations set name=name where id=v_org_b;
   get diagnostics v_affected = row_count;
