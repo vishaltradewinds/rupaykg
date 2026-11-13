@@ -108,3 +108,21 @@ Additional read-only queries against the same production branch found:
 Both production organizations are `test_fixture` type and VERIFIED. The only geography row is `CLUSTER / RUPAYKG-ACCEPTANCE-V1`, sourced from `RupayKG Acceptance Fixture Geography` version `v1`. There are no source-versioned ULB, Ward, Block, Gram Panchayat or Village rows in the inspected production geography table.
 
 **Urban/Rural conclusion:** production currently has no persisted real operational activity, measurement, evidence, verification, field-device or downstream MRV/registry/settlement records to support either real Golden Transaction. The existing acceptance seed and CI fixtures are synthetic, and are correctly excluded from real-site acceptance. The platform cannot honestly mark Urban or Rural Golden Transactions accepted until real authorized organizations, source-backed geographies, field/device measurement and evidence are supplied and recorded.
+
+
+## Candidate remediation and test evidence — 2026-11-13
+
+The convergence branch now contains migration 103 and the application changes to bind tenant context to a database-issued opaque grant:
+
+- `app.authenticate_bearer_session(text)` now returns a short-lived context token per verified membership and records the grant against the live identity session.
+- `app.set_request_context(identity_id, organization_id, context_token)` rejects a caller-selected identity/organization unless the grant matches that identity, organization, live session and current verified membership.
+- `app.current_identity_id()` and `app.current_organization_id()` are SECURITY DEFINER readers that return NULL unless the transaction-local identity, organization and opaque token match an unexpired grant.
+- The runtime role has no direct privileges on `app.request_context_grants`.
+- The API carries the context token internally. `withTenantTransaction` no longer performs a pre-context membership SELECT; it establishes the authenticated context before any tenant-scoped SQL.
+- The disposable PostgreSQL integration test now executes the authentication bootstrap and context setter as `rupaykg_app_runtime`, tests tenant reads under that role, rejects direct GUC spoof without the grant, and rejects reusing tenant A's grant for tenant B.
+
+CI runs 6845 and 6846 completed SUCCESS, including migration validation/execution, typecheck, build, browser smoke, PostgreSQL integration acceptance and production-container build. Run 6846 specifically includes the runtime-role bootstrap/context sequence.
+
+The main CI workflow has since been extended to execute the rollback-only `VERIFY_RLS_NEGATIVE_TEST.sql` harness, including FORCE RLS and two-tenant assertions; the new workflow revision still needs its own fresh run.
+
+**This is candidate code/test evidence only.** Migration 103 has not been applied to production Neon. The live GUC-spoof finding remains present in production until an approved, rehearsed migration and application deployment are completed. No production DDL/DML, role, credential or deployment setting was changed.
