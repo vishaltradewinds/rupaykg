@@ -25,18 +25,79 @@ begin
     raise exception 'RUPAYKG_SECURITY_DEFINER_OWNER_UNSAFE: owner must be NOLOGIN, NOINHERIT, NOSUPERUSER, NOBYPASSRLS, NOCREATEDB, NOCREATEROLE and NOREPLICATION';
   end if;
 
+  -- The isolated owner must have no role memberships in either direction:
+  -- it cannot inherit/SET ROLE into another role, and no other role can assume it.
+  if exists (
+    select 1
+      from pg_auth_members membership
+     where membership.member = 'rupaykg_security_definer'::regrole
+        or membership.roleid = 'rupaykg_security_definer'::regrole
+  ) then
+    raise exception 'RUPAYKG_SECURITY_DEFINER_OWNER_HAS_ROLE_MEMBERSHIPS';
+  end if;
+
   if pg_has_role('rupaykg_app_runtime', 'rupaykg_security_definer', 'MEMBER') then
     raise exception 'RUPAYKG_RUNTIME_CAN_ASSUME_SECURITY_DEFINER_OWNER';
+  end if;
+  if exists (
+    select 1 from pg_roles
+     where rolname = 'rupaykg_runtime_login'
+       and pg_has_role('rupaykg_runtime_login', 'rupaykg_security_definer', 'MEMBER')
+  ) then
+    raise exception 'RUPAYKG_RUNTIME_LOGIN_CAN_ASSUME_SECURITY_DEFINER_OWNER';
   end if;
 end
 $$;
 
 grant usage on schema app, public to rupaykg_security_definer;
-grant select on public.identities, public.identity_sessions,
-  public.organization_memberships, public.organizations
-  to rupaykg_security_definer;
-grant select, insert, delete on app.request_context_grants
-  to rupaykg_security_definer;
+
+-- Remove any pre-existing table/column grants before applying the explicit
+-- minimum column surface. This makes migration 104 safe for a pre-provisioned
+-- role as well as a freshly created disposable CI role.
+revoke all on public.identities, public.identity_sessions,
+  public.organization_memberships, public.organizations,
+  app.request_context_grants from rupaykg_security_definer;
+
+do $
+declare
+  privilege_row record;
+begin
+  for privilege_row in
+    select table_schema, table_name, column_name, privilege_type
+      from information_schema.column_privileges
+     where grantee = 'rupaykg_security_definer'
+       and table_schema in ('public', 'app')
+       and table_name in (
+         'identities', 'identity_sessions', 'organization_memberships',
+         'organizations', 'request_context_grants'
+       )
+  loop
+    execute format(
+      'revoke %s (%I) on table %I.%I from rupaykg_security_definer',
+      privilege_row.privilege_type,
+      privilege_row.column_name,
+      privilege_row.table_schema,
+      privilege_row.table_name
+    );
+  end loop;
+end
+$;
+
+-- Only the columns read by the five SECURITY DEFINER functions are exposed.
+grant select (id, status, suspended_at)
+  on public.identities to rupaykg_security_definer;
+grant select (id, identity_id, token_hash, expires_at, revoked_at)
+  on public.identity_sessions to rupaykg_security_definer;
+grant select (identity_id, organization_id, role_id, status)
+  on public.organization_memberships to rupaykg_security_definer;
+grant select (id, status)
+  on public.organizations to rupaykg_security_definer;
+
+-- The opaque context-grant table is accessed only by the SECURITY DEFINER
+-- functions. No broad table SELECT or INSERT privilege is granted.
+grant select (id, identity_id, organization_id, session_id, expires_at),
+      insert (identity_id, organization_id, session_id, expires_at),
+      delete on app.request_context_grants to rupaykg_security_definer;
 
 -- These are deliberately SELECT-only policies for the isolated function
 -- owner. No application role is a member of this owner role.
