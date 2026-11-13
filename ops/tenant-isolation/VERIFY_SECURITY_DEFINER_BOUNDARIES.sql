@@ -32,23 +32,23 @@ order by function_name;
 select
   has_function_privilege(current_user, 'app.set_request_context(uuid,uuid,uuid)', 'EXECUTE')
     as set_context_runtime_execute,
-  has_function_privilege('public', 'app.set_request_context(uuid,uuid,uuid)', 'EXECUTE')
+  (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.set_request_context(uuid,uuid,uuid)'::regprocedure)
     as set_context_public_execute,
   has_function_privilege(current_user, 'app.is_verified_org_member(uuid)', 'EXECUTE')
     as membership_runtime_execute,
-  has_function_privilege('public', 'app.is_verified_org_member(uuid)', 'EXECUTE')
+  (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.is_verified_org_member(uuid)'::regprocedure)
     as membership_public_execute,
   has_function_privilege(current_user, 'app.authenticate_bearer_session(text)', 'EXECUTE')
     as bootstrap_runtime_execute,
-  has_function_privilege('public', 'app.authenticate_bearer_session(text)', 'EXECUTE')
+  (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.authenticate_bearer_session(text)'::regprocedure)
     as bootstrap_public_execute,
   has_function_privilege(current_user, 'app.current_identity_id()', 'EXECUTE')
     as current_identity_runtime_execute,
-  has_function_privilege('public', 'app.current_identity_id()', 'EXECUTE')
+  (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.current_identity_id()'::regprocedure)
     as current_identity_public_execute,
   has_function_privilege(current_user, 'app.current_organization_id()', 'EXECUTE')
     as current_organization_runtime_execute,
-  has_function_privilege('public', 'app.current_organization_id()', 'EXECUTE')
+  (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.current_organization_id()'::regprocedure)
     as current_organization_public_execute;
 
 select 1 / case
@@ -79,11 +79,11 @@ select 1 / case
    and has_function_privilege(current_user, 'app.authenticate_bearer_session(text)', 'EXECUTE')
    and has_function_privilege(current_user, 'app.current_identity_id()', 'EXECUTE')
    and has_function_privilege(current_user, 'app.current_organization_id()', 'EXECUTE')
-   and not has_function_privilege('public', 'app.current_identity_id()', 'EXECUTE')
-   and not has_function_privilege('public', 'app.current_organization_id()', 'EXECUTE')
-   and not has_function_privilege('public', 'app.set_request_context(uuid,uuid,uuid)', 'EXECUTE')
-   and not has_function_privilege('public', 'app.is_verified_org_member(uuid)', 'EXECUTE')
-   and not has_function_privilege('public', 'app.authenticate_bearer_session(text)', 'EXECUTE')
+   and not (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.current_identity_id()'::regprocedure)
+   and not (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.current_organization_id()'::regprocedure)
+   and not (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.set_request_context(uuid,uuid,uuid)'::regprocedure)
+   and not (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.is_verified_org_member(uuid)'::regprocedure)
+   and not (select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where p.oid = 'app.authenticate_bearer_session(text)'::regprocedure)
   then 1
   else 0
 end as security_definer_boundary_assertion;
