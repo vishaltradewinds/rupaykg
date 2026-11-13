@@ -124,3 +124,13 @@ A release candidate may be called **production-ready** only when every material 
 - Controlled rehearsal evidence on `rupaykg-tenant-isolation-lab-20261101` confirms `rupaykg_app_runtime` is non-SUPERUSER/non-BYPASSRLS and that existing policy rows are visible to the coverage query; the rehearsal remains incomplete because 45/67 public tables have RLS disabled and the required authentication bootstrap function is absent there.
 - Production remains HOLD: the live production connection role `rupaykg` is BYPASSRLS and only 17/67 public tables currently have RLS enabled.
 - No production SQL, role, credential, RLS, ownership, or data mutation was performed in this batch.
+
+
+## 2026-11-13 CTO convergence batch — protected-domain activation
+
+- Added forward-only migration `101_shakti_tenant_isolation_activation.sql` on the convergence branch.
+- Scope is deliberately limited to the 17 protected-domain tables whose tenant boundary is explicit in the verified schema: direct organization-owned tables plus activity-derived MRV/evidence/verification records and organization-owned settlement/credential/chain-of-custody records.
+- The migration requires the controlled `rupaykg_app_runtime` role to exist and be non-SUPERUSER/non-BYPASSRLS; it does not create credentials or alter the production login.
+- Added `VERIFY_101_ACTIVATION.sql` as a read-only post-activation gate.
+- Production remains untouched. Neon temporary migration rehearsal could not be prepared because the Neon project currently reports its branch limit exceeded; therefore migration 101 is code-reviewed/repository-pinned but not declared database-applied.
+- Authentication bootstrap remains a separate gate: the verified rehearsal currently lacks `app.authenticate_bearer_session(text)`, so no production acceptance claim is made.
