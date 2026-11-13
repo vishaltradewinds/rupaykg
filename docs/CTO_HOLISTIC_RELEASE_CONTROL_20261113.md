@@ -115,3 +115,12 @@ Those require their own authoritative evidence.
 
 A release candidate may be called **production-ready** only when every material gate above is evidenced against the candidate itself and no P0/P1 blocker remains.
 
+
+
+## 2026-11-13 CTO convergence update — tenant-isolation acceptance harness
+
+- Fixed `VERIFY_RLS_POLICY_COVERAGE.sql` to use PostgreSQL's actual `pg_policies.cmd` values (`SELECT`/`INSERT`/`UPDATE`/`DELETE`) instead of lower-case aliases, and to fail closed when any protected table lacks RLS.
+- Fixed `.github/workflows/tenant-isolation-live-acceptance.yml` shell continuations in the SECURITY DEFINER verification step.
+- Controlled rehearsal evidence on `rupaykg-tenant-isolation-lab-20261101` confirms `rupaykg_app_runtime` is non-SUPERUSER/non-BYPASSRLS and that existing policy rows are visible to the coverage query; the rehearsal remains incomplete because 45/67 public tables have RLS disabled and the required authentication bootstrap function is absent there.
+- Production remains HOLD: the live production connection role `rupaykg` is BYPASSRLS and only 17/67 public tables currently have RLS enabled.
+- No production SQL, role, credential, RLS, ownership, or data mutation was performed in this batch.
