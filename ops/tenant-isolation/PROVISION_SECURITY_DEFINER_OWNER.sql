@@ -38,9 +38,20 @@ select 1 / case
       and not rolreplication
   )
     and not exists (
-      select 1 from pg_auth_members membership
+      select 1
+        from pg_auth_members membership
+        left join pg_roles member_role on member_role.oid = membership.member
        where membership.member = 'rupaykg_security_definer'::regrole
-          or membership.roleid = 'rupaykg_security_definer'::regrole
+          or (
+            membership.roleid = 'rupaykg_security_definer'::regrole
+            and not (
+              member_role.rolname = 'rupaykg'
+              and pg_get_userbyid(membership.grantor) = 'cloud_admin'
+              and membership.admin_option
+              and not membership.inherit_option
+              and not membership.set_option
+            )
+          )
     )
   then 1
   else 0
@@ -56,4 +67,4 @@ select
     select 1 from pg_auth_members membership
      where membership.member = 'rupaykg_security_definer'::regrole
         or membership.roleid = 'rupaykg_security_definer'::regrole
-  ) as isolated_owner_has_any_role_membership;
+  ) as isolated_owner_has_unsafe_role_membership;
