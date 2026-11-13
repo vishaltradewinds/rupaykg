@@ -80,10 +80,14 @@ select 1 / case
           and pg_get_function_identity_arguments(p.oid) = '')
          or (p.proname = 'current_organization_id'
           and pg_get_function_identity_arguments(p.oid) = '')
+         or (p.proname = 'current_credential_owner_id'
+          and pg_get_function_identity_arguments(p.oid) = 'target_credential_id uuid')
+         or (p.proname = 'organization_has_verified_members'
+          and pg_get_function_identity_arguments(p.oid) = 'target_organization_id uuid')
        )
        and p.prosecdef
        and coalesce(p.proconfig::text, '') like '%search_path=pg_catalog, public, app%'
-   ) = 5
+   ) = 7
    and has_function_privilege(current_user, 'app.set_request_context(uuid,uuid,uuid)', 'EXECUTE')
    and has_function_privilege(current_user, 'app.is_verified_org_member(uuid)', 'EXECUTE')
    and has_function_privilege(current_user, 'app.authenticate_bearer_session(text)', 'EXECUTE')
