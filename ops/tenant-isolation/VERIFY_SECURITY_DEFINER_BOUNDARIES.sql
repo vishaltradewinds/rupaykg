@@ -128,3 +128,64 @@ select 1 / case
   then 1
   else 0
 end as effective_runtime_privilege_assertion;
+
+
+-- Fail closed unless every SECURITY DEFINER entry point is owned by the
+-- isolated NOLOGIN/NOBYPASSRLS role, and neither runtime role can assume it.
+select
+  count(*) filter (where p.proowner = owner_role.oid) as functions_owned_by_isolated_role,
+  count(*) as expected_functions,
+  owner_role.rolcanlogin,
+  owner_role.rolsuper,
+  owner_role.rolbypassrls,
+  owner_role.rolcreatedb,
+  owner_role.rolcreaterole,
+  owner_role.rolreplication,
+  pg_has_role('rupaykg_app_runtime', owner_role.oid, 'MEMBER') as app_runtime_can_assume_owner,
+  pg_has_role(current_user, owner_role.oid, 'MEMBER') as invoking_runtime_can_assume_owner
+from pg_roles owner_role
+left join pg_proc p
+  on p.pronamespace = 'app'::regnamespace
+ and p.proname in (
+   'set_request_context',
+   'is_verified_org_member',
+   'authenticate_bearer_session',
+   'current_identity_id',
+   'current_organization_id'
+ )
+where owner_role.rolname = 'rupaykg_security_definer'
+group by owner_role.oid, owner_role.rolcanlogin, owner_role.rolsuper,
+         owner_role.rolbypassrls, owner_role.rolcreatedb,
+         owner_role.rolcreaterole, owner_role.rolreplication;
+
+select 1 / case
+  when exists (
+    select 1
+      from pg_roles owner_role
+     where owner_role.rolname = 'rupaykg_security_definer'
+       and not owner_role.rolcanlogin
+       and not owner_role.rolsuper
+       and not owner_role.rolbypassrls
+       and not owner_role.rolcreatedb
+       and not owner_role.rolcreaterole
+       and not owner_role.rolreplication
+       and not pg_has_role('rupaykg_app_runtime', owner_role.oid, 'MEMBER')
+       and not pg_has_role(current_user, owner_role.oid, 'MEMBER')
+       and (
+         select count(*)
+           from pg_proc p
+          where p.pronamespace = 'app'::regnamespace
+            and p.prosecdef
+            and p.proname in (
+              'set_request_context',
+              'is_verified_org_member',
+              'authenticate_bearer_session',
+              'current_identity_id',
+              'current_organization_id'
+            )
+            and p.proowner = owner_role.oid
+       ) = 5
+  )
+  then 1
+  else 0
+end as isolated_security_definer_owner_assertion;
