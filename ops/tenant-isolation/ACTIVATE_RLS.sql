@@ -36,7 +36,7 @@ begin
         ('settlements'),('audit_events'),('resource_flows'),('field_devices'),
         ('organization_memberships'),('measurements'),('evidence'),('verifications'),
         ('carbon_calculations'),('mrv_observations'),
-        ('evidence_verification_requirements'),('chain_of_custody_links'),('evidence_artifact_series'),('evidence_artifact_versions'),('evidence_artifact_reviews'),('field_sync_envelopes'),('field_sync_cursors'),('field_sync_conflicts'),('mrv_provenance_events'),('organization_geography_scopes'),('registry_events')
+        ('evidence_verification_requirements'),('chain_of_custody_links'),('evidence_artifact_series'),('evidence_artifact_versions'),('evidence_artifact_reviews'),('field_sync_envelopes'),('field_sync_cursors'),('field_sync_conflicts'),('mrv_provenance_events'),('organization_geography_scopes'),('registry_events'),('settlement_events'),('environmental_attribute_claims')
     )
     select 1
       from protected p
@@ -63,10 +63,10 @@ begin
          'carbon_calculations','mrv_observations',
          'evidence_verification_requirements','chain_of_custody_links',
          'evidence_artifact_series','evidence_artifact_versions','evidence_artifact_reviews',
-         'field_sync_envelopes','field_sync_cursors','field_sync_conflicts','mrv_provenance_events','organization_geography_scopes','registry_events'
+         'field_sync_envelopes','field_sync_cursors','field_sync_conflicts','mrv_provenance_events','organization_geography_scopes','registry_events','settlement_events','environmental_attribute_claims'
        )
        and pg_get_userbyid(c.relowner) = current_user
-  ) <> 26 then
+  ) <> 28 then
     raise exception 'TENANT_ISOLATION_ACTIVATION_BLOCKED: current DDL role does not own all protected tenant tables';
   end if;
 end $shakti$;
@@ -123,6 +123,10 @@ alter table organization_geography_scopes enable row level security;
 alter table organization_geography_scopes force row level security;
 alter table registry_events enable row level security;
 alter table registry_events force row level security;
+alter table settlement_events enable row level security;
+alter table settlement_events force row level security;
+alter table environmental_attribute_claims enable row level security;
+alter table environmental_attribute_claims force row level security;
 
 select
   c.relname as table_name,
