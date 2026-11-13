@@ -21,7 +21,7 @@ $preflight$;
 -- Geography is a versioned global reference catalogue. Tenant authorization
 -- remains enforced by organization_has_geography_scope and tenant-scoped
 -- activity policies; the application runtime receives read-only access only.
-grant select on public.geography to rupaykg_app_runtime;
+-- Privileged runner grants SELECT on the global geography catalogue as its owner.
 
 -- Organization geography scopes are authorization anchors, not global data.
 alter table public.organization_geography_scopes enable row level security;
@@ -611,7 +611,7 @@ create policy shakti_credentials_tenant
   );
 
 -- Methodology versions are global, read-only governance reference data.
-grant select on public.methodology_versions to rupaykg_app_runtime;
+-- Privileged runner grants SELECT on the global methodology catalogue as its owner.
 
 -- Settlement events are append-only children of a payer/payee settlement.
 alter table public.settlement_events enable row level security;
