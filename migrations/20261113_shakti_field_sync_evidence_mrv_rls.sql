@@ -312,6 +312,7 @@ as $function$
    limit 1
 $function$;
 
+grant create on schema app to rupaykg_security_definer;
 alter function app.current_credential_owner_id(uuid) owner to rupaykg_security_definer;
 revoke all on function app.current_credential_owner_id(uuid) from public;
 grant execute on function app.current_credential_owner_id(uuid) to rupaykg_app_runtime;
@@ -334,8 +335,12 @@ as $function$
 $function$;
 
 alter function app.organization_has_verified_members(uuid) owner to rupaykg_security_definer;
+revoke create on schema app from rupaykg_security_definer;
 revoke all on function app.organization_has_verified_members(uuid) from public;
 grant execute on function app.organization_has_verified_members(uuid) to rupaykg_app_runtime;
+
+comment on role rupaykg_security_definer is
+'NOLOGIN/NOBYPASSRLS owner for narrowly scoped authentication, tenant-context, registry current-owner and organization-readiness SECURITY DEFINER functions; never grant membership to application roles.';
 
 -- A credential remains visible to its issuer and to its current registry owner.
 -- Historical former owners can read only events in which they participated.
