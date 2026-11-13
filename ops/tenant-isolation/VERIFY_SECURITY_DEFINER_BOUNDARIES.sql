@@ -175,6 +175,79 @@ select 1 / case
        and not has_schema_privilege(owner_role.oid, 'public', 'CREATE')
        and not pg_has_role('rupaykg_app_runtime', owner_role.oid, 'MEMBER')
        and not pg_has_role(current_user, owner_role.oid, 'MEMBER')
+       and not exists (
+         select 1 from pg_auth_members membership
+          where membership.member = owner_role.oid
+             or membership.roleid = owner_role.oid
+       )
+       and not has_table_privilege(owner_role.oid, 'public.identities', 'SELECT')
+       and not has_table_privilege(owner_role.oid, 'public.identity_sessions', 'SELECT')
+       and not has_table_privilege(owner_role.oid, 'public.organization_memberships', 'SELECT')
+       and not has_table_privilege(owner_role.oid, 'public.organizations', 'SELECT')
+       and not has_table_privilege(owner_role.oid, 'app.request_context_grants', 'SELECT')
+       and not has_table_privilege(owner_role.oid, 'app.request_context_grants', 'INSERT')
+       and not has_table_privilege(owner_role.oid, 'app.request_context_grants', 'UPDATE')
+       and has_table_privilege(owner_role.oid, 'app.request_context_grants', 'DELETE')
+       and has_column_privilege(owner_role.oid, 'public.identities', 'id', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'public.identities', 'status', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'public.identities', 'suspended_at', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'public.identity_sessions', 'id', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'public.identity_sessions', 'identity_id', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'public.identity_sessions', 'token_hash', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'public.identity_sessions', 'expires_at', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'public.identity_sessions', 'revoked_at', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'public.organization_memberships', 'identity_id', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'public.organization_memberships', 'organization_id', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'public.organization_memberships', 'role_id', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'public.organization_memberships', 'status', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'public.organizations', 'id', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'public.organizations', 'status', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'app.request_context_grants', 'id', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'app.request_context_grants', 'identity_id', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'app.request_context_grants', 'organization_id', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'app.request_context_grants', 'session_id', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'app.request_context_grants', 'expires_at', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'app.request_context_grants', 'identity_id', 'INSERT')
+       and has_column_privilege(owner_role.oid, 'app.request_context_grants', 'organization_id', 'INSERT')
+       and has_column_privilege(owner_role.oid, 'app.request_context_grants', 'session_id', 'INSERT')
+       and has_column_privilege(owner_role.oid, 'app.request_context_grants', 'expires_at', 'INSERT')
+       and not exists (
+         select 1
+           from information_schema.columns column_row
+          where (column_row.table_schema, column_row.table_name) in (
+            ('public','identities'),
+            ('public','identity_sessions'),
+            ('public','organization_memberships'),
+            ('public','organizations')
+          )
+            and not (
+              (column_row.table_name = 'identities' and column_row.column_name = any(array['id','status','suspended_at']))
+              or (column_row.table_name = 'identity_sessions' and column_row.column_name = any(array['id','identity_id','token_hash','expires_at','revoked_at']))
+              or (column_row.table_name = 'organization_memberships' and column_row.column_name = any(array['identity_id','organization_id','role_id','status']))
+              or (column_row.table_name = 'organizations' and column_row.column_name = any(array['id','status']))
+            )
+            and has_column_privilege(owner_role.oid,
+              format('%I.%I', column_row.table_schema, column_row.table_name),
+              column_row.column_name, 'SELECT')
+       )
+       and not exists (
+         select 1
+           from information_schema.columns column_row
+          where column_row.table_schema = 'app'
+            and column_row.table_name = 'request_context_grants'
+            and not (column_row.column_name = any(array['id','identity_id','organization_id','session_id','expires_at']))
+            and has_column_privilege(owner_role.oid, 'app.request_context_grants',
+              column_row.column_name, 'SELECT')
+       )
+       and not exists (
+         select 1
+           from information_schema.columns column_row
+          where column_row.table_schema = 'app'
+            and column_row.table_name = 'request_context_grants'
+            and not (column_row.column_name = any(array['identity_id','organization_id','session_id','expires_at']))
+            and has_column_privilege(owner_role.oid, 'app.request_context_grants',
+              column_row.column_name, 'INSERT')
+       )
        and (
          select count(*)
            from pg_proc p
