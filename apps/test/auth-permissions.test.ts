@@ -35,7 +35,7 @@ describe("high-risk authorization policy", () => {
   });
 
   it("fails closed when the authoritative role query reports no permission", async () => {
-    const auth: AuthContext = { identityId: "identity-1", memberships: [{ organization_id: "org-1", role_id: "role-1", status: "VERIFIED" }] };
+    const auth: AuthContext = { identityId: "identity-1", contextToken: "test-context-token", memberships: [{ organization_id: "org-1", role_id: "role-1", status: "VERIFIED" }] };
     const client = { query: async () => ({ rows: [{ ok: false }] }) } as never;
     assert.equal(await canPerformHighRiskActionInDatabase(client, auth, "org-1", "SETTLE_FUNDS"), false);
   });
