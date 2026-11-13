@@ -316,6 +316,27 @@ alter function app.current_credential_owner_id(uuid) owner to rupaykg_security_d
 revoke all on function app.current_credential_owner_id(uuid) from public;
 grant execute on function app.current_credential_owner_id(uuid) to rupaykg_app_runtime;
 
+-- Return only a readiness boolean; never expose another organization's member
+-- rows to a tenant runtime session.
+create or replace function app.organization_has_verified_members(target_organization_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = pg_catalog, public, app
+as $function$
+  select exists (
+    select 1
+      from public.organization_memberships membership
+     where membership.organization_id = target_organization_id
+       and membership.status = 'VERIFIED'
+  )
+$function$;
+
+alter function app.organization_has_verified_members(uuid) owner to rupaykg_security_definer;
+revoke all on function app.organization_has_verified_members(uuid) from public;
+grant execute on function app.organization_has_verified_members(uuid) to rupaykg_app_runtime;
+
 -- A credential remains visible to its issuer and to its current registry owner.
 -- Historical former owners can read only events in which they participated.
 drop policy if exists shakti_credentials_tenant on public.credentials;
