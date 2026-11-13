@@ -54,10 +54,15 @@ select 1 / case
      select 1
      from protected p
      where not exists (
-       select 1 from pg_policies pol
+       select 1
+       from pg_policies pol
        where pol.schemaname='public'
          and pol.tablename=p.table_name
-         and pol.cmd in ('SELECT','*')
+         and pol.cmd = 'ALL'
+         and (
+           pol.roles = ARRAY['rupaykg_app_runtime']::name[]
+           or pol.roles @> ARRAY['rupaykg_app_runtime']::name[]
+         )
      )
    )
   then 1 else 0
