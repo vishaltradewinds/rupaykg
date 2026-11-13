@@ -149,6 +149,24 @@ revoke all on function app.current_organization_id() from public;
 grant execute on function app.current_identity_id() to rupaykg_app_runtime;
 grant execute on function app.current_organization_id() to rupaykg_app_runtime;
 
+-- CREATE OR REPLACE preserves the owner of current_identity_id/current_organization_id,
+-- while this helper is newly created by the migration executor. Ensure those
+-- SECURITY DEFINER owners can invoke the private validation helper regardless
+-- of which controlled migration role executed this migration.
+do $
+declare
+  v_owner name;
+begin
+  select pg_get_userbyid(proowner)::name into v_owner
+    from pg_proc where oid = 'app.current_identity_id()'::regprocedure;
+  execute format('grant execute on function app.request_context_is_valid() to %I', v_owner);
+
+  select pg_get_userbyid(proowner)::name into v_owner
+    from pg_proc where oid = 'app.current_organization_id()'::regprocedure;
+  execute format('grant execute on function app.request_context_is_valid() to %I', v_owner);
+end
+$;
+
 -- Remove the old membership-only setter: it accepted a caller-selected
 -- identity and organization without proving a bearer-session bootstrap.
 drop function if exists app.set_request_context(uuid, uuid);
