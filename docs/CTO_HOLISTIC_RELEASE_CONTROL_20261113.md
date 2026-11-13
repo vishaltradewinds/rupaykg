@@ -147,6 +147,9 @@ A release candidate may be called **production-ready** only when every material 
 - Discovered and connected as the existing `rupaykg_runtime_login` role; it is LOGIN, non-SUPERUSER, non-BYPASSRLS, and inherits `rupaykg_app_runtime`. The application runtime role itself remains NOLOGIN/non-BYPASSRLS.
 - Used two existing verified identity/organization membership pairs. Within one transaction, Tenant A saw exactly its own organization and zero rows for Tenant B; Tenant B saw exactly its own organization and zero rows for Tenant A.
 - Invalid bearer-token hash returned zero authentication rows.
+- With no request context, the runtime login saw zero organizations and zero organization memberships; a mismatched identity/organization context was rejected by the verified-membership guard.
 - Evidence is recorded in `docs/audit/evidence/2026-11-13-cto-tenant-isolation-live-runtime-acceptance.md`.
 - This is a **partial production read-isolation PASS**, not full tenant isolation. Cross-tenant write denial, no-context fail-closed behavior across the protected domain, 67-table RLS coverage, FORCE RLS, and application deployment connection-path verification remain OPEN.
 - Migrations 101/102 remain unapplied. Production data/schema/roles were not mutated; only read-only queries and transaction-local request-context settings were used.
+
+- The new candidate CI run 6820 for commit `754f44b...` was observed in progress at the time of this update; run 6808 remains the previously verified successful baseline, not evidence that the latest candidate is green.
