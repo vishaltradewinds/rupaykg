@@ -78,3 +78,28 @@ HOLD. No production migrations, RLS activation, role changes, credential changes
 2. Audit migration 103 owner privileges, session expiry/revocation behavior, concurrent membership revocation, and context-token entropy/lifetime.
 3. Add per-table ownership/relationship classification and tests for the remaining 50 tables.
 4. Keep field readiness and Urban/Rural Golden Transaction acceptance separate from synthetic CI fixtures. SITE-JBP-01 remains pre-validation pending official records and field evidence.
+
+
+### Core relationship constraints
+
+A targeted live catalogue check confirmed that the following high-value ownership/lineage columns have declared foreign keys:
+- activities.organization_id;
+- measurements.activity_id;
+- evidence.activity_id and evidence.measurement_id;
+- verifications.activity_id and verifications.evidence_id;
+- carbon_calculations.activity_id;
+- mrv_observations.activity_id;
+- evidence_verification_requirements.activity_id;
+- credentials.issuer_organization_id;
+- chain_of_custody_links.activity_id and resource_flow_id;
+- settlements.payer_id, payee_id, obligation_id, and credential_id;
+- organization_memberships.organization_id;
+- resource_flows.organization_id;
+- field_devices.organization_id;
+- BWG/ESG reporting-period organization_id;
+- CPCB workspace organization_id;
+- EPR credit issuer/recycler organization IDs and transfer from/to organization IDs;
+- environmental_attribute_claims.organization_id;
+- mrv_provenance_events.activity_id, evidence_id, and verification_id.
+
+This is positive referential-integrity evidence for these sampled edges. It does not prove that the FKs are composite tenant-safe constraints, that every relevant column is constrained, or that RLS policies use the same parent relationship. The next schema pass must compare FK definitions and referenced unique keys, including cross-organization settlement/transfer semantics, and inspect constraints for all 67 tables.
