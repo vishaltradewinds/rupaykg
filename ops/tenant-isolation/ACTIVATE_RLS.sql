@@ -72,29 +72,53 @@ begin
 end $shakti$;
 
 alter table organizations enable row level security;
+alter table organizations force row level security;
 alter table roles enable row level security;
+alter table roles force row level security;
 alter table activities enable row level security;
+alter table activities force row level security;
 alter table obligations enable row level security;
+alter table obligations force row level security;
 alter table credentials enable row level security;
+alter table credentials force row level security;
 alter table settlements enable row level security;
+alter table settlements force row level security;
 alter table audit_events enable row level security;
+alter table audit_events force row level security;
 alter table resource_flows enable row level security;
+alter table resource_flows force row level security;
 alter table field_devices enable row level security;
+alter table field_devices force row level security;
 alter table organization_memberships enable row level security;
+alter table organization_memberships force row level security;
 alter table measurements enable row level security;
+alter table measurements force row level security;
 alter table evidence enable row level security;
+alter table evidence force row level security;
 alter table verifications enable row level security;
+alter table verifications force row level security;
 alter table carbon_calculations enable row level security;
+alter table carbon_calculations force row level security;
 alter table mrv_observations enable row level security;
+alter table mrv_observations force row level security;
 alter table evidence_verification_requirements enable row level security;
+alter table evidence_verification_requirements force row level security;
 alter table chain_of_custody_links enable row level security;
+alter table chain_of_custody_links force row level security;
 alter table evidence_artifact_series enable row level security;
+alter table evidence_artifact_series force row level security;
 alter table evidence_artifact_versions enable row level security;
+alter table evidence_artifact_versions force row level security;
 alter table evidence_artifact_reviews enable row level security;
+alter table evidence_artifact_reviews force row level security;
 alter table field_sync_envelopes enable row level security;
+alter table field_sync_envelopes force row level security;
 alter table field_sync_cursors enable row level security;
+alter table field_sync_cursors force row level security;
 alter table field_sync_conflicts enable row level security;
+alter table field_sync_conflicts force row level security;
 alter table mrv_provenance_events enable row level security;
+alter table mrv_provenance_events force row level security;
 
 select
   c.relname as table_name,
