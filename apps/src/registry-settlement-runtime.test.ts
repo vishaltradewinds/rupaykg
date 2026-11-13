@@ -22,6 +22,7 @@ let evidenceId = "";
 let verificationId = "";
 let credentialId = "";
 let settlementId = "";
+let serverStderr = "";
 
 const token = () => randomBytes(32).toString("base64url");
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
@@ -55,7 +56,6 @@ before(async () => {
     await c.query("insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata,mirror_node_verified_at) values($1,$2,$3,'runtime-policy','runtime-guardian','VERIFIED','CONSENSUS_CONFIRMED','0.0.123',$4,$5,$6,'{\"testFixture\":true}',clock_timestamp())", [activityId, verificationId, evidenceId, `runtime-tx-${suffix}`, `runtime-consensus-${suffix}`, `runtime-hash-${suffix}`]);
     await c.query("commit");
   } catch (error) { await c.query("rollback"); throw error; } finally { c.release(); }
-  let serverStderr = "";
   server = spawn(process.execPath, ["dist/src/server.js"], { cwd: process.cwd(), env: { ...process.env, PORT: String(port), HOST: "127.0.0.1", DATABASE_URL: databaseUrl, DATABASE_SSL: "false" }, stdio: ["ignore", "ignore", "pipe"] });
   server.stderr?.setEncoding("utf8");
   server.stderr?.on("data", (chunk: string) => { serverStderr = (serverStderr + chunk).slice(-20000); });
