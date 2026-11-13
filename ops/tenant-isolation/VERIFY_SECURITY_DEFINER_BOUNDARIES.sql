@@ -136,6 +136,7 @@ select
   count(*) filter (where p.proowner = owner_role.oid) as functions_owned_by_isolated_role,
   count(*) as expected_functions,
   owner_role.rolcanlogin,
+  owner_role.rolinherit,
   owner_role.rolsuper,
   owner_role.rolbypassrls,
   owner_role.rolcreatedb,
@@ -155,7 +156,7 @@ left join pg_proc p
  )
 where owner_role.rolname = 'rupaykg_security_definer'
 group by owner_role.oid, owner_role.rolcanlogin, owner_role.rolsuper,
-         owner_role.rolbypassrls, owner_role.rolcreatedb,
+         owner_role.rolinherit, owner_role.rolbypassrls, owner_role.rolcreatedb,
          owner_role.rolcreaterole, owner_role.rolreplication;
 
 select 1 / case
@@ -164,11 +165,14 @@ select 1 / case
       from pg_roles owner_role
      where owner_role.rolname = 'rupaykg_security_definer'
        and not owner_role.rolcanlogin
+       and not owner_role.rolinherit
        and not owner_role.rolsuper
        and not owner_role.rolbypassrls
        and not owner_role.rolcreatedb
        and not owner_role.rolcreaterole
        and not owner_role.rolreplication
+       and not has_schema_privilege(owner_role.oid, 'app', 'CREATE')
+       and not has_schema_privilege(owner_role.oid, 'public', 'CREATE')
        and not pg_has_role('rupaykg_app_runtime', owner_role.oid, 'MEMBER')
        and not pg_has_role(current_user, owner_role.oid, 'MEMBER')
        and (
