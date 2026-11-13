@@ -273,3 +273,10 @@ A release candidate may be called **production-ready** only when every material 
 - Real Urban/Rural Golden Transactions: NOT EXECUTED; production has only test fixtures and no operational MRV/evidence/device/settlement rows.
 - PR #355: OPEN / UNMERGED.
 - Production release: HOLD.
+
+
+### CI retest after 6831/6849/6850 failure triage
+- Run 6831 exposed an ambiguous `identity_id` reference in migration 103's grant CTE; the RETURNING columns are now table-qualified and aliased.
+- Run 6849/6850 exposed an undeclared `v_name` variable in the rollback-only negative-test block; it is now declared in that DO block.
+- Run 6850 was executed against prior SHA `49f5cb04f768c4789e0132a7991898e785007576`, before the loop-variable correction. Its failure is therefore not the result for current PR head.
+- Current PR head at this document update: `5c0a8c43e71bae9e797f5b371a511d086b5a41af`. No workflow run was associated with this exact SHA at the time checked; fresh CI remains required.
