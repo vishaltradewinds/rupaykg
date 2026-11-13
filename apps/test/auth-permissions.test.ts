@@ -12,7 +12,7 @@ describe("high-risk authorization policy", () => {
   it("uses the authoritative PostgreSQL role query for an authorized organization", async () => {
     let queried = false;
     const client = { query: async () => { queried = true; return { rows: [{ ok: true }] }; } } as never;
-    const auth: AuthContext = { identityId: "identity-1", memberships: [{ organization_id: "org-1", role_id: "role-1", status: "VERIFIED" }] };
+    const auth: AuthContext = { identityId: "identity-1", contextToken: "test-context-token", memberships: [{ organization_id: "org-1", role_id: "role-1", status: "VERIFIED" }] };
     const allowed = await canPerformHighRiskActionInDatabase(client, auth, "org-1", "ISSUE_CREDENTIAL");
     assert.equal(allowed, true); assert.equal(queried, true);
   });
@@ -20,6 +20,7 @@ describe("high-risk authorization policy", () => {
   it("requires the active organization to match the mutation target", async () => {
     const auth: AuthContext = {
       identityId: "identity-1",
+      contextToken: "test-context-token",
       memberships: [
         { organization_id: "org-1", role_id: "role-1", status: "VERIFIED" },
         { organization_id: "org-2", role_id: "role-2", status: "VERIFIED" },
