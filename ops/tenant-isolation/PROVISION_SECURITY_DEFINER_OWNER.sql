@@ -43,7 +43,7 @@ begin
 
   -- The migration login needs an explicit SET edge to the non-login DDL role.
   execute format('grant rupaykg_ddl to %I with set true', login_role);
-  grant usage, create on schema app, public to rupaykg_ddl;
+  execute 'grant usage, create on schema app, public to rupaykg_ddl';
 
   -- Reconcile ownership of all tenant tables plus the two identity source
   -- tables from which the isolated authentication functions read.
@@ -55,29 +55,28 @@ begin
   end loop;
 
   -- Existing trigger functions are DDL-owned; migration 105/106 replaces them.
-  alter function public.require_guardian_hcs_mrv_for_credential() owner to rupaykg_ddl;
-  alter function public.prevent_credential_out_of_scope_issue() owner to rupaykg_ddl;
-  alter function public.prevent_unverified_registry_transfer_recipient() owner to rupaykg_ddl;
-  alter function public.prevent_unverified_credential_issue() owner to rupaykg_ddl;
+  execute 'alter function public.require_guardian_hcs_mrv_for_credential() owner to rupaykg_ddl';
+  execute 'alter function public.prevent_credential_out_of_scope_issue() owner to rupaykg_ddl';
+  execute 'alter function public.prevent_unverified_registry_transfer_recipient() owner to rupaykg_ddl';
+  execute 'alter function public.prevent_unverified_credential_issue() owner to rupaykg_ddl';
 
   -- Transfer the existing authentication/context functions to the isolated
   -- NOLOGIN owner before migrations 101-103 replace their implementations.
   execute format('grant rupaykg_security_definer to %I', login_role);
-  grant usage on schema app, public to rupaykg_security_definer;
-  grant create on schema app to rupaykg_security_definer;
-  alter function app.authenticate_bearer_session(text) owner to rupaykg_security_definer;
-  alter function app.set_request_context(uuid, uuid) owner to rupaykg_security_definer;
-  alter function app.current_identity_id() owner to rupaykg_security_definer;
-  alter function app.current_organization_id() owner to rupaykg_security_definer;
-  alter function app.is_verified_org_member(uuid) owner to rupaykg_security_definer;
-  revoke create on schema app from rupaykg_security_definer;
+  execute 'grant usage on schema app, public to rupaykg_security_definer';
+  execute 'grant create on schema app to rupaykg_security_definer';
+  execute 'alter function app.authenticate_bearer_session(text) owner to rupaykg_security_definer';
+  execute 'alter function app.set_request_context(uuid, uuid) owner to rupaykg_security_definer';
+  execute 'alter function app.current_identity_id() owner to rupaykg_security_definer';
+  execute 'alter function app.current_organization_id() owner to rupaykg_security_definer';
+  execute 'alter function app.is_verified_org_member(uuid) owner to rupaykg_security_definer';
+  execute 'revoke create on schema app from rupaykg_security_definer';
   execute format('revoke rupaykg_security_definer from %I', login_role);
-  comment on role rupaykg_security_definer is
-    'NOLOGIN/NOBYPASSRLS isolated owner for narrowly scoped SECURITY DEFINER functions; no application runtime membership.';
+  execute $comment on role rupaykg_security_definer is 'NOLOGIN/NOBYPASSRLS isolated owner for narrowly scoped SECURITY DEFINER functions; no application runtime membership.'$;
 
   -- The DDL role is not allowed to inherit the function-owner role outside the
   -- controlled migration transaction. The runner enables this only temporarily.
-  alter role rupaykg_ddl noinherit;
+  execute 'alter role rupaykg_ddl noinherit';
 end
 $bootstrap$;
 
