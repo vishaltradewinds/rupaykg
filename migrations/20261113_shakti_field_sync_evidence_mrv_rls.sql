@@ -312,7 +312,7 @@ as $function$
    limit 1
 $function$;
 
-grant create on schema app to rupaykg_security_definer;
+-- CREATE is temporarily granted by the privileged migration runner.
 alter function app.current_credential_owner_id(uuid) owner to rupaykg_security_definer;
 revoke all on function app.current_credential_owner_id(uuid) from public;
 grant execute on function app.current_credential_owner_id(uuid) to rupaykg_app_runtime;
@@ -515,7 +515,7 @@ alter function app.credential_is_acceptance_fixture(uuid, uuid) owner to rupaykg
 revoke all on function app.credential_is_acceptance_fixture(uuid, uuid) from public;
 grant execute on function app.credential_is_acceptance_fixture(uuid, uuid) to rupaykg_app_runtime;
 
-revoke create on schema app from rupaykg_security_definer;
+-- CREATE is revoked by the privileged migration runner after RESET ROLE.
 
 create or replace function public.require_guardian_hcs_mrv_for_credential()
 returns trigger
@@ -556,7 +556,7 @@ begin
 end;
 $trigger$;
 
-revoke create on schema app from rupaykg_security_definer;
+-- CREATE is revoked by the privileged migration runner after RESET ROLE.
 revoke all on function app.organization_has_verified_members(uuid) from public;
 grant execute on function app.organization_has_verified_members(uuid) to rupaykg_app_runtime;
 revoke all on function app.is_verified_organization(uuid) from public;
@@ -587,8 +587,7 @@ begin
 end;
 $trigger$;
 
-comment on role rupaykg_security_definer is
-'NOLOGIN/NOBYPASSRLS owner for narrowly scoped authentication, tenant-context, registry current-owner, organization-readiness, organization-verification, credential-scope and MRV-provenance SECURITY DEFINER functions; never grant membership to application roles.';
+-- Role comment is applied by the privileged migration runner after RESET ROLE.
 
 -- A credential remains visible to its issuer and to its current registry owner.
 -- Historical former owners can read only events in which they participated.
