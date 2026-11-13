@@ -35,7 +35,10 @@ begin
     'field_devices','measurements','evidence','verifications',
     'carbon_calculations','mrv_observations',
     'evidence_verification_requirements','chain_of_custody_links',
-    'organization_geography_scopes'
+    'evidence_artifact_series','evidence_artifact_versions','evidence_artifact_reviews',
+    'field_sync_envelopes','field_sync_cursors','field_sync_conflicts',
+    'mrv_provenance_events','organization_geography_scopes','registry_events',
+    'settlement_events','environmental_attribute_claims'
   ] loop
     if not exists (
       select 1 from pg_class c
