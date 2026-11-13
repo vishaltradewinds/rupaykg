@@ -153,7 +153,7 @@ grant execute on function app.current_organization_id() to rupaykg_app_runtime;
 -- while this helper is newly created by the migration executor. Ensure those
 -- SECURITY DEFINER owners can invoke the private validation helper regardless
 -- of which controlled migration role executed this migration.
-do $
+do $shakti$
 declare
   v_owner name;
 begin
@@ -165,7 +165,7 @@ begin
     from pg_proc where oid = 'app.current_organization_id()'::regprocedure;
   execute format('grant execute on function app.request_context_is_valid() to %I', v_owner);
 end
-$;
+$shakti$;
 
 -- Remove the old membership-only setter: it accepted a caller-selected
 -- identity and organization without proving a bearer-session bootstrap.
