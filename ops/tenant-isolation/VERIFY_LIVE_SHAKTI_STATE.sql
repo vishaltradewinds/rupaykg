@@ -56,6 +56,6 @@ SELECT
   has_table_privilege('rupaykg','public.schema_migrations','INSERT') AS ledger_insert,
   has_table_privilege('rupaykg','public.schema_migrations','UPDATE') AS ledger_update,
   (SELECT pg_get_userbyid(relowner) FROM pg_class WHERE oid='public.schema_migrations'::regclass) AS ledger_owner,
-  (SELECT pg_get_userbyid(relowner) FROM pg_class WHERE oid='public.mrv_provenance_events'::regclass) AS provenance_owner;
+  (SELECT pg_get_userbyid(relowner) FROM pg_class WHERE oid=to_regclass('public.mrv_provenance_events')) AS provenance_owner;
 
 COMMIT;
