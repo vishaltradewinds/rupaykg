@@ -72,6 +72,7 @@ test("Shakti tenant context rejects cross-organization context switching", { ski
     };
 
     const context = await withTenantTransaction(pool, authA, async client => {
+      await client.query("set local role rupaykg_app_runtime");
       const row = (await client.query<{ identity_id: string; organization_id: string }>(
         "select app.current_identity_id() as identity_id, app.current_organization_id() as organization_id",
       )).rows[0]!;
@@ -81,9 +82,27 @@ test("Shakti tenant context rejects cross-organization context switching", { ski
     });
     assert.equal(context.organization_id, organizationA);
 
+    // Directly setting the identity and organization GUCs is not sufficient:
+    // the opaque bearer-session context token is also required by RLS.
+    const spoofClient = await pool.connect();
+    try {
+      await spoofClient.query("begin");
+      await spoofClient.query("set local role rupaykg_app_runtime");
+      await spoofClient.query("select set_config('app.identity_id',$1,true), set_config('app.organization_id',$2,true), set_config('app.context_token','',true)", [identityId, organizationA]);
+      const spoof = await spoofClient.query<{ count: string }>("select count(*)::text as count from organizations where id=$1", [organizationA]);
+      assert.equal(spoof.rows[0]?.count, "0", "direct identity/organization GUC spoof must not reveal tenant rows");
+      await spoofClient.query("rollback");
+    } catch (error) {
+      try { await spoofClient.query("rollback"); } catch {}
+      throw error;
+    } finally {
+      spoofClient.release();
+    }
+
     const crossTenantClient = await pool.connect();
     try {
       await crossTenantClient.query("begin");
+      await crossTenantClient.query("set local role rupaykg_app_runtime");
       await assert.rejects(
         () => crossTenantClient.query("select app.set_request_context($1,$2,$3)", [identityId, organizationB, contextToken]),
         /context grant is invalid|not a verified member/i,
