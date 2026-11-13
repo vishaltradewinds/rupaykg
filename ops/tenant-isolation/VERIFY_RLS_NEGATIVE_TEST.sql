@@ -36,7 +36,7 @@ begin
     'carbon_calculations','mrv_observations',
     'evidence_verification_requirements','chain_of_custody_links',
     'evidence_artifact_series','evidence_artifact_versions','evidence_artifact_reviews',
-    'field_sync_envelopes','field_sync_cursors','field_sync_conflicts','mrv_provenance_events','organization_geography_scopes'
+    'field_sync_envelopes','field_sync_cursors','field_sync_conflicts','mrv_provenance_events','organization_geography_scopes','registry_events'
   ] loop
     if not exists (
       select 1 from pg_class c
@@ -61,7 +61,7 @@ begin
         'carbon_calculations','mrv_observations',
         'evidence_verification_requirements','chain_of_custody_links',
         'evidence_artifact_series','evidence_artifact_versions','evidence_artifact_reviews',
-        'field_sync_envelopes','field_sync_cursors','field_sync_conflicts','mrv_provenance_events','organization_geography_scopes'
+        'field_sync_envelopes','field_sync_cursors','field_sync_conflicts','mrv_provenance_events','organization_geography_scopes','registry_events'
       ])
       and pg_get_userbyid(c.relowner) = 'rupaykg_app_runtime'
   ) then
