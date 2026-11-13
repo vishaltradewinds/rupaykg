@@ -63,63 +63,63 @@ drop policy if exists shakti_organizations_tenant_select on public.organizations
 create policy shakti_organizations_tenant_select
   on public.organizations for select
   to rupaykg_app_runtime
-  using (id = app.current_organization_id());
+  using (id = app.current_organization_id() and app.is_verified_org_member(id));
 
 drop policy if exists shakti_organizations_tenant_write on public.organizations;
 create policy shakti_organizations_tenant_write
   on public.organizations for all
   to rupaykg_app_runtime
   using (id = app.current_organization_id())
-  with check (id = app.current_organization_id());
+  with check (id = app.current_organization_id() and app.is_verified_org_member(id));
 
 drop policy if exists shakti_roles_tenant on public.roles;
 create policy shakti_roles_tenant
   on public.roles for all
   to rupaykg_app_runtime
-  using (organization_id = app.current_organization_id())
-  with check (organization_id = app.current_organization_id());
+  using (organization_id = app.current_organization_id() and app.is_verified_org_member(organization_id))
+  with check (organization_id = app.current_organization_id() and app.is_verified_org_member(organization_id));
 
 drop policy if exists shakti_activities_tenant on public.activities;
 create policy shakti_activities_tenant
   on public.activities for all
   to rupaykg_app_runtime
-  using (organization_id = app.current_organization_id())
-  with check (organization_id = app.current_organization_id());
+  using (organization_id = app.current_organization_id() and app.is_verified_org_member(organization_id))
+  with check (organization_id = app.current_organization_id() and app.is_verified_org_member(organization_id));
 
 drop policy if exists shakti_obligations_tenant on public.obligations;
 create policy shakti_obligations_tenant
   on public.obligations for all
   to rupaykg_app_runtime
-  using (organization_id = app.current_organization_id())
-  with check (organization_id = app.current_organization_id());
+  using (organization_id = app.current_organization_id() and app.is_verified_org_member(organization_id))
+  with check (organization_id = app.current_organization_id() and app.is_verified_org_member(organization_id));
 
 drop policy if exists shakti_audit_events_tenant on public.audit_events;
 create policy shakti_audit_events_tenant
   on public.audit_events for all
   to rupaykg_app_runtime
-  using (organization_id = app.current_organization_id())
-  with check (organization_id = app.current_organization_id());
+  using (organization_id = app.current_organization_id() and app.is_verified_org_member(organization_id))
+  with check (organization_id = app.current_organization_id() and app.is_verified_org_member(organization_id));
 
 drop policy if exists shakti_field_devices_tenant on public.field_devices;
 create policy shakti_field_devices_tenant
   on public.field_devices for all
   to rupaykg_app_runtime
-  using (organization_id = app.current_organization_id())
-  with check (organization_id = app.current_organization_id());
+  using (organization_id = app.current_organization_id() and app.is_verified_org_member(organization_id))
+  with check (organization_id = app.current_organization_id() and app.is_verified_org_member(organization_id));
 
 drop policy if exists shakti_resource_flows_tenant on public.resource_flows;
 create policy shakti_resource_flows_tenant
   on public.resource_flows for all
   to rupaykg_app_runtime
-  using (organization_id = app.current_organization_id())
-  with check (organization_id = app.current_organization_id());
+  using (organization_id = app.current_organization_id() and app.is_verified_org_member(organization_id))
+  with check (organization_id = app.current_organization_id() and app.is_verified_org_member(organization_id));
 
 drop policy if exists shakti_organization_memberships_tenant on public.organization_memberships;
 create policy shakti_organization_memberships_tenant
   on public.organization_memberships for all
   to rupaykg_app_runtime
-  using (organization_id = app.current_organization_id())
-  with check (organization_id = app.current_organization_id());
+  using (organization_id = app.current_organization_id() and app.is_verified_org_member(organization_id))
+  with check (organization_id = app.current_organization_id() and app.is_verified_org_member(organization_id));
 
 -- Child records derive tenant scope from their owning activity/organization.
 do $$
@@ -149,64 +149,64 @@ drop policy if exists shakti_measurements_tenant on public.measurements;
 create policy shakti_measurements_tenant
   on public.measurements for all
   to rupaykg_app_runtime
-  using (exists (select 1 from public.activities a where a.id = activity_id and a.organization_id = app.current_organization_id()))
-  with check (exists (select 1 from public.activities a where a.id = activity_id and a.organization_id = app.current_organization_id()));
+  using (exists (select 1 from public.activities a where a.id = activity_id and a.organization_id = app.current_organization_id() and app.is_verified_org_member(a.organization_id)))
+  with check (exists (select 1 from public.activities a where a.id = activity_id and a.organization_id = app.current_organization_id() and app.is_verified_org_member(a.organization_id)));
 
 drop policy if exists shakti_evidence_tenant on public.evidence;
 create policy shakti_evidence_tenant
   on public.evidence for all
   to rupaykg_app_runtime
-  using (exists (select 1 from public.activities a where a.id = activity_id and a.organization_id = app.current_organization_id()))
-  with check (exists (select 1 from public.activities a where a.id = activity_id and a.organization_id = app.current_organization_id()));
+  using (exists (select 1 from public.activities a where a.id = activity_id and a.organization_id = app.current_organization_id() and app.is_verified_org_member(a.organization_id)))
+  with check (exists (select 1 from public.activities a where a.id = activity_id and a.organization_id = app.current_organization_id() and app.is_verified_org_member(a.organization_id)));
 
 drop policy if exists shakti_verifications_tenant on public.verifications;
 create policy shakti_verifications_tenant
   on public.verifications for all
   to rupaykg_app_runtime
-  using (exists (select 1 from public.activities a where a.id = activity_id and a.organization_id = app.current_organization_id()))
-  with check (exists (select 1 from public.activities a where a.id = activity_id and a.organization_id = app.current_organization_id()));
+  using (exists (select 1 from public.activities a where a.id = activity_id and a.organization_id = app.current_organization_id() and app.is_verified_org_member(a.organization_id)))
+  with check (exists (select 1 from public.activities a where a.id = activity_id and a.organization_id = app.current_organization_id() and app.is_verified_org_member(a.organization_id)));
 
 drop policy if exists shakti_carbon_calculations_tenant on public.carbon_calculations;
 create policy shakti_carbon_calculations_tenant
   on public.carbon_calculations for all
   to rupaykg_app_runtime
-  using (exists (select 1 from public.activities a where a.id = activity_id and a.organization_id = app.current_organization_id()))
-  with check (exists (select 1 from public.activities a where a.id = activity_id and a.organization_id = app.current_organization_id()));
+  using (exists (select 1 from public.activities a where a.id = activity_id and a.organization_id = app.current_organization_id() and app.is_verified_org_member(a.organization_id)))
+  with check (exists (select 1 from public.activities a where a.id = activity_id and a.organization_id = app.current_organization_id() and app.is_verified_org_member(a.organization_id)));
 
 drop policy if exists shakti_mrv_observations_tenant on public.mrv_observations;
 create policy shakti_mrv_observations_tenant
   on public.mrv_observations for all
   to rupaykg_app_runtime
-  using (exists (select 1 from public.activities a where a.id = activity_id and a.organization_id = app.current_organization_id()))
-  with check (exists (select 1 from public.activities a where a.id = activity_id and a.organization_id = app.current_organization_id()));
+  using (exists (select 1 from public.activities a where a.id = activity_id and a.organization_id = app.current_organization_id() and app.is_verified_org_member(a.organization_id)))
+  with check (exists (select 1 from public.activities a where a.id = activity_id and a.organization_id = app.current_organization_id() and app.is_verified_org_member(a.organization_id)));
 
 drop policy if exists shakti_evidence_requirements_tenant on public.evidence_verification_requirements;
 create policy shakti_evidence_requirements_tenant
   on public.evidence_verification_requirements for all
   to rupaykg_app_runtime
-  using (exists (select 1 from public.activities a where a.id = activity_id and a.organization_id = app.current_organization_id()))
-  with check (exists (select 1 from public.activities a where a.id = activity_id and a.organization_id = app.current_organization_id()));
+  using (exists (select 1 from public.activities a where a.id = activity_id and a.organization_id = app.current_organization_id() and app.is_verified_org_member(a.organization_id)))
+  with check (exists (select 1 from public.activities a where a.id = activity_id and a.organization_id = app.current_organization_id() and app.is_verified_org_member(a.organization_id)));
 
 drop policy if exists shakti_credentials_tenant on public.credentials;
 create policy shakti_credentials_tenant
   on public.credentials for all
   to rupaykg_app_runtime
-  using (issuer_organization_id = app.current_organization_id())
-  with check (issuer_organization_id = app.current_organization_id());
+  using (issuer_organization_id = app.current_organization_id() and app.is_verified_org_member(issuer_organization_id))
+  with check (issuer_organization_id = app.current_organization_id() and app.is_verified_org_member(issuer_organization_id));
 
 drop policy if exists shakti_chain_of_custody_tenant on public.chain_of_custody_links;
 create policy shakti_chain_of_custody_tenant
   on public.chain_of_custody_links for all
   to rupaykg_app_runtime
-  using (actor_organization_id = app.current_organization_id())
-  with check (actor_organization_id = app.current_organization_id());
+  using (actor_organization_id = app.current_organization_id() and app.is_verified_org_member(actor_organization_id))
+  with check (actor_organization_id = app.current_organization_id() and app.is_verified_org_member(actor_organization_id));
 
 drop policy if exists shakti_settlements_tenant on public.settlements;
 create policy shakti_settlements_tenant
   on public.settlements for all
   to rupaykg_app_runtime
-  using (payer_id = app.current_organization_id() or payee_id = app.current_organization_id())
-  with check (payer_id = app.current_organization_id() or payee_id = app.current_organization_id());
+  using ((payer_id = app.current_organization_id() or payee_id = app.current_organization_id()) and app.is_verified_org_member(app.current_organization_id()))
+  with check ((payer_id = app.current_organization_id() or payee_id = app.current_organization_id()) and app.is_verified_org_member(app.current_organization_id()));
 
 -- Explicitly grant only the protected-domain DML surface to the runtime role.
 grant select, insert, update, delete on
