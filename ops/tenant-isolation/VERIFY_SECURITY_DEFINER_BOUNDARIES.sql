@@ -246,9 +246,20 @@ select 1 / case
        and not pg_has_role('rupaykg_app_runtime', owner_role.oid, 'MEMBER')
        and not pg_has_role(current_user, owner_role.oid, 'MEMBER')
        and not exists (
-         select 1 from pg_auth_members membership
+         select 1
+           from pg_auth_members membership
+           left join pg_roles member_role on member_role.oid = membership.member
           where membership.member = owner_role.oid
-             or membership.roleid = owner_role.oid
+             or (
+               membership.roleid = owner_role.oid
+               and not (
+                 member_role.rolname = 'rupaykg'
+                 and pg_get_userbyid(membership.grantor) = 'cloud_admin'
+                 and membership.admin_option
+                 and not membership.inherit_option
+                 and not membership.set_option
+               )
+             )
        )
        and not has_table_privilege(owner_role.oid, 'public.identities', 'SELECT')
        and not has_table_privilege(owner_role.oid, 'public.identities', 'INSERT')
