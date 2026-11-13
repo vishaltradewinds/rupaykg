@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { Pool } from "pg";
 import { withTenantTransaction } from "./tenant-db.js";
 import type { AuthContext } from "./auth.js";
@@ -15,6 +15,8 @@ test("Shakti tenant context rejects cross-organization context switching", { ski
   let organizationB = "";
   let roleA = "";
   let membershipA = "";
+  let contextToken = "";
+  let sessionId = "";
   try {
     organizationA = (await pool.query<{ id: string }>(
       "insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id",
@@ -50,8 +52,21 @@ test("Shakti tenant context rejects cross-organization context switching", { ski
       fixtureClient.release();
     }
 
+    const tokenHash = createHash("sha256").update(`tenant-isolation-test:${suffix}`).digest("hex");
+    sessionId = (await pool.query<{ id: string }>(
+      "insert into identity_sessions(identity_id,expires_at,token_hash) values($1,now()+interval '5 minutes',$2) returning id",
+      [identityId, tokenHash],
+    )).rows[0]!.id;
+    const grant = await pool.query<{ context_token: string }>(
+      "select context_token from app.authenticate_bearer_session($1) where organization_id=$2",
+      [tokenHash, organizationA],
+    );
+    contextToken = grant.rows[0]?.context_token ?? "";
+    assert.ok(contextToken, "bearer-session bootstrap must issue a tenant context grant");
+
     const authA: AuthContext = {
       identityId,
+      contextToken,
       memberships: [{ organization_id: organizationA, role_id: roleA, status: "VERIFIED" }],
       activeOrganizationId: organizationA,
     };
@@ -70,8 +85,8 @@ test("Shakti tenant context rejects cross-organization context switching", { ski
     try {
       await crossTenantClient.query("begin");
       await assert.rejects(
-        () => crossTenantClient.query("select app.set_request_context($1,$2)", [identityId, organizationB]),
-        /not a verified member of the requested organization/i,
+        () => crossTenantClient.query("select app.set_request_context($1,$2,$3)", [identityId, organizationB, contextToken]),
+        /context grant is invalid|not a verified member/i,
       );
       await crossTenantClient.query("rollback");
     } catch (error) {
@@ -89,6 +104,7 @@ test("Shakti tenant context rejects cross-organization context switching", { ski
     });
     assert.equal(reset, organizationA);
   } finally {
+    if (sessionId) await pool.query("delete from identity_sessions where id=$1", [sessionId]);
     if (membershipA) await pool.query("delete from organization_memberships where id=$1", [membershipA]);
     if (roleA) await pool.query("delete from roles where id=$1", [roleA]);
     if (identityId) await pool.query("delete from identities where id=$1", [identityId]);
