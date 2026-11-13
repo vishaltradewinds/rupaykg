@@ -194,7 +194,7 @@ try {
     owner_exists: boolean;
     owner_safe: boolean;
     runtime_can_assume_owner: boolean;
-    runtime_login_can_assume_owner: boolean;
+    runtime_login_can_set_owner: boolean;
     owner_has_unsafe_memberships: boolean;
   }>(
     `select
@@ -205,7 +205,7 @@ try {
            from pg_roles where rolname = 'rupaykg_security_definer'
        ), false) as owner_safe,
        pg_has_role('rupaykg_app_runtime', 'rupaykg_security_definer', 'MEMBER') as runtime_can_assume_owner,
-       pg_has_role(session_user, 'rupaykg_security_definer', 'MEMBER') as runtime_login_can_assume_owner,
+       pg_has_role(session_user, 'rupaykg_security_definer', 'SET') as runtime_login_can_set_owner,
        exists (
          select 1
            from pg_auth_members membership
@@ -228,7 +228,7 @@ try {
     !boundary?.owner_exists ||
     !boundary.owner_safe ||
     boundary.runtime_can_assume_owner ||
-    boundary.runtime_login_can_assume_owner ||
+    boundary.runtime_login_can_set_owner ||
     boundary.owner_has_unsafe_memberships
   ) {
     throw new Error(
