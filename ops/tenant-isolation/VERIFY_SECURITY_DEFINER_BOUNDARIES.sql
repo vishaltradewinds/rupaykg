@@ -291,7 +291,8 @@ select 1 / case
               'is_verified_org_member',
               'authenticate_bearer_session',
               'current_identity_id',
-              'current_organization_id'
+              'current_organization_id',
+              'current_credential_owner_id'
             )
             and p.proowner = owner_role.oid
        ) = 6
