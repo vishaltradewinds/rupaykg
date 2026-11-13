@@ -71,7 +71,7 @@ jobs:
           if (!migrationDir) throw new Error("Migration directory not found");
 
           const files = (await readdir(migrationDir))
-            .filter((name) => /^\\d+_.+\\.sql$/.test(name))
+            .filter((name) => /^\d+_.+\.sql$/.test(name))
             .sort();
           const prefixCounts = new Map();
           for (const filename of files) {
@@ -79,7 +79,7 @@ jobs:
             prefixCounts.set(prefix, (prefixCounts.get(prefix) ?? 0) + 1);
           }
           const expected = files.map((filename) => {
-            const stem = filename.replace(/\\.sql$/, "");
+            const stem = filename.replace(/\.sql$/, "");
             const prefix = filename.slice(0, filename.indexOf("_"));
             const version = (prefixCounts.get(prefix) ?? 0) > 1 ? stem : prefix;
             return { version, filename };
