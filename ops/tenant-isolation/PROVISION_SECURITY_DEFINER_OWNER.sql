@@ -60,6 +60,17 @@ begin
   execute 'alter function public.prevent_unverified_registry_transfer_recipient() owner to rupaykg_ddl';
   execute 'alter function public.prevent_unverified_credential_issue() owner to rupaykg_ddl';
 
+  -- Organizations and memberships already have RLS enabled in production.
+  -- Install the isolated owner's narrow SELECT policies before transferring
+  -- the authentication functions, so the existing auth path remains usable
+  -- throughout the bootstrap-to-migration interval.
+  execute 'set local role rupaykg_ddl';
+  execute 'drop policy if exists shakti_security_definer_membership_read on public.organization_memberships';
+  execute 'create policy shakti_security_definer_membership_read on public.organization_memberships for select to rupaykg_security_definer using (true)';
+  execute 'drop policy if exists shakti_security_definer_organization_read on public.organizations';
+  execute 'create policy shakti_security_definer_organization_read on public.organizations for select to rupaykg_security_definer using (true)';
+  execute 'reset role';
+
   -- Transfer the existing authentication/context functions to the isolated
   -- NOLOGIN owner before migrations 101-103 replace their implementations.
   execute format('grant rupaykg_security_definer to %I', login_role);
