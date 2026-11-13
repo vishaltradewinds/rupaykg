@@ -86,16 +86,18 @@ $$;
 revoke all on function app.authenticate_bearer_session(text) from public;
 grant execute on function app.authenticate_bearer_session(text) to rupaykg_app_runtime;
 
--- Validate the opaque grant against the original live session and current
--- membership every time an RLS policy reads tenant context.
-create or replace function app.request_context_is_valid()
-returns boolean
+-- RLS context readers validate the opaque grant inline. They are SECURITY
+-- DEFINER so the runtime role never needs direct access to the private grant
+-- table. Keeping validation inline avoids a second function ACL edge.
+
+create or replace function app.current_identity_id()
+returns uuid
 language sql
 stable
 security definer
 set search_path = pg_catalog, public, app
 as $$
-  select exists (
+  select case when exists (
     select 1
       from app.request_context_grants g
       join public.identity_sessions s on s.id = g.session_id
@@ -115,21 +117,8 @@ as $$
        and o.status = 'VERIFIED'
        and om.status = 'VERIFIED'
   )
-$$;
-
-revoke all on function app.request_context_is_valid() from public;
-grant execute on function app.request_context_is_valid() to rupaykg_app_runtime;
-
-create or replace function app.current_identity_id()
-returns uuid
-language sql
-stable
-security definer
-set search_path = pg_catalog, public, app
-as $$
-  select case when app.request_context_is_valid()
-              then nullif(current_setting('app.identity_id', true), '')::uuid
-              else null end
+  then nullif(current_setting('app.identity_id', true), '')::uuid
+  else null end
 $$;
 
 create or replace function app.current_organization_id()
@@ -139,33 +128,34 @@ stable
 security definer
 set search_path = pg_catalog, public, app
 as $$
-  select case when app.request_context_is_valid()
-              then nullif(current_setting('app.organization_id', true), '')::uuid
-              else null end
+  select case when exists (
+    select 1
+      from app.request_context_grants g
+      join public.identity_sessions s on s.id = g.session_id
+      join public.identities i on i.id = g.identity_id
+      join public.organizations o on o.id = g.organization_id
+      join public.organization_memberships om
+        on om.identity_id = g.identity_id
+       and om.organization_id = g.organization_id
+     where g.id = nullif(current_setting('app.context_token', true), '')::uuid
+       and g.identity_id = nullif(current_setting('app.identity_id', true), '')::uuid
+       and g.organization_id = nullif(current_setting('app.organization_id', true), '')::uuid
+       and g.expires_at > now()
+       and s.revoked_at is null
+       and s.expires_at > now()
+       and i.status = 'VERIFIED'
+       and i.suspended_at is null
+       and o.status = 'VERIFIED'
+       and om.status = 'VERIFIED'
+  )
+  then nullif(current_setting('app.organization_id', true), '')::uuid
+  else null end
 $$;
 
 revoke all on function app.current_identity_id() from public;
 revoke all on function app.current_organization_id() from public;
 grant execute on function app.current_identity_id() to rupaykg_app_runtime;
 grant execute on function app.current_organization_id() to rupaykg_app_runtime;
-
--- CREATE OR REPLACE preserves the owner of current_identity_id/current_organization_id,
--- while this helper is newly created by the migration executor. Ensure those
--- SECURITY DEFINER owners can invoke the private validation helper regardless
--- of which controlled migration role executed this migration.
-do $shakti$
-declare
-  v_owner name;
-begin
-  select pg_get_userbyid(proowner)::name into v_owner
-    from pg_proc where oid = 'app.current_identity_id()'::regprocedure;
-  execute format('grant execute on function app.request_context_is_valid() to %I', v_owner);
-
-  select pg_get_userbyid(proowner)::name into v_owner
-    from pg_proc where oid = 'app.current_organization_id()'::regprocedure;
-  execute format('grant execute on function app.request_context_is_valid() to %I', v_owner);
-end
-$shakti$;
 
 -- Remove the old membership-only setter: it accepted a caller-selected
 -- identity and organization without proving a bearer-session bootstrap.
@@ -220,7 +210,5 @@ grant execute on function app.set_request_context(uuid, uuid, uuid) to rupaykg_a
 
 comment on table app.request_context_grants is
 'Private, short-lived grants minted by app.authenticate_bearer_session and required to establish RLS tenant context. Runtime role has no direct table privileges.';
-comment on function app.request_context_is_valid() is
-'Returns true only when transaction-local tenant GUCs match an unexpired grant tied to a live verified bearer session and current verified organization membership.';
 comment on function app.set_request_context(uuid, uuid, uuid) is
 'Sets transaction-local tenant context only when the opaque grant was minted by the bearer-session authentication bootstrap.';
