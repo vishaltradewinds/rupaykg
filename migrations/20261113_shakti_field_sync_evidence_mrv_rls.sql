@@ -335,12 +335,57 @@ as $function$
 $function$;
 
 alter function app.organization_has_verified_members(uuid) owner to rupaykg_security_definer;
+
+-- Verify a recipient organization without exposing cross-tenant organization rows.
+create or replace function app.is_verified_organization(target_organization_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = pg_catalog, public, app
+as $function$
+  select exists (
+    select 1
+      from public.organizations organization_row
+     where organization_row.id = target_organization_id
+       and organization_row.status = 'VERIFIED'
+  )
+$function$;
+
+alter function app.is_verified_organization(uuid) owner to rupaykg_security_definer;
 revoke create on schema app from rupaykg_security_definer;
 revoke all on function app.organization_has_verified_members(uuid) from public;
 grant execute on function app.organization_has_verified_members(uuid) to rupaykg_app_runtime;
+revoke all on function app.is_verified_organization(uuid) from public;
+grant execute on function app.is_verified_organization(uuid) to rupaykg_app_runtime;
+
+-- Keep the trigger's cross-tenant verification check behind the boolean helper.
+create or replace function public.prevent_unverified_registry_transfer_recipient()
+returns trigger
+language plpgsql
+set search_path = pg_catalog, public, app
+as $trigger$
+begin
+  if new.event_type = 'TRANSFERRED' then
+    if new.to_owner_id is null then
+      raise exception 'Registry transfer requires a destination organization';
+    end if;
+
+    if not app.is_verified_organization(new.to_owner_id) then
+      raise exception 'Registry transfer destination must be a verified organization';
+    end if;
+
+    if new.from_owner_id is not null and new.from_owner_id = new.to_owner_id then
+      raise exception 'Registry transfer destination must differ from current owner';
+    end if;
+  end if;
+
+  return new;
+end;
+$trigger$;
 
 comment on role rupaykg_security_definer is
-'NOLOGIN/NOBYPASSRLS owner for narrowly scoped authentication, tenant-context, registry current-owner and organization-readiness SECURITY DEFINER functions; never grant membership to application roles.';
+'NOLOGIN/NOBYPASSRLS owner for narrowly scoped authentication, tenant-context, registry current-owner, organization-readiness and organization-verification SECURITY DEFINER functions; never grant membership to application roles.';
 
 -- A credential remains visible to its issuer and to its current registry owner.
 -- Historical former owners can read only events in which they participated.
