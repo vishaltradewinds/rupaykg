@@ -62,7 +62,7 @@ try {
   const pendingProtected = baselineFiles.filter((name) => protectedMigrations.has(name) && !appliedProtected.has(name));
   if (pendingProtected.length && !allowProtected) throw new Error(`Protected Shakti migrations require RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS=1: ${pendingProtected.join(", ")}`);
 
-  for (const filename of files) {
+  for (const filename of baselineFiles) {
     const stem = filename.replace(/\.sql$/, "");
     const prefix = filename.slice(0, filename.indexOf("_"));
     const version = (prefixCounts.get(prefix) ?? 0) > 1 ? stem : prefix;
