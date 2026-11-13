@@ -20,9 +20,9 @@ begin
   if exists (
     select 1 from pg_roles
      where rolname = 'rupaykg_security_definer'
-       and (rolsuper or rolbypassrls or rolcanlogin or rolcreatedb or rolcreaterole or rolreplication)
+       and (rolsuper or rolbypassrls or rolcanlogin or rolinherit or rolcreatedb or rolcreaterole or rolreplication)
   ) then
-    raise exception 'RUPAYKG_SECURITY_DEFINER_OWNER_UNSAFE: owner must be NOLOGIN, NOSUPERUSER, NOBYPASSRLS, NOCREATEDB, NOCREATEROLE and NOREPLICATION';
+    raise exception 'RUPAYKG_SECURITY_DEFINER_OWNER_UNSAFE: owner must be NOLOGIN, NOINHERIT, NOSUPERUSER, NOBYPASSRLS, NOCREATEDB, NOCREATEROLE and NOREPLICATION';
   end if;
 
   if pg_has_role('rupaykg_app_runtime', 'rupaykg_security_definer', 'MEMBER') then
