@@ -1,6 +1,6 @@
 -- Read-only verification for migration 102 runtime-auth handoff.
 -- Fails closed if the runtime role is missing, privileged, or lacks EXECUTE
--- on the four request-context/authentication functions.
+-- on the session-bound request-context/authentication functions.
 
 DO $$
 DECLARE
@@ -29,7 +29,7 @@ BEGIN
     RAISE EXCEPTION 'VERIFY_102: authenticate_bearer_session EXECUTE missing';
   END IF;
 
-  IF NOT has_function_privilege('rupaykg_app_runtime', 'app.set_request_context(uuid,uuid)', 'EXECUTE') THEN
+  IF NOT has_function_privilege('rupaykg_app_runtime', 'app.set_request_context(uuid,uuid,uuid)', 'EXECUTE') THEN
     RAISE EXCEPTION 'VERIFY_102: set_request_context EXECUTE missing';
   END IF;
 
@@ -39,6 +39,15 @@ BEGIN
 
   IF NOT has_function_privilege('rupaykg_app_runtime', 'app.current_organization_id()', 'EXECUTE') THEN
     RAISE EXCEPTION 'VERIFY_102: current_organization_id EXECUTE missing';
+  END IF;
+
+  IF NOT has_function_privilege('rupaykg_app_runtime', 'app.request_context_is_valid()', 'EXECUTE') THEN
+    RAISE EXCEPTION 'VERIFY_102: request_context_is_valid EXECUTE missing';
+  END IF;
+
+  IF has_table_privilege('rupaykg_app_runtime', 'app.request_context_grants', 'SELECT')
+     OR has_table_privilege('rupaykg_app_runtime', 'app.request_context_grants', 'INSERT') THEN
+    RAISE EXCEPTION 'VERIFY_102: runtime role must not directly access request context grants';
   END IF;
 
   RAISE NOTICE 'VERIFY_102 PASS: runtime auth handoff is privilege-bounded and LOGIN remains unchanged';
@@ -51,7 +60,7 @@ SELECT
   r.rolbypassrls,
   r.rolcanlogin,
   has_function_privilege(r.rolname, 'app.authenticate_bearer_session(text)', 'EXECUTE') AS can_authenticate,
-  has_function_privilege(r.rolname, 'app.set_request_context(uuid,uuid)', 'EXECUTE') AS can_set_context,
+  has_function_privilege(r.rolname, 'app.set_request_context(uuid,uuid,uuid)', 'EXECUTE') AS can_set_context,
   has_function_privilege(r.rolname, 'app.current_identity_id()', 'EXECUTE') AS can_read_identity,
   has_function_privilege(r.rolname, 'app.current_organization_id()', 'EXECUTE') AS can_read_organization
 FROM pg_roles r
