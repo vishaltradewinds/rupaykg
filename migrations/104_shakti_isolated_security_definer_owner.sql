@@ -38,11 +38,16 @@ begin
         or (
           membership.roleid = 'rupaykg_security_definer'::regrole
           and not (
-            member_role.rolname = 'rupaykg'
+            ((member_role.rolname = 'rupaykg'
             and pg_get_userbyid(membership.grantor) = 'cloud_admin'
             and membership.admin_option
             and not membership.inherit_option
-            and not membership.set_option
+            and not membership.set_option)
+           or (member_role.rolname = 'rupaykg_ddl'
+            and pg_get_userbyid(membership.grantor) = session_user
+            and not membership.admin_option
+            and membership.inherit_option
+            and membership.set_option))
           )
         )
   ) then
@@ -60,7 +65,7 @@ begin
 end
 $$;
 
-grant usage on schema app, public to rupaykg_security_definer;
+-- Schema grants are applied by the privileged migration runner before SET ROLE.
 
 -- Remove any pre-existing table/column grants before applying the explicit
 -- minimum column surface. This makes migration 104 safe for a pre-provisioned
@@ -128,7 +133,7 @@ create policy shakti_security_definer_organization_read
 
 -- PostgreSQL requires CREATE on the containing schema when changing function
 -- ownership. Grant it only for this transaction, then revoke it immediately.
-grant create on schema app to rupaykg_security_definer;
+-- CREATE is temporarily granted by the privileged migration runner.
 
 alter function app.authenticate_bearer_session(text)
   owner to rupaykg_security_definer;
@@ -141,7 +146,7 @@ alter function app.current_organization_id()
 alter function app.is_verified_org_member(uuid)
   owner to rupaykg_security_definer;
 
-revoke create on schema app from rupaykg_security_definer;
+-- CREATE is revoked by the privileged migration runner after RESET ROLE.
 
 -- Reassert the intended function ACLs after ownership changes.
 revoke all on function app.authenticate_bearer_session(text) from public;
@@ -156,5 +161,4 @@ grant execute on function app.current_identity_id() to rupaykg_app_runtime;
 grant execute on function app.current_organization_id() to rupaykg_app_runtime;
 grant execute on function app.is_verified_org_member(uuid) to rupaykg_app_runtime;
 
-comment on role rupaykg_security_definer is
-'NOLOGIN/NOBYPASSRLS owner for narrowly scoped SECURITY DEFINER authentication and tenant-context functions; never grant membership to application roles.';
+-- Role comment is applied by the privileged migration runner after RESET ROLE.
