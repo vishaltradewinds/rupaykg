@@ -298,6 +298,19 @@ begin
   execute 'set local role rupaykg_app_runtime';
   perform app.set_request_context(v_identity_a,v_org_a,v_context_token_a);
 
+  -- Suspending an identity invalidates an already-issued context grant.
+  reset role;
+  update identities set suspended_at=now() where id=v_identity_a;
+  execute 'set local role rupaykg_app_runtime';
+  select count(*) into v_visible from organizations where id=v_org_a;
+  if v_visible <> 0 then
+    raise exception 'RLS_NEGATIVE_TEST_FAILED: suspended identity retained tenant visibility';
+  end if;
+  reset role;
+  update identities set suspended_at=null where id=v_identity_a;
+  execute 'set local role rupaykg_app_runtime';
+  perform app.set_request_context(v_identity_a,v_org_a,v_context_token_a);
+
   -- A tenant must not create a row in another tenant's organization scope.
   begin
     insert into organizations(id,name,organization_type,status)
