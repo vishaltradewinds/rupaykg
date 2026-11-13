@@ -206,6 +206,15 @@ begin
   if v_visible <> 0 then
     raise exception 'RLS_NEGATIVE_TEST_FAILED: direct identity/organization GUC spoof bypassed context grant';
   end if;
+
+  -- Malformed caller-controlled UUID GUCs must fail closed as zero visibility,
+  -- not raise a cast error that can disrupt request processing.
+  perform set_config('app.context_token', 'not-a-uuid', true);
+  select count(*) into v_visible from organizations where id=v_org_a;
+  if v_visible <> 0 then
+    raise exception 'RLS_NEGATIVE_TEST_FAILED: malformed context token exposed tenant rows';
+  end if;
+
   reset role;
   execute 'set local role rupaykg_app_runtime';
   perform app.set_request_context(v_identity_a,v_org_a,v_context_token_a);
