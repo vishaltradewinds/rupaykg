@@ -22,7 +22,7 @@ Urban, rural, peri-urban, industrial and regional deployments are controlled con
 | Current HEAD CI | Successful CI on current release candidate | **PASS** — CI run 6808 on `ec4ce27f...` completed successfully |
 | Migration reconciliation | Read-only production/staging comparison | **PARTIAL / OPEN** — production schema_migrations reaches `20261021`; repository head contains migrations through `100` plus dated migrations |
 | Runtime identity | Verified identity + active membership | OPEN |
-| Runtime DB role | Non-BYPASSRLS runtime role | **OPEN** — current production connection role `rupaykg` reports `rolbypassrls=true`; dedicated `rupaykg_app_runtime` exists in schema |
+| Runtime DB role | Non-BYPASSRLS runtime role | **OPEN** — current production connection role `rupaykg` reports `rolbypassrls=true`; dedicated `rupaykg_app_runtime` exists and is non-BYPASSRLS but currently NOLOGIN |
 | RLS | Enabled and tested in target runtime | **PARTIAL / OPEN** — 17 public tables currently report RLS enabled; 50 remain disabled; no production acceptance claim |
 | Cross-tenant negative tests | Tenant A cannot read/write tenant B | **OPEN** — repository has a controlled negative-test script, but authoritative production acceptance evidence is not yet recorded |
 | Urban Golden Transaction | Real end-to-end acceptance evidence | OPEN |
@@ -115,8 +115,6 @@ Those require their own authoritative evidence.
 
 A release candidate may be called **production-ready** only when every material gate above is evidenced against the candidate itself and no P0/P1 blocker remains.
 
-
-
 ## 2026-11-13 CTO convergence update — tenant-isolation acceptance harness
 
 - Fixed `VERIFY_RLS_POLICY_COVERAGE.sql` to use PostgreSQL's actual `pg_policies.cmd` values (`SELECT`/`INSERT`/`UPDATE`/`DELETE`) instead of lower-case aliases, and to fail closed when any protected table lacks RLS.
@@ -125,7 +123,6 @@ A release candidate may be called **production-ready** only when every material 
 - Production remains HOLD: the live production connection role `rupaykg` is BYPASSRLS and only 17/67 public tables currently have RLS enabled.
 - No production SQL, role, credential, RLS, ownership, or data mutation was performed in this batch.
 
-
 ## 2026-11-13 CTO convergence batch — protected-domain activation
 
 - Added forward-only migration `101_shakti_tenant_isolation_activation.sql` on the convergence branch.
@@ -133,4 +130,13 @@ A release candidate may be called **production-ready** only when every material 
 - The migration requires the controlled `rupaykg_app_runtime` role to exist and be non-SUPERUSER/non-BYPASSRLS; it does not create credentials or alter the production login.
 - Added `VERIFY_101_ACTIVATION.sql` as a read-only post-activation gate.
 - Production remains untouched. Neon temporary migration rehearsal could not be prepared because the Neon project currently reports its branch limit exceeded; therefore migration 101 is code-reviewed/repository-pinned but not declared database-applied.
-- Authentication bootstrap remains a separate gate: the verified rehearsal currently lacks `app.authenticate_bearer_session(text)`, so no production acceptance claim is made.
+- Authentication bootstrap remains a separate gate. Read-only inspection of the current production schema now verifies that `app.authenticate_bearer_session(text)` exists as a SECURITY DEFINER function and that `app.set_request_context(uuid,uuid)` exists. The production runtime role remains NOLOGIN/BYPASSRLS-safe; no production role change was made.
+
+## 2026-11-13 CTO convergence batch — runtime authentication handoff
+
+- Added forward-only migration `102_shakti_runtime_auth_handoff.sql`.
+- Migration 102 does **not** create credentials, enable LOGIN, or change production authentication configuration.
+- It revokes PUBLIC EXECUTE on the four request-context/authentication functions and grants EXECUTE only to `rupaykg_app_runtime`, after asserting that role is non-SUPERUSER/non-BYPASSRLS.
+- Added read-only `VERIFY_102_RUNTIME_AUTH_HANDOFF.sql` which fails closed if the runtime role is privileged, receives LOGIN, or lacks the required EXECUTE privileges.
+- This closes the **database privilege handoff design** gate in the repository; it does **not** close production runtime acceptance because migration 102 has not been applied and the application still needs a verified runtime login/connection path.
+- Production Neon remains untouched.
