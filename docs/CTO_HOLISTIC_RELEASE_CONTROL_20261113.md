@@ -183,3 +183,15 @@ A release candidate may be called **production-ready** only when every material 
 - Migrations 101/102: NOT APPLIED.
 - Urban/Rural real Golden Transactions: OPEN.
 - Production release: HOLD.
+
+
+## 2026-11-13 CTO convergence batch — complete candidate CI run 6822
+
+- GitHub Actions run `43411575978` (run number 6822) completed with conclusion **SUCCESS** on branch `cto/20261113-holistic-release-convergence`.
+- All execution gates passed: dependency audit; disposable non-BYPASSRLS runtime-role assertion; migration validation and disposable migration execution; typecheck; build; browser smoke; disposable PostgreSQL acceptance; and production-container build.
+- The latest `VERIFY_RLS_NEGATIVE_TEST.sql` includes the cross-tenant organization INSERT denial assertion. The disposable PostgreSQL acceptance stage passed with that assertion present.
+- **Correction to the earlier test-scope note above:** the latest harness does include and pass the cross-tenant organization INSERT denial assertion in disposable CI. The earlier statement that cross-tenant INSERT denial was not yet covered is superseded by this update.
+- Scope remains limited to the candidate's 17-table protected domain and the assertions actually executed by the disposable CI harness. It does not prove every child-table write path, all 67 public tables, production write denial, or production application deployment identity.
+- PR #355 remains open and unmerged. Canonical Render production remains on `main`; the candidate has not been deployed.
+- Production Neon remains untouched: migrations 101/102 are not applied, and no production DDL/DML, role, credential, or deployment-setting changes were made.
+- Updated release decision: **candidate CI PASS; production release HOLD** pending exact Render runtime identity proof, full-table tenant-isolation coverage and controlled production acceptance, Urban/Rural golden transactions, and operational recovery gates.
