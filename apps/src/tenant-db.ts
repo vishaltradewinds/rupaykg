@@ -10,6 +10,9 @@ export async function withTenantTransaction<T>(
   if (!auth.activeOrganizationId) {
     throw Object.assign(new Error("Active organization is required for tenant-scoped database access"), { code: "TENANT_CONTEXT_REQUIRED" });
   }
+  if (!auth.contextToken) {
+    throw Object.assign(new Error("Authenticated request context grant is required"), { code: "TENANT_CONTEXT_GRANT_REQUIRED" });
+  }
   const tracer = trace.getTracer("rupaykg-db");
   return tracer.startActiveSpan("rupaykg.db.tenant_transaction", async span => {
     span.setAttribute("db.system", "postgresql");
@@ -23,7 +26,7 @@ export async function withTenantTransaction<T>(
        join organizations o on o.id = om.organization_id and o.status = 'VERIFIED'
        where om.identity_id = $1 and om.organization_id = $2 and om.status = 'VERIFIED') as ok`, [auth.identityId, auth.activeOrganizationId]);
     if (!membership.rows[0]?.ok) throw Object.assign(new Error("Verified organization membership is required"), { code: "TENANT_MEMBERSHIP_REQUIRED" });
-    await client.query("select app.set_request_context($1,$2)", [auth.identityId, auth.activeOrganizationId]);
+    await client.query("select app.set_request_context($1,$2,$3)", [auth.identityId, auth.activeOrganizationId, auth.contextToken]);
     const result = await fn(client);
     await client.query("commit");
     span.setAttribute("db.transaction.status", "committed");
