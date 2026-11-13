@@ -340,6 +340,70 @@ create policy shakti_credentials_tenant
 -- Methodology versions are global, read-only governance reference data.
 grant select on public.methodology_versions to rupaykg_app_runtime;
 
+-- Settlement events are append-only children of a payer/payee settlement.
+alter table public.settlement_events enable row level security;
+alter table public.settlement_events force row level security;
+drop policy if exists shakti_settlement_events_tenant on public.settlement_events;
+create policy shakti_settlement_events_tenant
+  on public.settlement_events for all
+  to rupaykg_app_runtime
+  using (
+    exists (
+      select 1 from public.settlements s
+       where s.id = settlement_events.settlement_id
+         and (
+           s.payer_id = app.current_organization_id()
+           or s.payee_id = app.current_organization_id()
+         )
+         and app.is_verified_org_member(app.current_organization_id())
+    )
+  )
+  with check (
+    actor_identity_id = app.current_identity_id()
+    and exists (
+      select 1 from public.settlements s
+       where s.id = settlement_events.settlement_id
+         and (
+           s.payer_id = app.current_organization_id()
+           or s.payee_id = app.current_organization_id()
+         )
+         and app.is_verified_org_member(app.current_organization_id())
+    )
+  );
+grant select, insert on public.settlement_events to rupaykg_app_runtime;
+
+-- Environmental attribute claims are subordinate to their credential and
+-- inherit its issuer/current-owner access boundary.
+alter table public.environmental_attribute_claims enable row level security;
+alter table public.environmental_attribute_claims force row level security;
+drop policy if exists shakti_environmental_attribute_claims_tenant on public.environmental_attribute_claims;
+create policy shakti_environmental_attribute_claims_tenant
+  on public.environmental_attribute_claims for all
+  to rupaykg_app_runtime
+  using (
+    exists (
+      select 1 from public.credentials c
+       where c.id = environmental_attribute_claims.credential_id
+         and (
+           c.issuer_organization_id = app.current_organization_id()
+           or app.current_credential_owner_id(c.id) = app.current_organization_id()
+         )
+         and app.is_verified_org_member(app.current_organization_id())
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.credentials c
+       where c.id = environmental_attribute_claims.credential_id
+         and (
+           c.issuer_organization_id = app.current_organization_id()
+           or app.current_credential_owner_id(c.id) = app.current_organization_id()
+         )
+         and app.is_verified_org_member(app.current_organization_id())
+    )
+  );
+grant select, insert on public.environmental_attribute_claims to rupaykg_app_runtime;
+
 comment on table public.field_sync_envelopes is
 'Shakti tenant boundary: field-sync envelopes are visible only to the verified device identity and active organization.';
 comment on table public.evidence_artifact_series is
