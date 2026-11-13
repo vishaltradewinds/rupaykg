@@ -71,8 +71,24 @@ test("Shakti tenant context rejects cross-organization context switching", { ski
       activeOrganizationId: organizationA,
     };
 
-    const context = await withTenantTransaction(pool, authA, async client => {
-      await client.query("set local role rupaykg_app_runtime");
+    // Emulate the production non-BYPASSRLS connection role on every tenant
+    // transaction. SET ROLE occurs immediately after BEGIN, before the
+    // authenticated context setter and before any tenant-scoped query.
+    const runtimePool = {
+      connect: async () => {
+        const client = await pool.connect();
+        return {
+          query: async (sql: string, values?: unknown[]) => {
+            const result = await client.query(sql, values);
+            if (sql.trim().toLowerCase() === "begin") await client.query("set local role rupaykg_app_runtime");
+            return result;
+          },
+          release: () => client.release(),
+        };
+      },
+    } as unknown as Pool;
+
+    const context = await withTenantTransaction(runtimePool, authA, async client => {
       const row = (await client.query<{ identity_id: string; organization_id: string }>(
         "select app.current_identity_id() as identity_id, app.current_organization_id() as organization_id",
       )).rows[0]!;
@@ -115,7 +131,7 @@ test("Shakti tenant context rejects cross-organization context switching", { ski
       crossTenantClient.release();
     }
 
-    const reset = await withTenantTransaction(pool, authA, async client => {
+    const reset = await withTenantTransaction(runtimePool, authA, async client => {
       const row = (await client.query<{ organization_id: string }>(
         "select app.current_organization_id() as organization_id",
       )).rows[0]!;
