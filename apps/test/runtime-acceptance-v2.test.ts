@@ -57,8 +57,16 @@ async function submitAndApply(payload: Record<string, unknown>, identityToken: s
   assert.equal(accepted.status, 202);
   const acceptedBody = await body(accepted);
   const id = acceptedBody.envelope.id as string;
+  if (pool) {
+    const received = await pool.query<{ status: string }>("select status from field_sync_envelopes where id=$1", [id]);
+    assert.equal(received.rows[0]?.status, "RECEIVED", "202 must be returned only after the envelope is committed");
+  }
   const applied = await request(`/api/v1/field-sync/envelopes/${id}/apply`, { method: "POST", body: "{}" }, identityToken);
   assert.equal(applied.status, 200);
+  if (pool) {
+    const committed = await pool.query<{ status: string }>("select status from field_sync_envelopes where id=$1", [id]);
+    assert.equal(committed.rows[0]?.status, "APPLIED", "200 must be returned only after the envelope application is committed");
+  }
   return body(applied);
 }
 
