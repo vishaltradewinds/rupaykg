@@ -414,6 +414,80 @@ alter function app.activity_has_verified_geography_scope(uuid, uuid) owner to ru
 revoke all on function app.activity_has_verified_geography_scope(uuid, uuid) from public;
 grant execute on function app.activity_has_verified_geography_scope(uuid, uuid) to rupaykg_app_runtime;
 
+-- The credential MRV trigger must continue to see the issuer's exact proof tuple
+-- after a credential is transferred to another tenant.
+grant select (
+  activity_id, verification_id, evidence_id, guardian_status, hcs_status,
+  guardian_execution_id, hcs_topic_id, hcs_transaction_id,
+  hcs_consensus_timestamp, integrity_hash, mirror_node_verified_at
+) on public.mrv_provenance_events to rupaykg_security_definer;
+grant select (id, evidence_id) on public.verifications to rupaykg_security_definer;
+
+drop policy if exists shakti_security_definer_mrv_provenance_read on public.mrv_provenance_events;
+create policy shakti_security_definer_mrv_provenance_read
+  on public.mrv_provenance_events for select
+  to rupaykg_security_definer
+  using (true);
+
+drop policy if exists shakti_security_definer_verifications_read on public.verifications;
+create policy shakti_security_definer_verifications_read
+  on public.verifications for select
+  to rupaykg_security_definer
+  using (true);
+
+create or replace function app.credential_has_verified_mrv_provenance(target_activity_id uuid, target_verification_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = pg_catalog, public, app
+as $function$
+  select exists (
+    select 1
+      from public.mrv_provenance_events provenance
+      join public.verifications verification
+        on verification.id = target_verification_id
+     where provenance.activity_id = target_activity_id
+       and provenance.verification_id = target_verification_id
+       and provenance.evidence_id = verification.evidence_id
+       and verification.evidence_id = provenance.evidence_id
+       and provenance.guardian_status = 'VERIFIED'
+       and provenance.hcs_status = 'CONSENSUS_CONFIRMED'
+       and provenance.guardian_execution_id is not null
+       and btrim(provenance.guardian_execution_id) <> ''
+       and provenance.hcs_topic_id is not null
+       and btrim(provenance.hcs_topic_id) <> ''
+       and provenance.hcs_transaction_id is not null
+       and btrim(provenance.hcs_transaction_id) <> ''
+       and provenance.hcs_consensus_timestamp is not null
+       and btrim(provenance.hcs_consensus_timestamp) <> ''
+       and provenance.integrity_hash is not null
+       and btrim(provenance.integrity_hash) <> ''
+       and provenance.mirror_node_verified_at is not null
+  )
+$function$;
+
+alter function app.credential_has_verified_mrv_provenance(uuid, uuid) owner to rupaykg_security_definer;
+revoke all on function app.credential_has_verified_mrv_provenance(uuid, uuid) from public;
+grant execute on function app.credential_has_verified_mrv_provenance(uuid, uuid) to rupaykg_app_runtime;
+
+revoke create on schema app from rupaykg_security_definer;
+
+create or replace function public.require_guardian_hcs_mrv_for_credential()
+returns trigger
+language plpgsql
+set search_path = pg_catalog, public, app
+as $trigger$
+begin
+  if new.status in ('ISSUED','ACTIVE','TRANSFERRED','RETIRED') then
+    if not app.credential_has_verified_mrv_provenance(new.activity_id, new.verification_id) then
+      raise exception 'CREDENTIAL_MRV_REQUIRED: credential issuance requires Guardian VERIFIED, Hedera HCS consensus, and persisted Mirror Node verification bound to the verified evidence';
+    end if;
+  end if;
+  return new;
+end;
+$trigger$;
+
 create or replace function public.prevent_credential_out_of_scope_issue()
 returns trigger
 language plpgsql
@@ -466,7 +540,7 @@ end;
 $trigger$;
 
 comment on role rupaykg_security_definer is
-'NOLOGIN/NOBYPASSRLS owner for narrowly scoped authentication, tenant-context, registry current-owner, organization-readiness, organization-verification and credential-scope SECURITY DEFINER functions; never grant membership to application roles.';
+'NOLOGIN/NOBYPASSRLS owner for narrowly scoped authentication, tenant-context, registry current-owner, organization-readiness, organization-verification, credential-scope and MRV-provenance SECURITY DEFINER functions; never grant membership to application roles.';
 
 -- A credential remains visible to its issuer and to its current registry owner.
 -- Historical former owners can read only events in which they participated.
