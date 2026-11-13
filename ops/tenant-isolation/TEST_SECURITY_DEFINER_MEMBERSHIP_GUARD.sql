@@ -29,7 +29,12 @@ begin
   ) then
     raise exception 'SECURITY_DEFINER_MEMBERSHIP_TEST_FAILED: owner membership was not detected';
   end if;
-
+  if not exists (
+    select 1 from pg_auth_members
+     where member = owner_oid
+  ) then
+    raise exception 'SECURITY_DEFINER_MEMBERSHIP_TEST_FAILED: outbound owner membership was not rejected';
+  end if;
   execute 'revoke rupaykg_security_definer_membership_probe from rupaykg_security_definer';
 
   -- Case 2: another role can assume the SECURITY DEFINER owner.
@@ -41,25 +46,26 @@ begin
   ) then
     raise exception 'SECURITY_DEFINER_MEMBERSHIP_TEST_FAILED: membership into owner was not detected';
   end if;
+  if not exists (
+    select 1
+      from pg_auth_members membership
+     where membership.roleid = owner_oid
+       and membership.member = probe_oid
+       and not (
+         pg_get_userbyid(membership.grantor) = 'cloud_admin'
+         and membership.admin_option
+         and not membership.inherit_option
+         and not membership.set_option
+       )
+  ) then
+    raise exception 'SECURITY_DEFINER_MEMBERSHIP_TEST_FAILED: incoming probe membership was not rejected';
+  end if;
+  execute 'revoke rupaykg_security_definer from rupaykg_security_definer_membership_probe';
 
   -- The owner must never inherit/SET another role, and no ordinary role may
   -- assume it. The sole Neon platform-admin membership edge is allowed only
   -- when it is non-inheriting and non-SET, so it cannot enter SECURITY DEFINER
   -- ownership through role switching.
-  if not exists (
-    select 1 from pg_auth_members
-     where member = owner_oid
-  ) then
-    raise exception 'SECURITY_DEFINER_MEMBERSHIP_TEST_FAILED: outbound owner membership was not rejected';
-  end if;
-  if not exists (
-    select 1 from pg_auth_members
-     where member = probe_oid
-       and roleid = owner_oid
-  ) then
-    raise exception 'SECURITY_DEFINER_MEMBERSHIP_TEST_FAILED: incoming probe membership was not rejected';
-  end if;
-
   if exists (
     select 1
       from pg_auth_members membership
