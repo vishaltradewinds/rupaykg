@@ -321,7 +321,7 @@ test("identity suspension revokes active sessions and records an audit event tra
     headers: { authorization: "Bearer test-session", "x-rupaykg-organization-id": organizationId },
     payload: { reason: "Confirmed security incident review" },
   });
-  assert.equal(response.statusCode, 200);
+  assert.equal(response.statusCode, 200, JSON.stringify({ body: response.json(), statements }));
   assert.equal(response.json().suspended, true);
   assert.equal(response.json().revokedSessions, 2);
   assert.ok(statements.some(sql => sql.includes("update identities set suspended_at=now()")));
