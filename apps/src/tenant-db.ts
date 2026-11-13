@@ -20,6 +20,9 @@ export async function withTenantTransaction<T>(
     const client = await pool.connect();
     try {
     await client.query("begin");
+    // Switch to the non-BYPASSRLS application role inside the transaction.
+    // The database login receives SET-only membership, not inherited grants.
+    await client.query("set local role rupaykg_app_runtime");
     const membershipOk = auth.memberships.some((m) => m.status === "VERIFIED" && m.organization_id === auth.activeOrganizationId);
     if (!membershipOk) throw Object.assign(new Error("Verified organization membership is required"), { code: "TENANT_MEMBERSHIP_REQUIRED" });
     // Do not query organization_memberships before establishing tenant context:
