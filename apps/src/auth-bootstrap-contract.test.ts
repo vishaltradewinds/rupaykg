@@ -22,7 +22,7 @@ function poolWith(rows: any[]) {
   const client = {
     query: async (sql: string, _params?: unknown[]) => {
       calls.push(sql);
-      return /app\\.authenticate_bearer_session/.test(sql) ? { rows } : { rows: [] };
+      return /app\.authenticate_bearer_session/.test(sql) ? { rows } : { rows: [] };
     },
     release: () => {},
   };
@@ -42,7 +42,7 @@ test("authentication bootstrap uses the governed database function rather than a
   assert.equal(pool.calls[1], "set local role rupaykg_app_runtime");
   assert.match(pool.calls[2], /app\.authenticate_bearer_session/);
   assert.equal(pool.calls[3], "commit");
-  assert.doesNotMatch(pool.calls[0], /from\s+organization_memberships/i);
+  assert.doesNotMatch(pool.calls[2], /from\s+organization_memberships/i);
 });
 
 test("single-organization identity is scoped implicitly", async () => {
