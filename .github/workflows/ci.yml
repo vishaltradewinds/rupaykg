@@ -83,5 +83,7 @@ jobs:
         env:
           RUPAYKG_RUN_DB_INTEGRATION_TESTS: "1"
         run: npm test
+      - name: Run rollback-only tenant-isolation negative acceptance
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f ops/tenant-isolation/VERIFY_RLS_NEGATIVE_TEST.sql
       - name: Build production container
         run: docker build --pull --tag rupaykg:ci .
