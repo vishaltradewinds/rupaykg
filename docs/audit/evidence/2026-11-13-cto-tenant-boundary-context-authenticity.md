@@ -85,3 +85,26 @@ This is a candidate classification based on production catalog columns and forei
 - Full 67-table tenant coverage: OPEN.
 - Production migrations 101/102: NOT APPLIED.
 - Production release: HOLD.
+
+
+## Production operational-data readiness snapshot
+
+Additional read-only queries against the same production branch found:
+
+| Operational record | Rows |
+|---|---:|
+| Organizations | 2 |
+| Activities | 0 |
+| Resource flows | 0 |
+| Measurements | 0 |
+| Evidence | 0 |
+| Verifications | 0 |
+| Field devices | 0 |
+| MRV provenance events | 0 |
+| Credentials | 0 |
+| Registry events | 0 |
+| Settlements | 0 |
+
+Both production organizations are `test_fixture` type and VERIFIED. The only geography row is `CLUSTER / RUPAYKG-ACCEPTANCE-V1`, sourced from `RupayKG Acceptance Fixture Geography` version `v1`. There are no source-versioned ULB, Ward, Block, Gram Panchayat or Village rows in the inspected production geography table.
+
+**Urban/Rural conclusion:** production currently has no persisted real operational activity, measurement, evidence, verification, field-device or downstream MRV/registry/settlement records to support either real Golden Transaction. The existing acceptance seed and CI fixtures are synthetic, and are correctly excluded from real-site acceptance. The platform cannot honestly mark Urban or Rural Golden Transactions accepted until real authorized organizations, source-backed geographies, field/device measurement and evidence are supplied and recorded.
