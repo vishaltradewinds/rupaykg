@@ -50,7 +50,11 @@ begin
   end if;
 
   if pg_has_role('rupaykg_app_runtime', 'rupaykg_security_definer', 'MEMBER')
-     or pg_has_role('rupaykg_runtime_login', 'rupaykg_security_definer', 'MEMBER') then
+     or exists (
+       select 1 from pg_roles runtime_login
+        where runtime_login.rolname = 'rupaykg_runtime_login'
+          and pg_has_role(runtime_login.oid, 'rupaykg_security_definer'::regrole, 'MEMBER')
+     ) then
     raise exception 'RUPAYKG_RUNTIME_CAN_ASSUME_SECURITY_DEFINER_OWNER';
   end if;
 end
