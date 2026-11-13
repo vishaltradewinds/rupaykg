@@ -87,3 +87,44 @@ select 1 / case
   then 1
   else 0
 end as security_definer_boundary_assertion;
+
+-- Additional hardening diagnostics: function ownership, inherited grants and
+-- schema CREATE rights. has_*_privilege includes privileges inherited through
+-- role membership, so this checks the effective runtime privilege surface.
+select
+  p.oid::regprocedure as function_signature,
+  pg_get_userbyid(p.proowner) as function_owner,
+  owner_role.rolsuper as owner_superuser,
+  owner_role.rolbypassrls as owner_bypassrls,
+  p.prosecdef as security_definer,
+  p.proconfig as function_settings
+from pg_proc p
+join pg_roles owner_role on owner_role.oid = p.proowner
+where p.pronamespace = 'app'::regnamespace
+  and p.proname in (
+    'set_request_context',
+    'is_verified_org_member',
+    'authenticate_bearer_session',
+    'current_identity_id',
+    'current_organization_id'
+  )
+order by p.proname, p.oid::regprocedure::text;
+
+select
+  has_table_privilege('rupaykg_app_runtime', 'app.request_context_grants', 'SELECT') as runtime_select_via_any_role,
+  has_table_privilege('rupaykg_app_runtime', 'app.request_context_grants', 'INSERT') as runtime_insert_via_any_role,
+  has_table_privilege('rupaykg_app_runtime', 'app.request_context_grants', 'UPDATE') as runtime_update_via_any_role,
+  has_table_privilege('rupaykg_app_runtime', 'app.request_context_grants', 'DELETE') as runtime_delete_via_any_role,
+  has_schema_privilege('rupaykg_app_runtime', 'app', 'CREATE') as runtime_create_app_objects,
+  has_schema_privilege('rupaykg_app_runtime', 'public', 'CREATE') as runtime_create_public_objects;
+
+select 1 / case
+  when not has_table_privilege('rupaykg_app_runtime', 'app.request_context_grants', 'SELECT')
+   and not has_table_privilege('rupaykg_app_runtime', 'app.request_context_grants', 'INSERT')
+   and not has_table_privilege('rupaykg_app_runtime', 'app.request_context_grants', 'UPDATE')
+   and not has_table_privilege('rupaykg_app_runtime', 'app.request_context_grants', 'DELETE')
+   and not has_schema_privilege('rupaykg_app_runtime', 'app', 'CREATE')
+   and not has_schema_privilege('rupaykg_app_runtime', 'public', 'CREATE')
+  then 1
+  else 0
+end as effective_runtime_privilege_assertion;
