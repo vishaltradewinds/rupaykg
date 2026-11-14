@@ -123,6 +123,9 @@ test("SWM report resolves verified stakeholder roles and persists immutable tena
     assert.ok(activityRow, "activity must be included in the report snapshot");
     assert.equal(activityRow.stakeholder, "AGGREGATOR");
     assert.equal(activityRow.stakeholderAttribution, "VERIFIED");
+    const previewCsv = await app.inject({ method: "GET", url: previewUrl.replace("/preview?", "/preview.csv?"), headers: headers(ownerToken, organizationIds[0]!) });
+    assert.equal(previewCsv.statusCode, 200, previewCsv.body);
+    assert.match(previewCsv.headers["content-type"] ?? "", /text\/csv/);
     assert.equal(report.rows.find(row => row.id === recyclerActivityId)?.stakeholder, "RECYCLER");
     assert.equal(report.rows.find(row => row.id === recyclerActivityId)?.stakeholderAttribution, "VERIFIED");
     assert.equal(report.rows.find(row => row.id === transporterActivityId)?.stakeholder, "TRANSPORTER");
@@ -164,9 +167,22 @@ test("SWM report resolves verified stakeholder roles and persists immutable tena
     assert.match(csv.body, /RECYCLER/);
     assert.match(csv.body, /TRANSPORTER/);
     assert.match(csv.body, /VERIFIED/);
+    const pdf = await app.inject({ method: "GET", url: "/api/v1/reports/runs/" + runId + ".pdf", headers: headers(ownerToken, organizationIds[0]!) });
+    assert.equal(pdf.statusCode, 200, pdf.body);
+    assert.match(pdf.headers["content-type"] ?? "", /application\/pdf/);
+    assert.equal(pdf.rawPayload.subarray(0, 5).toString("ascii"), "%PDF-");
+    assert.equal(pdf.headers["x-rupaykg-report-hash"], freshReport.snapshotHash);
+
+    const xlsx = await app.inject({ method: "GET", url: "/api/v1/reports/runs/" + runId + ".xlsx", headers: headers(ownerToken, organizationIds[0]!) });
+    assert.equal(xlsx.statusCode, 200, xlsx.body);
+    assert.match(xlsx.headers["content-type"] ?? "", /spreadsheetml\.sheet/);
+    assert.equal(xlsx.rawPayload.subarray(0, 2).toString("ascii"), "PK");
+    assert.equal(xlsx.headers["x-rupaykg-report-hash"], freshReport.snapshotHash);
 
     const outsiderRead = await app.inject({ method: "GET", url: "/api/v1/reports/runs/" + runId, headers: headers(outsiderToken, organizationIds[1]!) });
     assert.equal(outsiderRead.statusCode, 404, outsiderRead.body);
+    const outsiderPdf = await app.inject({ method: "GET", url: "/api/v1/reports/runs/" + runId + ".pdf", headers: headers(outsiderToken, organizationIds[1]!) });
+    assert.equal(outsiderPdf.statusCode, 404, outsiderPdf.body);
   } finally {
     await app.close();
     if (organizationIds.length) {

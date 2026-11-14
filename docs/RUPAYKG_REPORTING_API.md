@@ -2,7 +2,7 @@
 
 ## Scope
 
-The first common reporting increment exposes an internal SWM 2026 preview and CSV export. It reads existing PostgreSQL records and does not create a statutory filing, certification, assurance opinion, or external portal submission. Preview requests are not persisted as report runs in this increment.
+The common reporting engine provides an internal SWM 2026 preview, immutable saved report runs, and CSV/PDF/XLSX exports. It reads existing PostgreSQL records and does not create a statutory filing, certification, assurance opinion, or external portal submission. Preview requests are not persisted until the caller explicitly saves the exact preview snapshot.
 
 ## Endpoints
 
@@ -20,21 +20,32 @@ Optional query parameter:
 
 - `geographyId`: UUID inside the active organization's verified geography scope
 
-Example:
-
-`/api/v1/reports/swm-2026/preview?periodStart=2026-04-01&periodEnd=2026-04-30&context=urban`
-
-### CSV download
+### Preview CSV
 
 `GET /api/v1/reports/swm-2026/preview.csv`
 
-Uses the same query parameters and authorization as the JSON preview. The response includes a CSV attachment plus `x-rupaykg-report-status` and `x-rupaykg-report-hash` headers.
+Uses the same query parameters as JSON preview. Requires `reports:export`. The response includes a CSV attachment plus `x-rupaykg-report-status` and `x-rupaykg-report-hash` headers.
+
+### Save and retrieve immutable runs
+
+- `POST /api/v1/reports/swm-2026/runs` saves a preview only when the caller supplies the exact `snapshotHash` and `generatedAt`. The server rebuilds the snapshot in the same tenant scope and returns `409 REPORT_PREVIEW_STALE` if source data changed.
+- `GET /api/v1/reports/runs?reportType=CPCB_SWMP_2026&limit=20` lists recent saved runs for the active organization.
+- `GET /api/v1/reports/runs/:runId` retrieves the immutable stored snapshot.
+
+### Saved-run exports
+
+- `GET /api/v1/reports/runs/:runId.csv`
+- `GET /api/v1/reports/runs/:runId.pdf`
+- `GET /api/v1/reports/runs/:runId.xlsx`
+
+All three exports use the original saved snapshot, not a recalculation of current source data. They require `reports:export`, return the snapshot status/hash headers, and use private/no-store caching.
 
 ## Authentication and tenant boundary
 
 - Requires the authenticated RupayKg session and a verified active organization membership.
-- Requires `reports:read` or `swm:read` permission for the active organization.
-- All report reads run inside `withTenantTransaction`, which establishes the non-BYPASSRLS runtime role and authenticated request context.
+- Preview, save, history and saved-snapshot retrieval require `reports:read` or `swm:read`.
+- CSV, PDF and XLSX exports require `reports:export`.
+- All database reads/writes run inside `withTenantTransaction`, which establishes the non-BYPASSRLS runtime role and authenticated request context.
 - Optional geography filters are checked with the organization's geography-scope predicate.
 - The active organization header is `X-RupayKG-Organization-Id`; the server remains authoritative for membership and permissions.
 
@@ -46,42 +57,46 @@ The preview reads:
 - `measurements` attached to those activities
 - `evidence` attached to those activities or measurements
 - latest `verifications` for each evidence record
-- `resource_flows` in the same organization, reporting period, and Urban/Rural geography rail
-- `chain_of_custody_links` attached to those flows, including sequence, actor organization reference, quantity, handover geographies, linked evidence, and latest verification
+- `resource_flows` in the same organization, reporting period and Urban/Rural geography rail
+- `chain_of_custody_links` attached to those flows, including sequence, actor organization reference, quantity, handover geographies, linked evidence and latest verification
 
-The preview is capped at 500 activities, 500 declared material flows, and 500 custody links. The response sets `truncated: true` when any of the caps is exceeded. Narrow the date range or geography before treating the extract as complete.
+The preview is capped at 500 activities, 500 declared material flows and 500 custody links. The response sets `truncated: true` when any cap is exceeded. Narrow the date range or geography before treating the extract as complete.
 
-## Data-quality and report states
+## Data quality and stakeholder attribution
 
 - `BLOCKED`: at least one missing value or disputed value.
-- `DRAFT`: declared or estimated values, missing evidence, missing verification references, unverified evidence, unmapped stakeholder attribution, or unavailable source revision remain unresolved.
-- `READY_FOR_REVIEW`: required source, evidence, verification and stakeholder attribution checks pass. This means internal review-ready only; it is not an external approval or assurance result.
+- `DRAFT`: declared or estimated values, missing evidence, missing verification references, unverified evidence, unmapped stakeholder attribution or unavailable source revision remain unresolved.
+- `READY_FOR_REVIEW`: required source, evidence, verification and stakeholder attribution checks pass. This means internal review-ready only; it is not external approval or an assurance result.
 
-Activity stakeholder attribution is resolved only when the activity actor has exactly one recognized stakeholder role through a VERIFIED organization membership and the organization-local role record. Canonical role names map to Generator, Aggregator, Transporter, Recycler, Processor, BWG, ULB, or Gram Panchayat. Multiple or unknown roles remain OTHER/UNMAPPED. Custody links currently identify actor_organization_id but not actor_identity_id, so custody stakeholder attribution remains UNMAPPED until the source schema can establish the acting identity or another authoritative role binding.
+Activity stakeholder attribution is resolved only when the activity actor has exactly one recognized role through a `VERIFIED` organization membership and the organization-local role record. Canonical role names map to Generator, Aggregator, Transporter, Recycler, Processor, BWG, ULB or Gram Panchayat. Multiple or unknown roles remain `OTHER`/`UNMAPPED`.
 
-Evidence is not considered verified solely because a client supplies a status. The snapshot requires evidence ID, content hash, verification record ID, and an accepted verification decision/status. Unknown stakeholder roles remain `OTHER`/`UNMAPPED`; the report does not infer Generator, Aggregator, Transporter, Recycler, or Processor identity from free-text activity types or an actor organization ID alone.
+Resource-flow rows remain `OTHER`/`UNMAPPED` because `origin_type` is not a verified stakeholder-role relationship. Custody rows remain `OTHER`/`UNMAPPED` because `chain_of_custody_links` stores `actor_organization_id` but not `actor_identity_id`. An individual stakeholder role is not inferred from an organization ID alone.
 
-Declared `resource_flows.declared_quantity` values remain explicitly `DECLARED`; they are not represented as independently measured quantities. The methodology code/version in this increment identifies an internal reporting template, not an official CPCB-approved calculation methodology.
+Evidence is not considered verified solely because a client supplies a status. The snapshot requires evidence ID, content hash, verification record ID and an accepted verification decision/status. Declared `resource_flows.declared_quantity` and custody quantities remain explicitly declared; they are not represented as independently measured.
 
-## Provenance and export
+## Provenance and export formats
 
-Every snapshot includes a schema version, report type, organization, reporting period, Urban/Rural mode, internal methodology version, source revision, generation timestamp, source record IDs, evidence hashes, data-quality issues, assumptions, and a deterministic SHA-256 snapshot hash. CSV preserves the corresponding row, field, unit, quality, source, evidence, verification, and stakeholder-attribution fields. CSV text fields are escaped against spreadsheet formula injection.
+Every snapshot includes schema version, report type, organization, reporting period, Urban/Rural mode, internal methodology version, source revision, generation timestamp, source record IDs, evidence hashes, data-quality issues, assumptions and a deterministic SHA-256 snapshot hash.
 
-## Immutable report-run history
+- CSV preserves row, stakeholder, attribution, field, value, unit, quality, source, evidence and verification fields. Text values are escaped against spreadsheet formula injection.
+- PDF includes report metadata, stakeholder attribution, report rows, evidence/verification references, data-quality issues, assumptions and the snapshot hash. It embeds the OFL-licensed Noto Sans Devanagari font for Latin and Devanagari text.
+- XLSX is an OOXML workbook with Summary, Report Rows, Provenance and Data Quality sheets. It uses inline text cells and no executable formulas.
 
-- POST /api/v1/reports/swm-2026/runs persists a report snapshot only when the caller supplies the exact preview hash and generation timestamp. The server rebuilds the snapshot in the same tenant scope and returns 409 REPORT_PREVIEW_STALE if source data changed.
-- GET /api/v1/reports/runs?reportType=CPCB_SWMP_2026&limit=20 lists the active organization's recent saved runs.
-- GET /api/v1/reports/runs/:runId retrieves the immutable stored snapshot.
-- GET /api/v1/reports/runs/:runId.csv exports the stored snapshot rather than recalculating current source data.
-- Migration 108_reporting_run_history.sql creates report_runs with forced RLS, organization/creator checks, and runtime SELECT/INSERT privileges only. The runtime role has no update/delete grant, making saved snapshots append-only through the application.
-- Migration 109_circular_stakeholder_role_defaults.sql adds least-privilege report/evidence permissions for recycler, transporter, collector_transporter, generator, BWG, ULB and Gram Panchayat onboarding roles. It is a baseline function migration, not a tenant-table/RLS migration.
-- Custody-link read policy now allows the verified owner of a resource flow to read its attached custody sequence while preserving the actor-organization policy.
+The methodology code/version identifies an internal reporting template, not an official CPCB-approved calculation methodology.
+
+## Immutable report-run history and migrations
+
+- `report_runs` stores the complete immutable snapshot and its hash.
+- Migration `108_reporting_run_history.sql` creates `report_runs` with forced RLS, organization/creator checks and runtime SELECT/INSERT privileges only. The runtime role has no UPDATE/DELETE grant.
+- Migration 108 is excluded from the baseline migration runner and applied by the controlled Shakti DDL runner. The runner supports a contiguous pending suffix, so deployments with 101-107 already recorded can apply 108 without replaying earlier migrations.
+- Migration `109_circular_stakeholder_role_defaults.sql` extends the baseline role-default function with least-privilege reporting/evidence permissions for Recycler, Transporter, Collector/Transporter, Generator, BWG, ULB and Gram Panchayat onboarding roles.
+- Custody-link reads are scoped to the verified owner of a resource flow while preserving the actor-organization policy.
 
 ## Not yet included
 
-- PDF and XLSX adapters
-- authoritative Generator â†’ Aggregator â†’ Transporter â†’ Recycler relationship resolution and mass-balance reconciliation
-- EPR and BRSR adapters
-- external CPCB submission, receipt, acceptance, certification, or assurance integrations
+- Authoritative cross-organization Generator -> Aggregator -> Transporter -> Recycler handover binding and mass-balance reconciliation. Activity role attribution does not, by itself, prove a transfer between organizations.
+- A verified acting-identity reference on custody links; unresolved custody actor attribution remains explicit.
+- EPR and BRSR adapters.
+- External CPCB submission, receipt, acceptance, certification or assurance integrations.
 
-These remain separate acceptance-gated increments. No production database migration or deployment is part of this API foundation.
+Migrations 108 and 109 are proposed on PR #358 and have been exercised in disposable CI PostgreSQL only. No production Neon migration, Render configuration change, merge or deployment has occurred.

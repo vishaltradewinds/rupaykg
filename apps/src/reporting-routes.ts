@@ -3,6 +3,7 @@ import type { Pool } from "pg";
 import { authenticate, bearerChallenge, hasOrganizationPermission, type AuthContext } from "./auth.js";
 import { withTenantTransaction } from "./tenant-db.js";
 import { buildReportSnapshot, reportSnapshotToCsv, type ReportEvidence, type ReportQuality, type ReportRow, type ReportSnapshot } from "./reporting-engine.js";
+import { createReportPdf, createReportXlsx } from "./reporting-export.js";
 
 type Context = "urban" | "rural";
 type Query = { periodStart?: string; periodEnd?: string; context?: string; geographyId?: string };
@@ -59,15 +60,13 @@ export function parseSwmReportQuery(query: Query): { periodStart: string; period
   if (query.geographyId !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(query.geographyId)) return null;
   return { periodStart: query.periodStart, periodEnd: query.periodEnd, context: query.context, ...(query.geographyId ? { geographyId: query.geographyId } : {}) };
 }
-async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<ReturnType<typeof parseSwmReportQuery>>, generatedAt?: string): Promise<ReportData> {
+async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<ReturnType<typeof parseSwmReportQuery>>, generatedAt?: string, access: "read" | "export" = "read"): Promise<ReportData> {
   if (!auth.activeOrganizationId || !auth.memberships.some(m => m.status === "VERIFIED" && m.organization_id === auth.activeOrganizationId)) {
     throw Object.assign(new Error("Verified active organization membership is required"), { code: "REPORT_FORBIDDEN" });
   }
   return withTenantTransaction(pool, auth, async client => {
-    if (!auth.activeOrganizationId) throw Object.assign(new Error("Active organization is required"), { code: "REPORT_FORBIDDEN" });
-    if (!auth.activeOrganizationId || !await hasOrganizationPermission(client, auth, auth.activeOrganizationId, ["reports:read", "swm:read"])) {
-      throw Object.assign(new Error("SWM report read permission required"), { code: "REPORT_FORBIDDEN" });
-    }
+    if (access === "export") await requireReportExport(client, auth);
+    else await requireReportRead(client, auth);
     const geographyKinds = params.context === "urban" ? ["ULB", "WARD"] : ["GRAM_PANCHAYAT", "VILLAGE", "CLUSTER"];
     if (params.geographyId) {
       const scope = await client.query<{ ok: boolean }>(
@@ -267,7 +266,7 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
     const snapshot = buildReportSnapshot({
       reportType: "CPCB_SWMP_2026",
       title: `SWM 2026 ${params.context.toUpperCase()} reporting preview`,
-      organizationId: auth.activeOrganizationId,
+      organizationId: auth.activeOrganizationId!,
       periodStart: params.periodStart,
       periodEnd: params.periodEnd,
       geographyMode: params.context.toUpperCase() as "URBAN" | "RURAL",
@@ -315,10 +314,18 @@ async function requireReportRead(client: import("pg").PoolClient, auth: AuthCont
     throw Object.assign(new Error("SWM report read permission required"), { code: "REPORT_FORBIDDEN" });
   }
 }
+async function requireReportExport(client: import("pg").PoolClient, auth: AuthContext): Promise<void> {
+  if (!auth.activeOrganizationId ||
+      !auth.memberships.some(m => m.status === "VERIFIED" && m.organization_id === auth.activeOrganizationId) ||
+      !await hasOrganizationPermission(client, auth, auth.activeOrganizationId, ["reports:export"])) {
+    throw Object.assign(new Error("Report export permission required"), { code: "REPORT_EXPORT_FORBIDDEN" });
+  }
+}
 
-async function loadSavedReportRun(pool: Pool, auth: AuthContext, runId: string): Promise<ReportRunRow | null> {
+async function loadSavedReportRun(pool: Pool, auth: AuthContext, runId: string, access: "read" | "export" = "read"): Promise<ReportRunRow | null> {
   return withTenantTransaction(pool, auth, async client => {
-    await requireReportRead(client, auth);
+    if (access === "export") await requireReportExport(client, auth);
+    else await requireReportRead(client, auth);
     const result = await client.query<ReportRunRow>(
       `select id,report_type,title,period_start::text,period_end::text,geography_mode,status,
               snapshot_hash,snapshot,created_at
@@ -438,19 +445,77 @@ export async function registerReportingRoutes(app: FastifyInstance, pool: Pool |
     const runId = parseReportRunId((request.params as { runId?: string }).runId);
     if (!runId) return reply.code(400).send({ error: "A valid report run UUID is required", code: "INVALID_REPORT_RUN_ID", syntheticData: false });
     try {
-      const run = await loadSavedReportRun(pool, auth, runId);
+      const run = await loadSavedReportRun(pool, auth, runId, "export");
       if (!run) return reply.code(404).send({ error: "Report run not found", code: "REPORT_RUN_NOT_FOUND", syntheticData: false });
       reply.header("content-type", "text/csv; charset=utf-8");
+      reply.header("cache-control", "private, no-store");
       reply.header("content-disposition", `attachment; filename="rupaykg-report-${run.id}.csv"`);
       reply.header("x-rupaykg-report-status", run.status);
       reply.header("x-rupaykg-report-hash", run.snapshot_hash);
       return reportSnapshotToCsv(run.snapshot);
     } catch (error) {
       const code = (error as { code?: string })?.code;
+      if (code === "REPORT_EXPORT_FORBIDDEN") return reply.code(403).send({ error: "reports:export permission required", code, syntheticData: false });
       if (code === "REPORT_FORBIDDEN") return reply.code(403).send({ error: "SWM report read permission required", code, syntheticData: false });
       if (code === "REPORT_SNAPSHOT_INTEGRITY") return reply.code(409).send({ error: "Stored report snapshot integrity check failed", code, syntheticData: false });
       request.log.error(error);
       return reply.code(503).send({ error: "Saved report export unavailable", code: "REPORT_EXPORT_UNAVAILABLE", syntheticData: false });
+    }
+  });
+
+  app.get("/api/v1/reports/runs/:runId.pdf", async (request, reply) => {
+    if (!pool) return reply.code(503).send({ error: "Reporting database unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false });
+    let auth: AuthContext | null;
+    try { auth = await authenticate(request, pool); }
+    catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication unavailable", code: "AUTH_UNAVAILABLE", syntheticData: false }); }
+    if (!auth) return reply.code(401).send(bearerChallenge());
+    const runId = parseReportRunId((request.params as { runId?: string }).runId);
+    if (!runId) return reply.code(400).send({ error: "A valid report run UUID is required", code: "INVALID_REPORT_RUN_ID", syntheticData: false });
+    try {
+      const run = await loadSavedReportRun(pool, auth, runId, "export");
+      if (!run) return reply.code(404).send({ error: "Report run not found", code: "REPORT_RUN_NOT_FOUND", syntheticData: false });
+      const buffer = await createReportPdf(run.snapshot);
+      reply.header("content-type", "application/pdf");
+      reply.header("content-disposition", "attachment; filename=\"rupaykg-report-" + run.id + ".pdf\"");
+      reply.header("content-length", String(buffer.byteLength));
+      reply.header("cache-control", "private, no-store");
+      reply.header("x-rupaykg-report-status", run.status);
+      reply.header("x-rupaykg-report-hash", run.snapshot_hash);
+      return reply.send(buffer);
+    } catch (error) {
+      const code = (error as { code?: string })?.code;
+      if (code === "REPORT_EXPORT_FORBIDDEN") return reply.code(403).send({ error: "reports:export permission required", code, syntheticData: false });
+      if (code === "REPORT_SNAPSHOT_INTEGRITY") return reply.code(409).send({ error: "Stored report snapshot integrity check failed", code, syntheticData: false });
+      request.log.error(error);
+      return reply.code(503).send({ error: "Saved PDF export unavailable", code: "REPORT_EXPORT_UNAVAILABLE", syntheticData: false });
+    }
+  });
+
+  app.get("/api/v1/reports/runs/:runId.xlsx", async (request, reply) => {
+    if (!pool) return reply.code(503).send({ error: "Reporting database unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false });
+    let auth: AuthContext | null;
+    try { auth = await authenticate(request, pool); }
+    catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication unavailable", code: "AUTH_UNAVAILABLE", syntheticData: false }); }
+    if (!auth) return reply.code(401).send(bearerChallenge());
+    const runId = parseReportRunId((request.params as { runId?: string }).runId);
+    if (!runId) return reply.code(400).send({ error: "A valid report run UUID is required", code: "INVALID_REPORT_RUN_ID", syntheticData: false });
+    try {
+      const run = await loadSavedReportRun(pool, auth, runId, "export");
+      if (!run) return reply.code(404).send({ error: "Report run not found", code: "REPORT_RUN_NOT_FOUND", syntheticData: false });
+      const buffer = await createReportXlsx(run.snapshot);
+      reply.header("content-type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      reply.header("content-disposition", "attachment; filename=\"rupaykg-report-" + run.id + ".xlsx\"");
+      reply.header("content-length", String(buffer.byteLength));
+      reply.header("cache-control", "private, no-store");
+      reply.header("x-rupaykg-report-status", run.status);
+      reply.header("x-rupaykg-report-hash", run.snapshot_hash);
+      return reply.send(buffer);
+    } catch (error) {
+      const code = (error as { code?: string })?.code;
+      if (code === "REPORT_EXPORT_FORBIDDEN") return reply.code(403).send({ error: "reports:export permission required", code, syntheticData: false });
+      if (code === "REPORT_SNAPSHOT_INTEGRITY") return reply.code(409).send({ error: "Stored report snapshot integrity check failed", code, syntheticData: false });
+      request.log.error(error);
+      return reply.code(503).send({ error: "Saved Excel export unavailable", code: "REPORT_EXPORT_UNAVAILABLE", syntheticData: false });
     }
   });
 
@@ -484,14 +549,16 @@ export async function registerReportingRoutes(app: FastifyInstance, pool: Pool |
     const params = parseSwmReportQuery(request.query as Query);
     if (!params) return reply.code(400).send({ error: "Valid periodStart, periodEnd and context=urban|rural are required; geographyId must be a UUID", code: "INVALID_REPORT_QUERY", syntheticData: false });
     try {
-      const data = await loadSwmReport(pool, auth, params);
+      const data = await loadSwmReport(pool, auth, params, undefined, "export");
       reply.header("content-type", "text/csv; charset=utf-8");
+      reply.header("cache-control", "private, no-store");
       reply.header("content-disposition", `attachment; filename="rupaykg-swm-2026-${params.context}-${params.periodStart}-${params.periodEnd}.csv"`);
       reply.header("x-rupaykg-report-status", data.snapshot.status);
       reply.header("x-rupaykg-report-hash", data.snapshot.snapshotHash);
       return reportSnapshotToCsv(data.snapshot);
     } catch (error) {
       const code = (error as { code?: string })?.code;
+      if (code === "REPORT_EXPORT_FORBIDDEN") return reply.code(403).send({ error: "reports:export permission required", code, syntheticData: false });
       if (code === "REPORT_FORBIDDEN") return reply.code(403).send({ error: "SWM report read permission required", code, syntheticData: false });
       if (code === "GEOGRAPHY_FORBIDDEN") return reply.code(403).send({ error: "Geography outside organization authorization scope", code, syntheticData: false });
       if (code === "REPORT_NO_SOURCE_DATA") return reply.code(404).send({ error: "No source activities found for the selected reporting scope", code, syntheticData: false });
