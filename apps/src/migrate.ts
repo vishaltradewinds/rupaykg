@@ -31,7 +31,7 @@ try {
   const files = (await readdir(migrationDir))
     .filter((name) => /^\d+_.+\.sql$/.test(name))
     .sort();
-  // Tenant-isolation migrations 101-107 are deliberately excluded from this
+  // Tenant-isolation migrations 101-109 are deliberately excluded from this
   // application/baseline runner. They require the separate privileged,
   // temporary-role handoff implemented by migrate-shakti.ts.
   const controlledTenantMigrations = new Set([
@@ -98,7 +98,7 @@ try {
     }
   }
 
-  console.log(`Baseline migrations are current (${baselineFiles.length} files). Run migrate:shakti separately for tenant-isolation migrations 101-108.`);
+  console.log(`Baseline migrations are current (${baselineFiles.length} files). Run migrate:shakti separately for tenant-isolation migrations 101-109.`);
 } finally {
   await pool.end();
 }
