@@ -6,7 +6,7 @@ import { Pool } from "pg";
 
 // This runner is deliberately separate from application startup. It requires
 // Date-prefixed controlled migrations stay outside the numeric baseline validator.
-// the database-owner migration connection and applies Shakti migrations 101-20261114
+// the database-owner migration connection and applies controlled migrations 101-109 and 112
 // as one atomic transaction so the application never sees a partial RLS state.
 const databaseUrl = process.env.MIGRATION_DATABASE_URL;
 if (!databaseUrl) throw new Error("MIGRATION_DATABASE_URL is required; do not use the application runtime connection for schema migrations");
@@ -42,6 +42,7 @@ const controlledMigrationOrder = [
   "107_shakti_tenant_direct_domain_activation.sql",
   "108_shakti_tenant_organization_domain_activation.sql",
   "20261114_shakti_platform_review_boundary.sql",
+  "112_reporting_run_history.sql",
 ];
 
 const pool = new Pool({
@@ -109,11 +110,13 @@ try {
       throw new Error(`Migration version ${entry.version} is already recorded as ${recorded}, not ${entry.filename}`);
     }
   }
-  if (existing.size === versions.length) {
-    console.log(`Controlled Shakti migrations current (${versions.length} files).`);
-    process.exitCode = 0;
-  } else if (existing.size > 0) {
-    throw new Error("Partial Shakti migration ledger detected. Refusing to mix old and new migration execution paths; reconcile the ledger before retrying.");
+  const pending = versions.filter((entry) => !existing.has(entry.version));
+  const firstPendingIndex = versions.findIndex((entry) => !existing.has(entry.version));
+  if (firstPendingIndex >= 0 && versions.slice(firstPendingIndex).some((entry) => existing.has(entry.version))) {
+    throw new Error("Controlled Shakti migration ledger has a gap. Refusing to apply a later migration before an earlier pending migration.");
+  }
+  if (pending.length === 0) {
+    console.log("Controlled Shakti migrations current (" + versions.length + " files).");
   } else {
     const client = await pool.connect();
     try {
@@ -126,7 +129,7 @@ try {
       await client.query(`grant usage on schema app, public to ${securityDefinerRole}`);
       await client.query(`grant create on schema app to ${securityDefinerRole}`);
       await client.query("grant select on public.geography, public.methodology_versions to rupaykg_app_runtime");
-      // Migration 108 evaluates policies that reference geography while running as the DDL role.
+      // Migration 112 evaluates policies that reference geography while running as the DDL role.
       // Grant only for this atomic migration transaction; revoke before commit.
       await client.query(`grant select on public.geography to ${ddlRole}`);
 
@@ -155,10 +158,10 @@ try {
       await client.query(`grant ${securityDefinerRole} to ${ddlRole}`);
       await client.query(`set local role ${ddlRole}`);
 
-      for (const filename of controlledMigrationOrder) {
-        const sql = await readFile(path.join(migrationDir, filename), "utf8");
+      for (const entry of pending) {
+        const sql = await readFile(path.join(migrationDir, entry.filename), "utf8");
         await client.query(sql);
-        console.log(`Executed controlled migration ${filename}`);
+        console.log("Executed controlled migration " + entry.filename);
       }
 
       await client.query("reset role");
@@ -168,14 +171,14 @@ try {
       await client.query(`revoke create on schema app from ${securityDefinerRole}`);
       await client.query(`comment on role ${securityDefinerRole} is 'NOLOGIN/NOBYPASSRLS isolated owner for narrowly scoped SECURITY DEFINER functions; no application runtime membership.'`);
 
-      for (const entry of versions) {
+      for (const entry of pending) {
         await client.query(
           "insert into public.schema_migrations(version, filename) values ($1, $2)",
           [entry.version, entry.filename],
         );
       }
       await client.query("commit");
-      console.log(`Applied all ${versions.length} controlled Shakti migrations atomically.`);
+      console.log("Applied " + pending.length + " pending controlled Shakti migrations atomically.");
     } catch (error) {
       try { await client.query("rollback"); } catch {}
       throw new Error("Controlled Shakti migration batch failed; all migration, ledger, and temporary privilege changes rolled back", { cause: error });

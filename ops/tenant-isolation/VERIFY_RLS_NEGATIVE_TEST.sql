@@ -43,7 +43,7 @@ begin
     'cpcb_swm_stakeholder_workspaces','cpcb_swm_status_history','epr_returns',
     'esg_reporting_periods','organization_bwg_assessments','organization_epr_applicability',
     'organization_statutory_profiles','organization_verification_evidence',
-    'stakeholder_applications','stakeholder_application_approvals'
+    'stakeholder_applications','stakeholder_application_approvals','report_runs'
   ] loop
     if not exists (
       select 1 from pg_class c
@@ -73,7 +73,7 @@ begin
     'cpcb_swm_stakeholder_workspaces','cpcb_swm_status_history','epr_returns',
     'esg_reporting_periods','organization_bwg_assessments','organization_epr_applicability',
     'organization_statutory_profiles','organization_verification_evidence',
-    'stakeholder_applications','stakeholder_application_approvals'
+    'stakeholder_applications','stakeholder_application_approvals','report_runs'
       ])
       and pg_get_userbyid(c.relowner) = 'rupaykg_app_runtime'
   ) then
@@ -407,7 +407,7 @@ begin
     'cpcb_swm_stakeholder_workspaces','cpcb_swm_status_history','epr_returns',
     'esg_reporting_periods','organization_bwg_assessments','organization_epr_applicability',
     'organization_statutory_profiles','organization_verification_evidence',
-    'stakeholder_applications','stakeholder_application_approvals'
+    'stakeholder_applications','stakeholder_application_approvals','report_runs'
   ] loop
     execute format('select count(*) from public.%I', v_name) into v_visible;
     if v_visible <> 0 then

@@ -5,6 +5,7 @@ const failures = [];
 
 const workflow = fs.readFileSync(".github/workflows/ci.yml", "utf8");
 const migrationRunner = fs.readFileSync("apps/src/migrate.ts", "utf8");
+const shaktiMigrationRunner = fs.readFileSync("apps/src/migrate-shakti.ts", "utf8");
 const tenantDb = fs.readFileSync("apps/src/tenant-db.ts", "utf8");
 const auth = fs.readFileSync("apps/src/auth.ts", "utf8");
 
@@ -30,10 +31,14 @@ const protectedMigrationPatterns = [
 for (const [filename, pattern] of protectedMigrationPatterns) {
   if (!pattern.test(migrationRunner)) failures.push(`Migration invariant missing: protected migration ${filename}`);
 }
+if (!/112_reporting_run_history\.sql/.test(migrationRunner) || !/112_reporting_run_history\.sql/.test(shaktiMigrationRunner)) failures.push("Migration invariant missing: report-run RLS migration must use the controlled Shakti DDL handoff.");
+if (!/const pending = versions\.filter/.test(shaktiMigrationRunner) || !/versions\.slice\(firstPendingIndex\)\.some/.test(shaktiMigrationRunner)) failures.push("Migration invariant missing: controlled Shakti runner must apply a contiguous pending suffix without rejecting already-applied earlier migrations.");
+if (/113_circular_stakeholder_role_defaults\.sql/.test(shaktiMigrationRunner) || /113_circular_stakeholder_role_defaults\.sql/.test(migrationRunner.match(/const controlledTenantMigrations[\s\S]*?\]\);/)?.[0] ?? "")) failures.push("Migration invariant missing: role-default function migration 113 must remain on the baseline migration path, not the controlled tenant-table DDL path.");
+
 const requiredMigrationInvariants = [
   ["explicit protected gate", /RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS/],
-  ["legacy numeric migration compatibility", /prefixCounts/],
-  ["duplicate-prefix disambiguation", /filename\.replace\(\/\\\.sql\$\/, ""\)/],
+  ["immutable numeric migration ledger", /filenameByVersion/],
+  ["duplicate numeric migration rejection", /Duplicate migration version/],
 ];
 for (const [name, pattern] of requiredMigrationInvariants) {
   if (!pattern.test(migrationRunner)) failures.push(`Migration invariant missing: ${name}`);
@@ -48,8 +53,8 @@ if (!/auth\.activeOrganizationId/.test(tenantDb)) {
 if (!/auth\.memberships\.some\(\(m\) => m\.status === "VERIFIED" && m\.organization_id === auth\.activeOrganizationId\)/.test(tenantDb)) {
   failures.push("Tenant transaction invariant missing: active organization must have verified membership.");
 }
-if (!/select exists \(select 1 from organization_memberships om\s+join organizations o on o\.id\s*=\s*om\.organization_id\s+and o\.status\s*=\s*'VERIFIED'\s+where om\.identity_id\s*=\s*\$1\s+and om\.organization_id\s*=\s*\$2\s+and om\.status\s*=\s*'VERIFIED'\)/.test(tenantDb)) {
-  failures.push("Tenant transaction invariant missing: authoritative database membership must be revalidated inside the transaction.");
+if (!/from app\.authenticate_bearer_session\(\$1\)/.test(auth) || !/context_token/.test(auth) || !/app\.set_request_context\(\$1,\$2,\$3\)/.test(tenantDb)) {
+  failures.push("Tenant transaction invariant missing: opaque bearer-session grants must be revalidated by PostgreSQL and bound inside the tenant transaction.");
 }
 if (!/memberships\.rows\.length\s*===\s*0/.test(auth) || !/activeOrganizationId/.test(auth) || !/status\s*===\s*"VERIFIED"/.test(auth)) {
   failures.push("Authorization fail-closed invariant missing for empty organization/membership context.");

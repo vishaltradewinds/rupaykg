@@ -1,10 +1,10 @@
-﻿# PR #348 mainline reconciliation evidence
+# PR #348 mainline reconciliation evidence
 
-**Date:** 14 November 2026  
-**Repository:** `vishaltradewinds/rupaykg`  
-**PR:** #348 — `cto/20261112-mrv-provenance-rls`  
-**Reconciliation base:** `main` at `e62c67b47fa0f743ac1c53713b07859c115eab4e`  
-**Reconciliation merge commit:** `c537796a`  
+**Date:** 14 November 2026
+**Repository:** `vishaltradewinds/rupaykg`
+**PR:** #348 — `cto/20261112-mrv-provenance-rls`
+**Reconciliation base:** `main` at `e62c67b47fa0f743ac1c53713b07859c115eab4e`
+**Reconciliation merge commit:** `c537796a`
 **Current branch head at evidence capture:** `1e1fbecba0fccf67e6acda9934dfc8d88f55e1e9`
 
 ## Scope and conflict handling

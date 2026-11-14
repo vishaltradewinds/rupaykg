@@ -2,10 +2,16 @@ import type { Pool, PoolClient } from "pg";
 import { trace } from "@opentelemetry/api";
 import type { AuthContext } from "./auth.js";
 
+export type TenantTransactionOptions = {
+  isolationLevel?: "READ COMMITTED" | "REPEATABLE READ" | "SERIALIZABLE";
+  readOnly?: boolean;
+};
+
 export async function withTenantTransaction<T>(
   pool: Pool,
   auth: AuthContext,
   fn: (client: PoolClient) => Promise<T>,
+  options: TenantTransactionOptions = {},
 ): Promise<T> {
   if (!auth.activeOrganizationId) {
     throw Object.assign(new Error("Active organization is required for tenant-scoped database access"), { code: "TENANT_CONTEXT_REQUIRED" });
@@ -19,7 +25,9 @@ export async function withTenantTransaction<T>(
     span.setAttribute("rupaykg.db.tenant_scoped", true);
     const client = await pool.connect();
     try {
-    await client.query("begin");
+    const isolation = options.isolationLevel ? " isolation level " + options.isolationLevel.toLowerCase() : "";
+    const accessMode = options.readOnly ? " read only" : "";
+    await client.query("begin" + isolation + accessMode);
     // Switch to the non-BYPASSRLS application role inside the transaction.
     // The database login receives SET-only membership, not inherited grants.
     await client.query("set local role rupaykg_app_runtime");
