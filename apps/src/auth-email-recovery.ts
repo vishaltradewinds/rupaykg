@@ -25,7 +25,13 @@ async function deliver(to: string, subject: string, text: string): Promise<boole
   } catch { return false; }
 }
 
-async function createToken(pool: Pool, table: "identity_email_verification_tokens" | "identity_password_reset_tokens", identityId: string): Promise<string> {
+async function createToken(pool: Pool, table: "identity_email_verification_tokens" | "identity_password_reset_tokens", identityId: string): Promise<string | null> {
+  const recent = await pool.query<{ count: string; last_created_at: Date | null }>(
+    `select count(*)::text as count,max(created_at) as last_created_at from ${table} where identity_id=$1 and created_at>now()-interval '1 hour'`,
+    [identityId],
+  );
+  if (Number(recent.rows[0]?.count ?? 0) >= 5) return null;
+  if (recent.rows[0]?.last_created_at && recent.rows[0].last_created_at.getTime() > Date.now() - 60_000) return null;
   const value = token();
   await pool.query(`update ${table} set consumed_at=now() where identity_id=$1 and consumed_at is null`, [identityId]);
   await pool.query(`insert into ${table}(identity_id,token_hash,expires_at) values($1,$2,now()+interval '30 minutes')`, [identityId,digest(value)]);
@@ -34,6 +40,7 @@ async function createToken(pool: Pool, table: "identity_email_verification_token
 
 export async function sendVerification(pool: Pool, identityId: string, email: string): Promise<boolean> {
   const value = await createToken(pool, "identity_email_verification_tokens", identityId);
+  if (!value) return false;
   const origin = process.env.RUPAYKG_ALLOWED_ORIGINS?.split(",")[0]?.trim();
   if (!origin) return false;
   return deliver(email, "Verify your RupayKg email address", `Verify your email within 30 minutes: ${origin}/verify-email?token=${encodeURIComponent(value)}`);
@@ -81,7 +88,7 @@ export async function registerEmailRecoveryRoutes(app: FastifyInstance, pool: Po
     if (result.rows[0]) {
       const value = await createToken(pool, "identity_password_reset_tokens", result.rows[0].id);
       const origin = process.env.RUPAYKG_ALLOWED_ORIGINS?.split(",")[0]?.trim();
-      const sent = origin ? await deliver(result.rows[0].email, "Reset your RupayKg password", `Reset your password within 30 minutes: ${origin}/reset-password?token=${encodeURIComponent(value)}`) : false;
+      const sent = value && origin ? await deliver(result.rows[0].email, "Reset your RupayKg password", `Reset your password within 30 minutes: ${origin}/reset-password?token=${encodeURIComponent(value)}`) : false;
       if (!sent) request.log.warn("Password recovery email delivery is not configured or failed");
     }
     return { message: "If an eligible account exists, password reset instructions will be sent." };
