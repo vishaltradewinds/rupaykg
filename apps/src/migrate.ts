@@ -31,15 +31,6 @@ try {
   const files = (await readdir(migrationDir))
     .filter((name) => /^\d+_.+\.sql$/.test(name))
     .sort();
-  // A migration's numeric prefix is its immutable ledger identity. Duplicate
-  // prefixes fail closed across the complete migration inventory.
-  const filenameByVersion = new Map<string, string>();
-  for (const filename of files) {
-    const version = filename.slice(0, filename.indexOf("_"));
-    const prior = filenameByVersion.get(version);
-    if (prior) throw new Error(`Duplicate migration version ${version}: ${prior} and ${filename}`);
-    filenameByVersion.set(version, filename);
-  }
   // Tenant-isolation migrations 101-107 are deliberately excluded from this
   // application/baseline runner. They require the separate privileged,
   // temporary-role handoff implemented by migrate-shakti.ts.
@@ -53,8 +44,16 @@ try {
     "107_shakti_tenant_direct_domain_activation.sql",
   ]);
   const baselineFiles = files.filter((name) => !controlledTenantMigrations.has(name));
-  }
-  const protectedMigrations = new Set([
+
+  // Numeric migration prefixes are immutable ledger identities. Reject
+  // duplicates across the full inventory rather than deriving alternate IDs.
+  const filenameByVersion = new Map<string, string>();
+  for (const filename of files) {
+    const version = filename.slice(0, filename.indexOf("_"));
+    const prior = filenameByVersion.get(version);
+    if (prior) throw new Error(`Duplicate migration version ${version}: ${prior} and ${filename}`);
+    filenameByVersion.set(version, filename);
+  }  const protectedMigrations = new Set([
     "097_shakti_tenant_isolation_runtime_contract.sql",
     "098_shakti_authentication_bootstrap.sql",
     "099_shakti_rls_policy_foundation.sql",
@@ -67,28 +66,8 @@ try {
   const pendingProtected = baselineFiles.filter((name) => protectedMigrations.has(name) && !appliedProtected.has(name));
   if (pendingProtected.length && !allowProtected) throw new Error(`Protected Shakti migrations require RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS=1: ${pendingProtected.join(", ")}`);
 
-  // A migration's numeric prefix is its immutable ledger identity. Duplicate
-  // prefixes fail closed across the complete migration inventory.
-  const filenameByVersion = new Map<string, string>();
-  for (const filename of files) {
+  for (const filename of baselineFiles) {
     const version = filename.slice(0, filename.indexOf("_"));
-    const prior = filenameByVersion.get(version);
-    if (prior) throw new Error(`Duplicate migration version ${version}: ${prior} and ${filename}`);
-    filenameByVersion.set(version, filename);
-  }
-  // Tenant-isolation migrations 101-107 are deliberately excluded from this
-  // application/baseline runner. They require the separate privileged,
-  // temporary-role handoff implemented by migrate-shakti.ts.
-  const controlledTenantMigrations = new Set([
-    "101_shakti_tenant_isolation_activation.sql",
-    "102_shakti_runtime_auth_handoff.sql",
-    "103_shakti_nonforgeable_request_context.sql",
-    "104_shakti_isolated_security_definer_owner.sql",
-    "20261113_shakti_field_sync_evidence_mrv_rls.sql",
-    "106_credential_lifecycle_verification_boundary.sql",
-    "107_shakti_tenant_direct_domain_activation.sql",
-  ]);
-  const baselineFiles = files.filter((name) => !controlledTenantMigrations.has(name));
     const existing = await pool.query<{ version: string; filename: string }>(
       "select version, filename from schema_migrations where version = $1",
       [version],
