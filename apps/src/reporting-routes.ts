@@ -10,6 +10,7 @@ type ActivityRow = { id: string; activity_type: string; status: string; occurred
 type MeasurementRow = { id: string; activity_id: string; value: string | number; unit: string; method: string; source: string; measured_at: Date | string; quality_status: string | null };
 type EvidenceRow = { id: string; activity_id: string; measurement_id: string | null; content_hash: string | null; status: string; verification_id: string | null; verification_decision: string | null };
 type FlowRow = { id: string; origin_type: string; resource_form: string; material_code: string; declared_quantity: string | number; unit: string; status: string; source_geography_name: string | null; destination_geography_name: string | null };
+type CustodyRow = { id: string; resource_flow_id: string; sequence_no: number; actor_organization_id: string | null; activity_id: string | null; quantity: string | number; unit: string; recorded_at: Date | string; evidence_id: string | null; content_hash: string | null; evidence_status: string | null; verification_id: string | null; verification_decision: string | null; from_geography_name: string | null; to_geography_name: string | null };
 type ReportData = { snapshot: ReportSnapshot; truncated: boolean };
 
 function isDate(value: unknown): value is string {
@@ -68,7 +69,7 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
     const truncated = activityResult.rows.length > 500;
     const activities = activityResult.rows.slice(0, 500);
     const activityIds = activities.map(row => row.id);
-    const [measurementResult, evidenceResult, flowResult] = await Promise.all([
+    const [measurementResult, evidenceResult, flowResult, custodyResult] = await Promise.all([
       client.query<MeasurementRow>(
         `select m.id,m.activity_id,m.value,m.unit,m.method,m.source,m.measured_at,m.quality_status
          from measurements m join activities a on a.id=m.activity_id
@@ -99,6 +100,25 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
            or exists(select 1 from geography destination_geo where destination_geo.id=rf.destination_geography_id and destination_geo.kind::text=any($4::text[])))
          ${params.geographyId ? "and (rf.source_geography_id=$5::uuid or rf.destination_geography_id=$5::uuid)" : ""}
          order by rf.created_at,rf.id limit 501` ,
+        values,
+      ),
+      client.query<CustodyRow>(
+        `select ccl.id,ccl.resource_flow_id,ccl.sequence_no,ccl.actor_organization_id,ccl.activity_id,
+                ccl.quantity,ccl.unit,ccl.recorded_at,ccl.evidence_id,e.content_hash,e.status as evidence_status,
+                v.id as verification_id,v.decision as verification_decision,fg.name as from_geography_name,tg.name as to_geography_name
+         from chain_of_custody_links ccl
+         join resource_flows rf on rf.id=ccl.resource_flow_id
+         left join geography fg on fg.id=ccl.from_geography_id
+         left join geography tg on tg.id=ccl.to_geography_id
+         left join evidence e on e.id=ccl.evidence_id
+         left join lateral (select id,decision from verifications where evidence_id=e.id order by decided_at desc,id desc limit 1) v on true
+         where rf.organization_id=$1::uuid and ccl.recorded_at >= $2::date and ccl.recorded_at < ($3::date + interval '1 day')
+         and ((ccl.from_geography_id is not null and organization_has_geography_scope(rf.organization_id,ccl.from_geography_id))
+           or (ccl.to_geography_id is not null and organization_has_geography_scope(rf.organization_id,ccl.to_geography_id)))
+         and (exists(select 1 from geography from_geo where from_geo.id=ccl.from_geography_id and from_geo.kind::text=any($4::text[]))
+           or exists(select 1 from geography to_geo where to_geo.id=ccl.to_geography_id and to_geo.kind::text=any($4::text[])))
+         ${params.geographyId ? "and (ccl.from_geography_id=$5::uuid or ccl.to_geography_id=$5::uuid)" : ""}
+         order by ccl.resource_flow_id,ccl.sequence_no,ccl.recorded_at limit 501` ,
         values,
       ),
     ]);
@@ -173,7 +193,32 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
       });
     }
     if (!rows.length) {
-      throw Object.assign(new Error("No source activities or material flows found for the selected tenant, period and geography context"), { code: "REPORT_NO_SOURCE_DATA" });
+    for (const custody of custodyResult.rows.slice(0, 500)) {
+      const evidenceRefs: ReportEvidence[] = custody.evidence_id ? [{
+        sourceRecordId: custody.id,
+        evidenceId: custody.evidence_id,
+        evidenceHash: custody.content_hash,
+        verificationId: custody.verification_id,
+        verificationStatus: custody.verification_decision ?? (custody.evidence_status === "VERIFIED" ? "VERIFIED" : custody.evidence_status ?? "NOT_REPORTED"),
+      }] : [];
+      const quantity = Number(custody.quantity);
+      rows.push({
+        id: "custody:" + custody.id,
+        stakeholder: "OTHER",
+        stakeholderAttribution: "UNMAPPED",
+        label: "Chain-of-custody sequence " + custody.sequence_no,
+        cells: [{
+          key: "custody_quantity",
+          value: Number.isFinite(quantity) ? quantity : null,
+          unit: custody.unit,
+          quality: Number.isFinite(quantity) ? "DECLARED" : "MISSING",
+          sourceRecordId: custody.id,
+          evidence: evidenceRefs,
+          note: "Resource flow: " + custody.resource_flow_id + "; actor organization: " + (custody.actor_organization_id ?? "not recorded") + "; activity: " + (custody.activity_id ?? "not recorded") + "; from: " + (custody.from_geography_name ?? "not recorded") + "; to: " + (custody.to_geography_name ?? "not recorded") + "; recorded: " + new Date(custody.recorded_at).toISOString(),
+        }],
+      });
+    }
+      throw Object.assign(new Error("No source activities, material flows or custody links found for the selected tenant, period and geography context"), { code: "REPORT_NO_SOURCE_DATA" });
     }
     const sourceRevision = process.env.RENDER_GIT_COMMIT ?? process.env.GITHUB_SHA ?? "unavailable";
     const snapshot = buildReportSnapshot({
@@ -192,12 +237,12 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
         "This is an internal reporting preview, not a CPCB filing, statutory submission, certificate or assurance opinion.",
         "The methodology code and version identify this internal reporting template; they are not an official CPCB-approved calculation methodology.",
         ...(sourceRevision === "unavailable" ? ["Source code revision was unavailable at generation time; the report is not review-ready."] : []),
-        "Activity types are not treated as verified stakeholder roles; stakeholder attribution remains OTHER until an authoritative role relationship is available.",
-        "Only active-organization activity measurements, linked evidence and declared material flows are included; declared flows remain separately identified.",
-        ...(activities.length > 500 || flowResult.rows.length > 500 ? ["Preview capped at 500 activities and 500 declared material flows; narrow the period or geography for a complete extract."] : []),
+        "Activity and custody records are not assigned Generator/Aggregator/Transporter/Recycler roles without an authoritative role relationship; stakeholder attribution remains OTHER/UNMAPPED.",
+        "Only active-organization activities, measurements, linked evidence, declared material flows and recorded custody links are included; declared quantities remain separately identified.",
+        ...(activities.length > 500 || flowResult.rows.length > 500 || custodyResult.rows.length > 500 ? ["Preview capped at 500 activities, 500 declared material flows and 500 custody links; narrow the period or geography for a complete extract."] : []),
       ],
     });
-    return { snapshot, truncated: truncated || flowResult.rows.length > 500 };
+    return { snapshot, truncated: truncated || flowResult.rows.length > 500 || custodyResult.rows.length > 500 };
   });
 }
 
