@@ -7,7 +7,8 @@ import type { ReportSnapshot } from "./reporting-engine.js";
 
 function safeText(value: unknown): string {
   const text = (value === null || value === undefined ? "" : String(value)).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "");
-  return /^[=+\-@\t\r]/.test(text) ? "'" + text : text;
+  const numericText = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(text);
+  return !numericText && /^[=+\-@\t\r]/.test(text) ? "'" + text : text;
 }
 
 function xmlEscape(value: string): string {
