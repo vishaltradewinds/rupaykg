@@ -48,6 +48,8 @@ jobs:
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "create role rupaykg_security_definer nologin noinherit nosuperuser nobypassrls nocreatedb nocreaterole noreplication;"
           test "$(psql "$DATABASE_URL" -tAc "select rolbypassrls from pg_roles where rolname = 'rupaykg_app_runtime'")" = "f"
       - run: npm run validate:migrations
+      - run: npm run validate:migration-ledger
+      - run: npm run test:migration-ledger
       - run: npm run migrate -w @rupaykg/api
       - name: Reconcile controlled Shakti migration ownership
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f ops/tenant-isolation/PROVISION_SECURITY_DEFINER_OWNER.sql

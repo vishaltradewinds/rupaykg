@@ -16,6 +16,8 @@
     "typecheck": "npm run build -w @rupaykg/domain && npm run build -w @rupaykg/carbon && npm run build -w @rupaykg/compliance && npm run build -w @rupaykg/esg && npm run build -w @rupaykg/intelligence && npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "validate:migrations": "node scripts/validate-migrations.mjs",
+    "validate:migration-ledger": "node scripts/validate-migration-ledger.mjs",
+    "test:migration-ledger": "node --test scripts/validate-migration-ledger.test.mjs",
     "ecosystem:reconcile": "node scripts/reconcile-ecosystem-state.mjs"
   },
   "overrides": {
