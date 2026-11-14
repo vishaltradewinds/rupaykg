@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
 import { authenticate, type AuthContext } from "./auth.js";
+import { withTenantTransaction } from "./tenant-db.js";
 
 function bodyOf(r:{body:unknown}){return r.body&&typeof r.body==="object"?r.body as Record<string,unknown>:{};}
 function text(b:Record<string,unknown>,k:string){return typeof b[k]==="string"&&b[k].trim()?b[k].trim():null;}
@@ -35,9 +36,9 @@ export async function registerOnboardingHierarchyRoutes(app:FastifyInstance,pool
   app.get("/api/v1/onboarding/review-queue",async(request,reply)=>{
     const a=await authn(request,reply,pool);if(!a||!pool)return;
     try{
-      const r=await pool.query<{queue:unknown}>(
+      const r=await withTenantTransaction(pool,a,client=>client.query<{queue:unknown}>(
         "select app.onboarding_review_queue($1) as queue",[a.identityId],
-      );
+      ));
       return {source:"postgresql",syntheticData:false,applications:r.rows[0]?.queue??[]};
     }catch(e){
       const x=boundaryError(e);request.log.error(e);return reply.code(x.status).send(x.body);
@@ -51,10 +52,10 @@ export async function registerOnboardingHierarchyRoutes(app:FastifyInstance,pool
     if(!note||!["VERIFIED","REJECTED"].includes(status??""))
       return reply.code(400).send({error:"verificationStatus and verificationNote are required",code:"LEGAL_REVIEW_INVALID"});
     try{
-      const r=await pool.query<{result:unknown}>(
+      const r=await withTenantTransaction(pool,a,client=>client.query<{result:unknown}>(
         "select app.onboarding_verify_legal($1,$2,$3,$4) as result",
         [a.identityId,id,status,note],
-      );
+      ));
       return r.rows[0]?.result;
     }catch(e){
       const x=boundaryError(e);request.log.error(e);return reply.code(x.status).send(x.body);
@@ -70,10 +71,10 @@ export async function registerOnboardingHierarchyRoutes(app:FastifyInstance,pool
     if(action==="reject"&&!note)
       return reply.code(400).send({error:"A review rationale is required when rejecting an application.",code:"REVIEW_NOTE_REQUIRED"});
     try{
-      const r=await pool.query<{result:unknown}>(
+      const r=await withTenantTransaction(pool,a,client=>client.query<{result:unknown}>(
         "select app.onboarding_decide($1,$2,$3,$4) as result",
         [a.identityId,id,action,note],
-      );
+      ));
       return r.rows[0]?.result;
     }catch(e){
       const x=boundaryError(e);request.log.error(e);return reply.code(x.status).send(x.body);
