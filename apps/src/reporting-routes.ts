@@ -62,7 +62,8 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
        order by a.occurred_at,a.id limit 501`,
       values,
     );
-    const truncated = activityResult.rows.length > 500;\n    const activities = activityResult.rows.slice(0, 500);
+    const truncated = activityResult.rows.length > 500;
+    const activities = activityResult.rows.slice(0, 500);
     const activityIds = activities.map(row => row.id);
     const [measurementResult, evidenceResult, flowResult] = await Promise.all([
       client.query<MeasurementRow>(
