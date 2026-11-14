@@ -17,3 +17,15 @@ test("zero obligation can be compliant without fabricated evidence", () => {
   const result = assessEprObligation(0, []);
   assert.equal(result.status, "COMPLIANT");
 });
+
+
+test("duplicate evidence IDs cannot inflate EPR verified quantity", () => {
+  const result = assessEprObligation(100, [
+    { evidenceId: "duplicate", verificationId: "v1", approved: true, quantity: 70 },
+    { evidenceId: "duplicate", verificationId: "v1", approved: true, quantity: 70 },
+    { evidenceId: "unique", verificationId: "v2", approved: true, quantity: 20 },
+  ]);
+  assert.equal(result.verifiedQuantity, 20);
+  assert.equal(result.remainingQuantity, 80);
+  assert.equal(result.status, "EVIDENCE_PENDING");
+});
