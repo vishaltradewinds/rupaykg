@@ -79,7 +79,7 @@ test("SWM report resolves verified stakeholder roles and persists immutable tena
     // satisfied. This test targets reporting, not the onboarding approval workflow.
     await pool.query(
       "insert into stakeholder_applications(identity_id,organization_id,role_id,requested_role_key,requested_organization_type,status,reviewed_by_identity_id,reviewed_at) values($1,$2,$3,'aggregator','AGGREGATOR','APPROVED',$4,now()),($5,$2,$6,'recycler','RECYCLER','APPROVED',$1,now()),($7,$2,$8,'transporter','TRANSPORTER','APPROVED',$1,now()),($9,$10,$11,'aggregator','AGGREGATOR','APPROVED',$12,now())",
-      [ownerIdentityId, organizationIds[0], ownerRoleId, recyclerIdentityId, recyclerRoleId, transporterIdentityId, transporterRoleId, outsiderIdentityId, organizationIds[1], outsiderRoleId, outsiderReviewerId],
+      [ownerIdentityId, organizationIds[0], ownerRoleId, recyclerIdentityId, recyclerIdentityId, recyclerRoleId, transporterIdentityId, transporterRoleId, outsiderIdentityId, organizationIds[1], outsiderRoleId, outsiderReviewerId],
     );
     await pool.query(
       "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED'),($4,$2,$5,'VERIFIED'),($6,$2,$7,'VERIFIED'),($8,$9,$10,'VERIFIED')",
