@@ -9,8 +9,9 @@ Before merging/enabling `.github/workflows/approved-branch-cleanup.yml`:
 1. In **Settings → Environments**, create an environment named `branch-maintenance`.
 2. Enable **Required reviewers** and select the repository owner/maintainers who may approve cleanup.
 3. Enable **Prevent self-review** where available.
-4. Do not add deployment secrets; the workflow uses the short-lived `GITHUB_TOKEN`.
-5. Confirm the environment protection rule is active before the first dispatch.
+4. Add an environment variable named `BRANCH_MAINTENANCE_ENABLED` with value `true` only after required reviewers are configured and verified. Without this variable, the cleanup script fails closed.
+5. Do not add deployment secrets; the workflow uses the short-lived `GITHUB_TOKEN`.
+6. Confirm the environment protection rule and enablement variable before the first dispatch.
 
 ## Per-branch operation
 
