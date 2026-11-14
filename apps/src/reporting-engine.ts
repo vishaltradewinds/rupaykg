@@ -89,7 +89,7 @@ export function computeReportSnapshotHash(snapshot: Omit<ReportSnapshot, "snapsh
 /** Builds an immutable, deterministic report snapshot; it never upgrades evidence or assurance states. */
 export function buildReportSnapshot(input: ReportSnapshotInput): ReportSnapshot {
   // Detach all nested caller-owned data before validation, hashing and freezing.
-  const source = JSON.parse(JSON.stringify(input)) as ReportSnapshotInput;
+  const source = structuredClone(input) as ReportSnapshotInput;
   if (!source.reportType.trim() || !source.title.trim() || !source.organizationId.trim()) throw new Error("Report type, title and organization are required");
   if (!validDate(source.periodStart) || !validDate(source.periodEnd) || source.periodStart > source.periodEnd) throw new Error("A valid, ordered reporting period is required");
   if (!source.methodologyCode.trim() || !source.methodologyVersion.trim() || !source.sourceRevision.trim()) throw new Error("Methodology version and source revision are required");
