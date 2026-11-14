@@ -46,7 +46,7 @@ Receiving an offline envelope does not mutate authoritative business state. An e
 
 ## Geography authorization rule
 
-An organization may have explicit verified geography roots. When roots exist, activities and resource flows are accepted only when their geography is the assigned root or a descendant of an assigned root. This is enforced in PostgreSQL so API and offline paths cannot bypass the authorization boundary. Organizations without configured geography roots remain governed by their existing organization-membership authorization until scopes are provisioned.
+An organization must have at least one **VERIFIED** geography root to authorize geography-scoped operations. A requested geography is in scope only when it is the assigned root or a descendant of an assigned root. Missing scope rows, PENDING/REJECTED scope rows, null organization/geography identifiers, and unrelated geography branches all return **FALSE**. This is enforced by the forward-only migration `20261105_geography_scope_fail_closed.sql` in PostgreSQL so API, worker and offline paths cannot treat missing configuration as authority. Organizations without verified roots must complete scope provisioning before geography-scoped operations are enabled; do not use an implicit membership-only fallback.
 
 ## Settlement truth rule
 
