@@ -29,6 +29,10 @@ It also consumes `/api/v1/auth/me`, `/api/v1/auth/exchange`, `/api/v1/auth/logou
 
 The UI must continue to treat the API as authoritative and must not derive regulatory, registry, settlement, Guardian, Hedera, or carbon certification claims from client-side counters alone.
 
+## Governance integrity
+
+Organization-owned legal-verification and statutory-applicability records are tenant data. Their foreign keys preserve organization lifecycle cleanup through `ON DELETE CASCADE`; this is a persistence-integrity rule and does not grant operational access or imply statutory approval.
+
 ## MRV / Guardian / Hedera boundary
 
 The authoritative MRV routes expose:
