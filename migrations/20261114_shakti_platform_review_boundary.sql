@@ -29,6 +29,16 @@ grant select on public.stakeholder_applications,
   public.roles
   to rupaykg_security_definer;
 
+-- The review queue projects organization legal/registration details and
+-- applicant display/email fields. Migration 104 intentionally grants only
+-- identity/status columns; add this exact read surface for the review owner.
+grant select (id, status, name, legal_name, legal_form,
+              registration_identifier, registration_authority,
+              verification_status, verification_note)
+  on public.organizations to rupaykg_security_definer;
+grant select (id, status, suspended_at, display_name, email)
+  on public.identities to rupaykg_security_definer;
+
 -- Grant UPDATE only on the fields mutated by the review workflow. Avoid
 -- table-wide UPDATE so the isolated owner cannot alter unrelated columns.
 grant update (status, reviewed_by_identity_id, reviewed_at, review_note)
