@@ -46,7 +46,8 @@
     host.id = "rupaykg-national-language-selector";
     host.setAttribute("role", "region");
     host.setAttribute("aria-label", "Language selection");
-    Object.assign(host.style, { position: "fixed", top: "12px", right: "14px", zIndex: "30", display: "flex", alignItems: "center", gap: "6px", padding: "5px 8px", border: "1px solid #314c63", borderRadius: "10px", background: "rgba(7,17,31,.94)", color: "#dbe7ef", font: "600 12px system-ui,sans-serif" });
+    host.className = "language-selector";
+    Object.assign(host.style, { position: "static", top: "auto", right: "auto", zIndex: "auto", display: "flex", alignItems: "center", gap: "6px", padding: "5px 8px", border: "1px solid rgba(255,255,255,.08)", borderRadius: "10px", background: "#151619", color: "rgba(255,255,255,.72)", font: "600 11px system-ui,sans-serif", marginLeft: "auto", flex: "0 1 auto", maxWidth: "100%" });
 
     const label = document.createElement("label");
     label.htmlFor = "rupaykg-language-select";
@@ -56,7 +57,7 @@
     const select = document.createElement("select");
     select.id = "rupaykg-language-select";
     select.setAttribute("aria-label", "Select application language");
-    Object.assign(select.style, { maxWidth: "180px", padding: "5px 7px", borderRadius: "7px", border: "1px solid #526b7d", background: "#0d1d2b", color: "#f1f6fa" });
+    Object.assign(select.style, { maxWidth: "150px", minWidth: "0", padding: "5px 7px", borderRadius: "7px", border: "1px solid rgba(255,255,255,.08)", background: "#080a09", color: "#f5f5f5" });
     languages.forEach(([code, labelText, nativeLabel]) => {
       const option = document.createElement("option");
       option.value = code;
@@ -70,7 +71,18 @@
       if (code && select.value !== code) select.value = code;
     });
     host.append(label, select);
-    document.body.appendChild(host);
+    const attachToHeader = () => {
+      const topbar = document.querySelector(".topbar");
+      if (!topbar) return false;
+      topbar.appendChild(host);
+      return true;
+    };
+    if (!attachToHeader()) {
+      const observer = new MutationObserver(() => {
+        if (attachToHeader()) observer.disconnect();
+      });
+      observer.observe(document.documentElement, { childList: true, subtree: true });
+    }
     apply(select.value);
   }
 
