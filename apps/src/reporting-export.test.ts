@@ -77,6 +77,7 @@ test("XLSX export is an OOXML workbook with provenance, quality and formula-safe
   assert.match(rows, /AGGREGATOR/);
   assert.match(rows, /VERIFIED/);
   assert.match(rows, /COMPLETED/);
+  assert.match(rows, /-99999999999999\.999999/);
   assert.match(rows, /&apos;=HYPERLINK/);
   assert.doesNotMatch(rows, /<f[ >]/i);
   assert.match(provenance, /evidence-1/);
