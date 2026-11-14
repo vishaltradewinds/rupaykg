@@ -49,6 +49,10 @@ const securityDefinerFunctions = [
   "activity_has_verified_geography_scope",
   "credential_has_verified_mrv_provenance",
   "credential_is_acceptance_fixture",
+  "review_authority_allowed",
+  "onboarding_review_queue",
+  "onboarding_verify_legal",
+  "onboarding_decide",
 ];
 
 const connectionUrl = new URL(databaseUrl);
