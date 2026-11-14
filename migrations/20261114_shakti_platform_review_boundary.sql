@@ -29,12 +29,18 @@ grant select on public.stakeholder_applications,
   public.roles
   to rupaykg_security_definer;
 
-grant update on public.stakeholder_applications,
-  public.stakeholder_application_approvals,
-  public.organization_verification_evidence,
-  public.organizations,
-  public.organization_memberships,
-  public.organization_geography_scopes
+-- Grant UPDATE only on the fields mutated by the review workflow. Avoid
+-- table-wide UPDATE so the isolated owner cannot alter unrelated columns.
+grant update (status, reviewed_by_identity_id, reviewed_at, review_note)
+  on public.stakeholder_applications to rupaykg_security_definer;
+grant update (status, approved_by_identity_id, reviewed_at, review_note)
+  on public.stakeholder_application_approvals to rupaykg_security_definer;
+grant update (status, verification_note, verified_by_identity_id, verified_at)
+  on public.organization_verification_evidence to rupaykg_security_definer;
+grant update (status, verification_status, verification_note, verified_by_identity_id, verified_at)
+  on public.organizations to rupaykg_security_definer;
+grant update (status)
+  on public.organization_memberships, public.organization_geography_scopes
   to rupaykg_security_definer;
 
 grant select on public.organization_geography_scopes to rupaykg_security_definer;
