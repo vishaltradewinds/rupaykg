@@ -29,3 +29,8 @@ create index if not exists identity_password_reset_active_idx
 
 -- Existing accounts are deliberately not modified. The new email_verified_at
 -- field is populated only through the explicit verification workflow.
+
+-- The runtime needs only the token-table operations used by the auth endpoints.
+grant select, insert, update, delete
+  on identity_email_verification_tokens, identity_password_reset_tokens
+  to rupaykg_app_runtime;
