@@ -15,11 +15,13 @@ Passwords are stored as salted scrypt hashes in `identity_password_credentials`;
 
 The frontend build validator explicitly validates native authentication configuration and does not require a third-party identity-provider configuration. The inspected web and API package manifests do not declare the Firebase SDK.
 
-## Email verification limitation
+## Email verification and account recovery
 
-**Email ownership verification is not currently implemented by the native registration flow.** Registration currently creates the identity with platform identity status `VERIFIED`; this must not be interpreted as proof that the person controls the supplied email address. No email OTP, verification-link or delivery-provider workflow was found in the inspected registration implementation.
+New native registrations are created with identity status `PENDING` and cannot sign in until a one-time email verification token is redeemed. Tokens are stored only as SHA-256 hashes, expire after 30 minutes and are single-use. Existing identities are not bulk-modified by the migration.
 
-Before relying on email as a verified identity attribute in production, implement and test a verification workflow with an approved delivery provider, or adopt a separately reviewed identity-provider integration. Do not describe the current native flow as verified-email authentication.
+The API exposes `POST /api/v1/auth/email/verify`, `POST /api/v1/auth/email/resend`, `POST /api/v1/auth/password/request-reset` and `POST /api/v1/auth/password/reset`. Password reset tokens are hashed, single-use and expire after 30 minutes. A successful password reset revokes all active sessions and clears failed-login lockout state. Reset-request responses do not disclose whether an account exists.
+
+Email delivery uses a provider-neutral HTTPS webhook configured through server-side `RUPAYKG_EMAIL_DELIVERY_URL` and `RUPAYKG_EMAIL_DELIVERY_TOKEN`. This change does not select a mail vendor or paid plan. Until a trusted delivery endpoint is configured and tested, verification and recovery messages cannot be delivered; new accounts remain pending and cannot sign in. Never put these values in frontend environment variables.
 
 ## Onboarding and authorization
 
