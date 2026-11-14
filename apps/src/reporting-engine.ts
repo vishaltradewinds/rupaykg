@@ -76,6 +76,7 @@ export function buildReportSnapshot(input: ReportSnapshotInput): ReportSnapshot 
   if (!validDate(input.periodStart) || !validDate(input.periodEnd) || input.periodStart > input.periodEnd) throw new Error("A valid, ordered reporting period is required");
   if (!input.methodologyCode.trim() || !input.methodologyVersion.trim() || !input.sourceRevision.trim()) throw new Error("Methodology version and source revision are required");
   if (!Number.isFinite(Date.parse(input.generatedAt))) throw new Error("generatedAt must be a valid timestamp");
+  if (!input.rows.length) throw new Error("A report must contain at least one source row");
   const rowIds = new Set<string>();
   const issues: ReportIssue[] = [];
   const sourceRecordIds = new Set<string>();
@@ -88,6 +89,7 @@ export function buildReportSnapshot(input: ReportSnapshotInput): ReportSnapshot 
       if (!cell.key.trim() || keys.has(cell.key)) throw new Error(`Cell keys must be unique within row ${row.id}`);
       keys.add(cell.key);
       if (!cell.sourceRecordId.trim()) throw new Error(`Source record ID is required for ${row.id}.${cell.key}`);
+      if (typeof cell.value === "number" && !Number.isFinite(cell.value)) throw new Error(`Report value must be finite for ${row.id}.${cell.key}`);
       sourceRecordIds.add(cell.sourceRecordId);
       if (cell.quality === "MISSING" || cell.value === null) issues.push({ code: "MISSING_VALUE", rowId: row.id, cellKey: cell.key, detail: "Value is missing; do not infer or silently substitute zero." });
       if (cell.quality === "ESTIMATED") issues.push({ code: "ESTIMATED_VALUE", rowId: row.id, cellKey: cell.key, detail: "Value is estimated and must remain visibly identified." });
@@ -120,7 +122,8 @@ export function buildReportSnapshot(input: ReportSnapshotInput): ReportSnapshot 
 }
 
 function csv(value: unknown): string {
-  const text = value === null || value === undefined ? "" : String(value);
+  const raw = value === null || value === undefined ? "" : String(value);
+  const text = typeof value === "string" && /^[=+@\t\r]/.test(raw) ? "'" + raw : raw;
   return /[",\r\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
 }
 
