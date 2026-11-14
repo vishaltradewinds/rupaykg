@@ -39,4 +39,3 @@ as $$
     else '[]'::jsonb
   end;
 $$;
-
