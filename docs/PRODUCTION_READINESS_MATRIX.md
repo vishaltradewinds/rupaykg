@@ -1,5 +1,8 @@
 # RupayKG Production Readiness Matrix
 
+> **Historical snapshot warning — 2026-11-03:** The evidence snapshot and GREEN/AMBER classifications below predate the current repository, Neon and tenant-isolation reconciliation. They are not current release approval. Use [the dated AIM and whole-repository reconciliation](engineering/repository-reconciliation/2026-11-03-aim-and-whole-repository-reconciliation.md) as the current status record. Production certification remains HOLD/OFF.
+
+
 This matrix converts the useful readiness discipline from the former AI Studio repository into the current canonical architecture.
 
 ## Status legend
