@@ -108,6 +108,7 @@ test("CSV preserves snapshot-level provenance and escapes minus-prefixed text bu
       cells: [
         { ...base.rows[0]!.cells[0]!, value: "-1+1" },
         { ...base.rows[0]!.cells[0]!, key: "negative_numeric", value: -10 },
+        { ...base.rows[0]!.cells[0]!, key: "exact_negative_decimal", value: "-99999999999999.999999" },
       ],
     }],
   });
@@ -121,6 +122,7 @@ test("CSV preserves snapshot-level provenance and escapes minus-prefixed text bu
   assert.ok(csv.includes("Declared quantities are not independently measured."));
   assert.ok(csv.includes(",'-1+1,"));
   assert.ok(csv.includes(",-10,kg"));
+  assert.ok(csv.includes(",-99999999999999.999999,kg"));
 });
 
 test("non-completed activity lifecycle blocks report readiness", () => {
