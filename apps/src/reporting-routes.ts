@@ -42,7 +42,7 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
     const geographyKinds = params.context === "urban" ? ["ULB", "WARD"] : ["GRAM_PANCHAYAT", "VILLAGE", "CLUSTER"];
     if (params.geographyId) {
       const scope = await client.query<{ ok: boolean }>(
-        "select exists(select 1 from organization_has_geography_scope($1::uuid,$2::uuid)) as ok",
+        "select organization_has_geography_scope($1::uuid,$2::uuid) as ok",
         [auth.activeOrganizationId, params.geographyId],
       );
       if (!scope.rows[0]?.ok) throw Object.assign(new Error("Geography outside organization authorization scope"), { code: "GEOGRAPHY_FORBIDDEN" });
