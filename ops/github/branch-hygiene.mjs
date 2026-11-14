@@ -51,7 +51,7 @@ const rows = branches.map(branch => {
   let behind = "";
   try {
     date = git(["show", "-s", "--format=%cI", ref]);
-    const counts = git(["rev-list", "--left-right", "--count", defaultBranch + "..." + ref]).split(/\s+/);
+    const counts = git(["rev-list", "--left-right", "--count", "refs/remotes/origin/" + defaultBranch + "..." + ref]).split(/\s+/);
     behind = Number(counts[0]);
     ahead = Number(counts[1]);
   } catch {}
