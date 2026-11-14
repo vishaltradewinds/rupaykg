@@ -43,7 +43,8 @@ grant update (status)
   on public.organization_memberships, public.organization_geography_scopes
   to rupaykg_security_definer;
 
-grant select on public.organization_geography_scopes to rupaykg_security_definer;
+grant select (organization_id, geography_id, status)
+  on public.organization_geography_scopes to rupaykg_security_definer;
 
 -- RLS is intentionally permissive only for the isolated function owner on the
 -- review-domain tables. The owner is not a runtime member and is NOLOGIN.
