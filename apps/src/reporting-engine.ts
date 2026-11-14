@@ -40,7 +40,7 @@ export type ReportSnapshotInput = {
   assumptions?: string[];
 };
 export type ReportIssue = {
-  code: "MISSING_VALUE" | "DECLARED_VALUE" | "ESTIMATED_VALUE" | "DISPUTED_VALUE" | "MISSING_EVIDENCE" | "UNVERIFIED_EVIDENCE";
+  code: "MISSING_VALUE" | "DECLARED_VALUE" | "ESTIMATED_VALUE" | "DISPUTED_VALUE" | "MISSING_EVIDENCE" | "UNVERIFIED_EVIDENCE" | "UNMAPPED_STAKEHOLDER";
   rowId: string;
   cellKey: string;
   detail: string;
@@ -128,7 +128,7 @@ function csv(value: unknown): string {
 
 /** A lossless, machine-readable long-form CSV adapter for a report snapshot. */
 export function reportSnapshotToCsv(snapshot: ReportSnapshot): string {
-  const header = ["report_type", "report_title", "organization_id", "period_start", "period_end", "geography_mode", "methodology_code", "methodology_version", "snapshot_hash", "report_status", "row_id", "stakeholder", "row_label", "field", "value", "unit", "quality", "source_record_id", "evidence_ids", "evidence_hashes", "verification_ids", "verification_status", "note"];
+  const header = ["report_type", "report_title", "organization_id", "period_start", "period_end", "geography_mode", "methodology_code", "methodology_version", "snapshot_hash", "report_status", "row_id", "stakeholder", "stakeholder_attribution", "row_label", "field", "value", "unit", "quality", "source_record_id", "evidence_ids", "evidence_hashes", "verification_ids", "verification_status", "note"];
   const rows = snapshot.rows.flatMap(row => row.cells.map(cell => [
     snapshot.reportType, snapshot.title, snapshot.organizationId, snapshot.periodStart, snapshot.periodEnd, snapshot.geographyMode,
     snapshot.methodologyCode, snapshot.methodologyVersion, snapshot.snapshotHash, snapshot.status, row.id, row.stakeholder,
