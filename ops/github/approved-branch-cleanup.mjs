@@ -36,7 +36,13 @@ if (live.name !== branch) throw new Error("Returned branch name mismatch.");
 if (live.protected) throw new Error("Refusing to delete a protected branch.");
 if (live.commit.sha.toLowerCase() !== expectedSha.toLowerCase()) throw new Error("Branch head changed since manifest creation; refusing deletion.");
 
-const openPrs = await request("pulls?state=open&per_page=100");
+const openPrs = [];
+for (let page = 1; ; page++) {
+  const batch = await request("pulls?state=open&per_page=100&page=" + page);
+  if (!Array.isArray(batch)) throw new Error("Unexpected open PR list response.");
+  openPrs.push(...batch);
+  if (batch.length < 100) break;
+}
 const associated = openPrs.filter(pr => pr.head?.repo?.full_name === repository && pr.head.ref === branch);
 if (associated.length) throw new Error("Refusing deletion: branch has open PR(s): " + associated.map(pr => "#" + pr.number).join(", "));
 
