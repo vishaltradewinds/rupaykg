@@ -58,4 +58,4 @@ npm run migrate -w @rupaykg/api
 test "$(psql "$DATABASE_URL" -tAc "select count(*) from public.schema_migrations where version='111' and filename='111_shakti_mrv_provenance_tenant_rls.sql'")" = "1"
 test "$(psql "$DATABASE_URL" -tAc "select pg_get_userbyid(relowner) from pg_class where oid='public.mrv_provenance_events'::regclass")" = "rupaykg_ddl"
 
-echo "PASS: apps/src/migrate.ts executed migration 111 as LOGIN rupaykg; ledger row 101 committed and provenance owner transferred to rupaykg_ddl."
+echo "PASS: apps/src/migrate.ts executed migration 111 as LOGIN rupaykg; ledger row 111 committed and provenance owner transferred to rupaykg_ddl."
