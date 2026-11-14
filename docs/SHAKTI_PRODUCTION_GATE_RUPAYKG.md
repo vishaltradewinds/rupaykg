@@ -6,6 +6,29 @@ This document is the production-control record for RupayKg under SHAKTI — Stan
 
 **Rule:** RupayKg must satisfy all applicable SHAKTI gates before it can be treated as SHAKTI-certified for live production. SHAKTI certification does not replace independent statutory, regulatory, contractual, infrastructure-provider, or third-party approvals.
 
+## Controlling architecture priority — national deployment first
+
+**National deployment objectives are the primary architecture objective. Jabalpur SITE-JBP-01 Kathonda is the first field implementation and validation instance of that same national architecture—not a separate pilot architecture.**
+
+RupayKg must be built as one pan-India platform. The Jabalpur implementation must use the same shared capabilities, data contracts, tenancy and security model, integration boundaries, release artefacts and operational controls intended for national deployment. Site-specific parameters belong in governed configuration and adapters. Do not introduce a Jabalpur-only fork, data model, API contract or workflow engine. Where a local shortcut conflicts with national operability, the national requirement takes priority.
+
+Controlling architecture record: [docs/RUPAYKG_NATIONAL_DEPLOYMENT_ARCHITECTURE_AND_JABALPUR_VALIDATION.md](RUPAYKG_NATIONAL_DEPLOYMENT_ARCHITECTURE_AND_JABALPUR_VALIDATION.md).
+
+**Validation boundary:** Jabalpur success proves only the site, workflows, integrations and operating conditions actually tested. It does not by itself prove national deployment readiness, nationwide statutory applicability, multi-state acceptance, capacity or TRL 9. National readiness requires separately evidenced tenant isolation, cross-jurisdiction coverage, load/resilience, security, backup/restore, external integration, field operations and rollout gates.
+
+## Controlling DPI ecosystem and commercialisation strategy
+
+Use both DPI ecosystems together but for distinct purposes:
+
+- **DPGA Registry:** reusable software and technology discovery, followed by exact upstream, licence, security, portability and cost evaluation.
+- **Global DPI Repository (GDPIR):** implementation, governance, maturity, institutional operating model and deployment learning; not a software marketplace or runtime dependency.
+- **RupayKg:** translate validated learning into a commercially viable interoperable environmental operating platform and paid integration/implementation services.
+- **DIGICORE INFRASYS:** intended engineering, product, IP stewardship, implementation and managed-services company, subject to documented entity, IP rights and contracting evidence.
+
+The target is a commercially sustainable RupayKg that can be deployed within government-led digital ecosystems under each programme's lawful institutional, data, procurement and security controls. Do not claim that RupayKg is itself a government DPI, public authority, regulator or official operator without a separate legal/institutional basis.
+
+Controlling companion record: [docs/DPI_ECOSYSTEM_STRATEGY_DIGICORE_INFRASYS_RUPAYKG.md](DPI_ECOSYSTEM_STRATEGY_DIGICORE_INFRASYS_RUPAYKG.md).
+
 ## Current verified baseline
 
 - Repository: `vishaltradewinds/rupaykg`
@@ -70,3 +93,19 @@ A successful build, CI run, deployment, or HTTP 200 response is **not** sufficie
 RupayKg becomes SHAKTI-certified for its defined production release only after every applicable gate is evidenced, all material blockers are closed, and required independent external approvals/evidence are satisfied.
 
 **Current certification decision: BLOCKED — evidence incomplete.**
+
+## Commercial monetization and DPG sourcing — controlling direction
+
+RupayKg is a proprietary commercial product. The commercial objective is revenue through software subscriptions, enterprise/public-sector contracts, implementation, integration, managed operations, APIs, support, training and SLAs.
+
+Controlling companion records:
+- docs/RUPAYKG_COMMERCIAL_MONETIZATION_STRATEGY.md — commercial packages, revenue models, DPGA/GDPIR sourcing strategy and DIGICORE INFRASYS commercialisation role.
+- docs/DPG_REGISTRY_COMPONENT_EVALUATION_RUPAYKG.md — ranked DPG component sourcing and integration evaluation.
+- docs/RUPAYKG_OPEN_MRV_CORE_FEASIBILITY_ASSESSMENT.md — revised commercial IP boundary; earlier Open MRV Core extraction is on hold.
+- docs/RUPAYKG_NATIONAL_DEPLOYMENT_ARCHITECTURE_AND_JABALPUR_VALIDATION.md — national-first architecture and Jabalpur field validation boundary.
+- docs/DPI_ECOSYSTEM_STRATEGY_DIGICORE_INFRASYS_RUPAYKG.md — dual DPI ecosystem operating model and commercialisation strategy.
+
+- docs/DPI_ECOSYSTEM_EXECUTION_ROADMAP_RUPAYKG.md — prioritised DPGA/GDPIR research, national capability mapping, buyer validation, component due diligence, commercial service and rollout execution backlog.
+- docs/RUPAYKG_NATIONAL_CAPABILITY_GAP_MATRIX_20261107.md — initial repository-backed national capability status and P0/P1 deployment proof gaps.
+
+No root licence, package-publication flag or source-code release is authorised by this workstream. Use selected DPGs as separately governed dependencies/services only where customer value, exact licence, security, operating cost and support responsibilities have been validated.
