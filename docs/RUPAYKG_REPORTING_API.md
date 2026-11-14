@@ -46,9 +46,10 @@ The preview reads:
 - `measurements` attached to those activities
 - `evidence` attached to those activities or measurements
 - latest `verifications` for each evidence record
-- `resource_flows` in the same organization, reporting period, and Urban/Rural geography rail`r`n- `chain_of_custody_links` attached to those flows, including sequence, actor organization reference, quantity, handover geographies, linked evidence, and latest verification
+- `resource_flows` in the same organization, reporting period, and Urban/Rural geography rail
+- `chain_of_custody_links` attached to those flows, including sequence, actor organization reference, quantity, handover geographies, linked evidence, and latest verification
 
-The preview is capped at 500 activities, 500 declared material flows, and 500 custody links. The response sets `truncated: true` when either cap is exceeded. Narrow the date range or geography before treating the extract as complete.
+The preview is capped at 500 activities, 500 declared material flows, and 500 custody links. The response sets `truncated: true` when any of the caps is exceeded. Narrow the date range or geography before treating the extract as complete.
 
 ## Data-quality and report states
 
@@ -56,7 +57,7 @@ The preview is capped at 500 activities, 500 declared material flows, and 500 cu
 - `DRAFT`: declared or estimated values, missing evidence, missing verification references, unverified evidence, unmapped stakeholder attribution, or unavailable source revision remain unresolved.
 - `READY_FOR_REVIEW`: required source, evidence, verification and stakeholder attribution checks pass. This means internal review-ready only; it is not an external approval or assurance result.
 
-Evidence is not considered verified solely because a client supplies a status. The snapshot requires evidence ID, content hash, verification record ID, and an accepted verification decision/status. Unknown stakeholder roles remain `OTHER`/`UNMAPPED`; the report does not infer Generator, Aggregator, Transporter, Recycler, or Processor identity from free-text activity types.
+Evidence is not considered verified solely because a client supplies a status. The snapshot requires evidence ID, content hash, verification record ID, and an accepted verification decision/status. Unknown stakeholder roles remain `OTHER`/`UNMAPPED`; the report does not infer Generator, Aggregator, Transporter, Recycler, or Processor identity from free-text activity types or an actor organization ID alone.
 
 Declared `resource_flows.declared_quantity` values remain explicitly `DECLARED`; they are not represented as independently measured quantities. The methodology code/version in this increment identifies an internal reporting template, not an official CPCB-approved calculation methodology.
 
@@ -68,7 +69,7 @@ Every snapshot includes a schema version, report type, organization, reporting p
 
 - Persisted report-run history and immutable export retrieval by report ID
 - PDF and XLSX adapters
-- authoritative Generator → Aggregator → Transporter → Recycler relationship resolution and mass-balance reconciliation
+- authoritative Generator â†’ Aggregator â†’ Transporter â†’ Recycler relationship resolution and mass-balance reconciliation
 - EPR and BRSR adapters
 - external CPCB submission, receipt, acceptance, certification, or assurance integrations
 
