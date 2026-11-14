@@ -11,6 +11,17 @@
 
 begin;
 
+-- The deployment operator is the authenticated login; the DDL role is
+-- intentionally NOLOGIN. Grant its runtime hand-off only inside this
+-- rollback-only test transaction, then assume the DDL role for fixtures.
+select 1 / case
+  when pg_has_role(current_user, 'rupaykg_ddl', 'set') then 1
+  else 0
+end as ddl_role_handoff_assertion;
+
+grant rupaykg_app_runtime to rupaykg_ddl with inherit false, set true;
+set local role rupaykg_ddl;
+
 select 1 / case
   when pg_has_role(current_user, 'rupaykg_app_runtime', 'member') then 1
   else 0
@@ -22,7 +33,7 @@ select 1 / case
   else 0
 end as runtime_role_switch_assertion;
 
-reset role;
+set local role rupaykg_ddl;
 
 do $shakti$
 declare
@@ -150,7 +161,7 @@ begin
   select context_token into v_context_token_b
     from app.authenticate_bearer_session('shakti-rls-b:'||v_suffix)
    where organization_id=v_org_b;
-  reset role;
+  set local role rupaykg_ddl;
 
   if v_context_token_a is null or v_context_token_b is null then
     raise exception 'RLS_NEGATIVE_TEST_FAILED: bearer bootstrap did not issue context grants';
@@ -180,7 +191,7 @@ begin
   end if;
 
   -- Independently prove tenant B receives only its own organization scope.
-  reset role;
+  set local role rupaykg_ddl;
   execute 'set local role rupaykg_app_runtime';
   perform app.set_request_context(v_identity_b,v_org_b,v_context_token_b);
   select count(*) into v_visible from organizations where id=v_org_b;
@@ -191,7 +202,7 @@ begin
   if v_visible <> 0 then
     raise exception 'RLS_NEGATIVE_TEST_FAILED: tenant B can read organization A';
   end if;
-  reset role;
+  set local role rupaykg_ddl;
   execute 'set local role rupaykg_app_runtime';
   perform app.set_request_context(v_identity_a,v_org_a,v_context_token_a);
 
@@ -209,7 +220,7 @@ begin
 
   -- A caller-selected identity/organization pair without the opaque
   -- bearer-session grant must not satisfy RLS, even if both values are valid.
-  reset role;
+  set local role rupaykg_ddl;
   execute 'set local role rupaykg_app_runtime';
   perform set_config('app.identity_id', v_identity_a::text, true);
   perform set_config('app.organization_id', v_org_a::text, true);
@@ -227,12 +238,12 @@ begin
     raise exception 'RLS_NEGATIVE_TEST_FAILED: malformed context token exposed tenant rows';
   end if;
 
-  reset role;
+  set local role rupaykg_ddl;
   execute 'set local role rupaykg_app_runtime';
   perform app.set_request_context(v_identity_a,v_org_a,v_context_token_a);
 
   -- Session revocation invalidates an already-issued context grant immediately.
-  reset role;
+  set local role rupaykg_ddl;
   update identity_sessions set revoked_at=now()
    where token_hash='shakti-rls-a:'||v_suffix;
   execute 'set local role rupaykg_app_runtime';
@@ -240,7 +251,7 @@ begin
   if v_visible <> 0 then
     raise exception 'RLS_NEGATIVE_TEST_FAILED: revoked bearer session retained tenant visibility';
   end if;
-  reset role;
+  set local role rupaykg_ddl;
   update identity_sessions set revoked_at=null
    where token_hash='shakti-rls-a:'||v_suffix;
 
@@ -252,7 +263,7 @@ begin
   if v_visible <> 0 then
     raise exception 'RLS_NEGATIVE_TEST_FAILED: expired context grant retained tenant visibility';
   end if;
-  reset role;
+  set local role rupaykg_ddl;
   update app.request_context_grants set expires_at=now()+interval '1 minute'
    where id=v_context_token_a;
 
@@ -282,7 +293,7 @@ begin
   if v_visible <> 0 then
     raise exception 'RLS_NEGATIVE_TEST_FAILED: removed organization membership retained tenant visibility';
   end if;
-  reset role;
+  set local role rupaykg_ddl;
   if exists (
     select 1 from pg_trigger t
      where t.tgrelid = 'public.organization_memberships'::regclass
@@ -305,14 +316,14 @@ begin
   perform app.set_request_context(v_identity_a,v_org_a,v_context_token_a);
 
   -- Suspending an identity invalidates an already-issued context grant.
-  reset role;
+  set local role rupaykg_ddl;
   update identities set suspended_at=now() where id=v_identity_a;
   execute 'set local role rupaykg_app_runtime';
   select count(*) into v_visible from organizations where id=v_org_a;
   if v_visible <> 0 then
     raise exception 'RLS_NEGATIVE_TEST_FAILED: suspended identity retained tenant visibility';
   end if;
-  reset role;
+  set local role rupaykg_ddl;
   update identities set suspended_at=null where id=v_identity_a;
   execute 'set local role rupaykg_app_runtime';
   perform app.set_request_context(v_identity_a,v_org_a,v_context_token_a);
@@ -327,7 +338,7 @@ begin
       null; -- expected PostgreSQL RLS WITH CHECK denial (SQLSTATE 42501)
   end;
 
-  reset role;
+  set local role rupaykg_ddl;
 
   -- A caller must not obtain tenant visibility by setting only the
   -- organization GUC. The policy must also require a verified identity
@@ -339,7 +350,7 @@ begin
   if v_visible <> 0 then
     raise exception 'RLS_NEGATIVE_TEST_FAILED: organization-only GUC forged tenant context without verified identity';
   end if;
-  reset role;
+  set local role rupaykg_ddl;
 
   -- Fail-closed check: with no tenant context, the runtime must see zero
   -- rows from every protected tenant table. This prevents accidental
@@ -369,7 +380,7 @@ begin
     end if;
   end loop;
 
-  reset role;
+  set local role rupaykg_ddl;
 
   raise notice 'RLS_NEGATIVE_TEST_PASS: tenant A can read/mutate only its own organization scope and no-context runtime sees zero protected rows';
 end $shakti$;
