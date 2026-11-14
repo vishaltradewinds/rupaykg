@@ -285,7 +285,7 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
       ],
     });
     return { snapshot, truncated: snapshotTruncated };
-  });
+  }, { isolationLevel: "REPEATABLE READ", readOnly: true });
 }
 
 export function parseReportRunId(value: unknown): string | null {
