@@ -39,7 +39,7 @@ test("cross-organization review queue is served through the controlled database 
   const response = await app.inject({ method: "GET", url: "/api/v1/onboarding/review-queue", headers });
   assert.equal(response.statusCode, 200, response.body);
   assert.deepEqual(response.json().applications, queue);
-  const roleIndex = pool.statements.indexOf("set local role rupaykg_app_runtime");
+  const roleIndex = pool.statements.lastIndexOf("set local role rupaykg_app_runtime");
   const contextIndex = pool.statements.findIndex(sql => sql.includes("app.set_request_context"));
   const boundaryIndex = pool.statements.findIndex(sql => sql.includes("app.onboarding_review_queue"));
   assert.ok(roleIndex >= 0 && contextIndex > roleIndex && boundaryIndex > contextIndex);
