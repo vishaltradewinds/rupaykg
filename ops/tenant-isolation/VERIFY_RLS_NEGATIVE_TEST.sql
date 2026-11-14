@@ -38,7 +38,12 @@ begin
     'evidence_artifact_series','evidence_artifact_versions','evidence_artifact_reviews',
     'field_sync_envelopes','field_sync_cursors','field_sync_conflicts',
     'mrv_provenance_events','organization_geography_scopes','registry_events',
-    'settlement_events','environmental_attribute_claims'
+    'settlement_events','environmental_attribute_claims',
+    'bwg_profiles','bwg_reporting_periods','carbon_projects',
+    'cpcb_swm_stakeholder_workspaces','cpcb_swm_status_history','epr_returns',
+    'esg_reporting_periods','organization_bwg_assessments','organization_epr_applicability',
+    'organization_statutory_profiles','organization_verification_evidence',
+    'stakeholder_applications','stakeholder_application_approvals'
   ] loop
     if not exists (
       select 1 from pg_class c
@@ -63,7 +68,12 @@ begin
         'carbon_calculations','mrv_observations',
         'evidence_verification_requirements','chain_of_custody_links',
         'evidence_artifact_series','evidence_artifact_versions','evidence_artifact_reviews',
-        'field_sync_envelopes','field_sync_cursors','field_sync_conflicts','mrv_provenance_events','organization_geography_scopes','registry_events','settlement_events','environmental_attribute_claims'
+        'field_sync_envelopes','field_sync_cursors','field_sync_conflicts','mrv_provenance_events','organization_geography_scopes','registry_events','settlement_events','environmental_attribute_claims',
+    'bwg_profiles','bwg_reporting_periods','carbon_projects',
+    'cpcb_swm_stakeholder_workspaces','cpcb_swm_status_history','epr_returns',
+    'esg_reporting_periods','organization_bwg_assessments','organization_epr_applicability',
+    'organization_statutory_profiles','organization_verification_evidence',
+    'stakeholder_applications','stakeholder_application_approvals'
       ])
       and pg_get_userbyid(c.relowner) = 'rupaykg_app_runtime'
   ) then
@@ -355,7 +365,12 @@ begin
     'evidence_artifact_series','evidence_artifact_versions','evidence_artifact_reviews',
     'field_sync_envelopes','field_sync_cursors','field_sync_conflicts',
     'mrv_provenance_events','organization_geography_scopes','registry_events',
-    'settlement_events','environmental_attribute_claims'
+    'settlement_events','environmental_attribute_claims',
+    'bwg_profiles','bwg_reporting_periods','carbon_projects',
+    'cpcb_swm_stakeholder_workspaces','cpcb_swm_status_history','epr_returns',
+    'esg_reporting_periods','organization_bwg_assessments','organization_epr_applicability',
+    'organization_statutory_profiles','organization_verification_evidence',
+    'stakeholder_applications','stakeholder_application_approvals'
   ] loop
     execute format('select count(*) from public.%I', v_name) into v_visible;
     if v_visible <> 0 then
