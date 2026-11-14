@@ -31,7 +31,7 @@ try {
   const files = (await readdir(migrationDir))
     .filter((name) => /^\d+_.+\.sql$/.test(name))
     .sort();
-  // Tenant-isolation migrations 101-107 are deliberately excluded from this
+  // Tenant-isolation migrations 101-109 are deliberately excluded from this
   // application/baseline runner. They require the separate privileged,
   // temporary-role handoff implemented by migrate-shakti.ts.
   const controlledTenantMigrations = new Set([
@@ -42,6 +42,8 @@ try {
     "20261113_shakti_field_sync_evidence_mrv_rls.sql",
     "106_credential_lifecycle_verification_boundary.sql",
     "107_shakti_tenant_direct_domain_activation.sql",
+    "108_shakti_tenant_organization_domain_activation.sql",
+    "20261114_shakti_platform_review_boundary.sql",
   ]);
   const baselineFiles = files.filter((name) => !controlledTenantMigrations.has(name));
 
@@ -98,7 +100,7 @@ try {
     }
   }
 
-  console.log(`Baseline migrations are current (${baselineFiles.length} files). Run migrate:shakti separately for tenant-isolation migrations 101-107.`);
+  console.log(`Baseline migrations are current (${baselineFiles.length} files). Run migrate:shakti separately for tenant-isolation migrations 101-109.`);
 } finally {
   await pool.end();
 }
