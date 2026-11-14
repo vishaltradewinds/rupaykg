@@ -147,7 +147,8 @@ export function buildReportSnapshot(input: ReportSnapshotInput): ReportSnapshot 
 
 function csv(value: unknown): string {
   const raw = value === null || value === undefined ? "" : String(value);
-  const text = typeof value === "string" && /^[=+\-@\t\r]/.test(raw) ? "'" + raw : raw;
+  const numericText = typeof value === "string" && /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(raw);
+  const text = typeof value === "string" && !numericText && /^[=+\-@\t\r]/.test(raw) ? "'" + raw : raw;
   return /[",\r\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
 }
 
