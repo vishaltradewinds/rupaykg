@@ -36,6 +36,9 @@ export function parseSwmReportQuery(query: Query): { periodStart: string; period
   return { periodStart: query.periodStart, periodEnd: query.periodEnd, context: query.context, ...(query.geographyId ? { geographyId: query.geographyId } : {}) };
 }
 async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<ReturnType<typeof parseSwmReportQuery>>): Promise<ReportData> {
+  if (!auth.activeOrganizationId || !auth.memberships.some(m => m.status === "VERIFIED" && m.organization_id === auth.activeOrganizationId)) {
+    throw Object.assign(new Error("Verified active organization membership is required"), { code: "REPORT_FORBIDDEN" });
+  }
   return withTenantTransaction(pool, auth, async client => {
     if (!auth.activeOrganizationId) throw Object.assign(new Error("Active organization is required"), { code: "REPORT_FORBIDDEN" });
     if (!auth.activeOrganizationId || !await hasOrganizationPermission(client, auth, auth.activeOrganizationId, ["reports:read", "swm:read"])) {
@@ -190,7 +193,7 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
         "The methodology code and version identify this internal reporting template; they are not an official CPCB-approved calculation methodology.",
         ...(sourceRevision === "unavailable" ? ["Source code revision was unavailable at generation time; the report is not review-ready."] : []),
         "Activity types are not treated as verified stakeholder roles; stakeholder attribution remains OTHER until an authoritative role relationship is available.",
-        "Only activity measurements and linked evidence available to the active organization are included.",
+        "Only active-organization activity measurements, linked evidence and declared material flows are included; declared flows remain separately identified.",
         ...(activities.length > 500 || flowResult.rows.length > 500 ? ["Preview capped at 500 activities and 500 declared material flows; narrow the period or geography for a complete extract."] : []),
       ],
     });
