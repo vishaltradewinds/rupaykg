@@ -4,7 +4,7 @@
 
 Activate the tenant-isolation policy foundation only after the application runtime satisfies the database security contract.
 
-The protected inventory is 18 tenant-owned tables. It now includes `mrv_provenance_events`, whose policy boundary must bind the provenance row's activity, evidence and verification to the active verified organization. Its ownership and policy installation are protected migration 101; enabling RLS remains a separate controlled activation step.
+The protected inventory is 18 tenant-owned tables. It now includes `mrv_provenance_events`, whose policy boundary must bind the provenance row's activity, evidence and verification to the active verified organization. Its ownership and policy installation are protected migration 111; enabling RLS remains a separate controlled activation step.
 
 ## Preconditions
 
@@ -20,23 +20,23 @@ All must be true before activation:
 
 ## Protected migration execution boundary
 
-Migration 101 is separate from the DDL acceptance login and from RLS activation. The migration runner writes the `schema_migrations` ledger using the database connection role. The current production ledger is owned by `rupaykg`; read-only catalog inspection confirms that neither `rupaykg_ddl` nor `rupaykg_runtime_login` has SELECT/INSERT/UPDATE privileges on it. Therefore, the DDL acceptance login must not be used to run `apps/src/migrate.ts`.
+Migration 111 is separate from the DDL acceptance login and from RLS activation. The migration runner writes the `schema_migrations` ledger using the database connection role. The current production ledger is owned by `rupaykg`; read-only catalog inspection confirms that neither `rupaykg_ddl` nor `rupaykg_runtime_login` has SELECT/INSERT/UPDATE privileges on it. Therefore, the DDL acceptance login must not be used to run `apps/src/migrate.ts`.
 
 The current observed one-shot migration path requires the restricted migration-owner credential for `rupaykg` (the existing owner role has BYPASSRLS and CREATEROLE). This credential is not an application runtime identity and must never be placed in Render runtime configuration. Before any production use:
-- rehearse migration 101 and ledger recording on a disposable database;
+- rehearse migration 111 and ledger recording on a disposable database;
 - verify the migration executor is the current table owner and can `SET ROLE rupaykg_ddl`; `pg_has_role(current_user, 'rupaykg_ddl', 'SET')` must return true. Ordinary membership is insufficient. The migration now fails closed before changing grants or policies if this capability is absent;
 - if the current migration owner lacks SET capability, have the separately authorized database administrator provision a temporary membership for the migration owner (for the observed production path, `rupaykg`) with `SET TRUE`, `INHERIT FALSE`, and `ADMIN FALSE`, then verify the `SET` privilege. This is a privileged role change and is NOT authorized by this runbook while production is on HOLD;
-- after migration 101 commits and the ledger row/table owner are verified, revoke that temporary membership and verify `pg_has_role('rupaykg', 'rupaykg_ddl', 'SET')` is false. Do not grant this membership to the application runtime or DDL acceptance login;
+- after migration 111 commits and the ledger row/table owner are verified, revoke that temporary membership and verify `pg_has_role('rupaykg', 'rupaykg_ddl', 'SET')` is false. Do not grant this membership to the application runtime or DDL acceptance login;
 - inspect the exact SQL, migration fingerprint, rollback/recovery plan and post-migration ownership;
 - use a restricted, audited operator session and set `RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS=1` only for that one migration run;
 - unset the flag immediately afterward and verify the exact ledger row and table owner;
 - do not continue to RLS activation unless the separate DDL acceptance login passes its preflight.
 
-The production ledger currently has no `101_shakti_mrv_provenance_tenant_rls.sql` row. Production remains READ-ONLY / HOLD; this runbook documents the controlled path and does not authorize executing it.
+The production ledger currently has no `111_shakti_mrv_provenance_tenant_rls.sql` row. Production remains READ-ONLY / HOLD; this runbook documents the controlled path and does not authorize executing it.
 
 ## Activation sequence
 
-1. Apply protected migration 101 only through the separately controlled migration-owner procedure above; never run it through the Render application startup or the runtime/DDL acceptance login. Reconcile all earlier migration lineage before running it.
+1. Apply protected migration 111 only through the separately controlled migration-owner procedure above; never run it through the Render application startup or the runtime/DDL acceptance login. Reconcile all earlier migration lineage before running it.
 2. Keep three identities separate: (a) the application runtime login derived from `rupaykg_app_runtime`; (b) the non-login owner role `rupaykg_ddl`, which owns the 18 protected tables and is not SUPERUSER or BYPASSRLS; and (c) a dedicated acceptance login (for example `rupaykg_ddl_login`) with `LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION`. Grant this acceptance login exactly two direct memberships: `SET TRUE, INHERIT FALSE` to `rupaykg_ddl` and `rupaykg_app_runtime`, with no ADMIN option and no other role memberships. The production activation and preflight wrappers enforce LOGIN, NOINHERIT, NOBYPASSRLS, no role-creation/database-creation/replication attributes, exactly these two membership edges, and rejection of `rupaykg`/provider-admin membership; the production activation wrapper never accepts `postgres`. Store its connection URL only in a restricted GitHub Actions environment secret. The acceptance script uses `rupaykg_ddl` only for rollback-only fixture setup and switches to `rupaykg_app_runtime` for the actual tenant assertions. Do not reuse the application runtime login as the DDL acceptance login.
 3. Run `ops/tenant-isolation/VERIFY_DDL_ROLE_PRE_RLS.sql` using the controlled migration/DDL role and preserve its output. It must prove ownership of all 18 protected tenant tables and fail closed for SUPERUSER, BYPASSRLS, or runtime-role execution.
 4. Run `ops/tenant-isolation/VERIFY_PRE_RLS.sql` using the exact intended application runtime login role and preserve its output as deployment evidence.
