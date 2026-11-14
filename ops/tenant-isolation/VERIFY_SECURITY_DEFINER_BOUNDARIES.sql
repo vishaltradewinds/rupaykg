@@ -276,6 +276,39 @@ select count(*) as legacy_security_definer_functions_owned
      'credential_is_acceptance_fixture'
    ]);
 
+-- Diagnose each isolated-owner boundary independently for actionable CI output.
+select owner_role.rolname,
+       owner_role.rolcanlogin, owner_role.rolinherit, owner_role.rolsuper,
+       owner_role.rolbypassrls, owner_role.rolcreatedb, owner_role.rolcreaterole,
+       owner_role.rolreplication,
+       has_schema_privilege(owner_role.oid, 'app', 'CREATE') as app_create,
+       has_schema_privilege(owner_role.oid, 'public', 'CREATE') as public_create,
+       pg_has_role('rupaykg_app_runtime', owner_role.oid, 'MEMBER') as runtime_member,
+       pg_has_role(current_user, owner_role.oid, 'MEMBER') as invoking_member
+  from pg_roles owner_role
+ where owner_role.rolname = 'rupaykg_security_definer';
+
+select membership.roleid::regrole as granted_role,
+       membership.member::regrole as member_role,
+       pg_get_userbyid(membership.grantor) as grantor,
+       membership.admin_option, membership.inherit_option, membership.set_option
+  from pg_auth_members membership
+ where membership.member = 'rupaykg_security_definer'::regrole
+    or membership.roleid = 'rupaykg_security_definer'::regrole;
+
+select
+  has_table_privilege('rupaykg_security_definer','public.registry_events','SELECT') as registry_select,
+  has_table_privilege('rupaykg_security_definer','app.request_context_grants','DELETE') as request_context_delete,
+  has_table_privilege('rupaykg_security_definer','public.identities','SELECT') as identities_table_select,
+  has_table_privilege('rupaykg_security_definer','public.identity_sessions','SELECT') as sessions_table_select,
+  has_table_privilege('rupaykg_security_definer','public.organization_memberships','SELECT') as memberships_table_select,
+  has_table_privilege('rupaykg_security_definer','public.organizations','SELECT') as organizations_table_select,
+  has_table_privilege('rupaykg_security_definer','public.activities','SELECT') as activities_table_select,
+  has_table_privilege('rupaykg_security_definer','public.organization_geography_scopes','SELECT') as geography_scopes_table_select,
+  has_table_privilege('rupaykg_security_definer','public.mrv_provenance_events','SELECT') as provenance_table_select,
+  has_table_privilege('rupaykg_security_definer','public.verifications','SELECT') as verifications_table_select,
+  has_table_privilege('rupaykg_security_definer','public.evidence','SELECT') as evidence_table_select;
+
 select 1 / case
   when exists (
     select 1
