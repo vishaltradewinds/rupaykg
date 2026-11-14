@@ -127,6 +127,9 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
     const activeOrganizationId = auth.activeOrganizationId ?? auth.memberships[0]?.organization_id;
     const ids = activeOrganizationId ? [activeOrganizationId] : [];
     if (!ids.length) return { source: "postgresql", syntheticData: false, data: { profiles: [], periods: [], wasteReports: [], eprReports: [], esgReports: [], jurisdictions: [], schemes: [] } };
+    if (!await hasOrganizationPermission(pool, auth, activeOrganizationId!, ["reports:read"])) {
+      return reply.code(403).send({ error: "BWG workspace read permission required", code: "BWG_WORKSPACE_READ_FORBIDDEN", syntheticData: false });
+    }
     try {
       return await withTenantTransaction(pool, auth, async client => {
         const profiles = await client.query("select p.*, g.name as jurisdiction_name from bwg_profiles p left join geography g on g.id=p.jurisdiction_id where p.organization_id=any($1::uuid[]) order by p.updated_at desc", [ids]);
