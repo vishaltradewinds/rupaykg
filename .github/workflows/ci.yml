@@ -79,9 +79,9 @@ jobs:
           grep -q 'RupayKG' /tmp/rupaykg-web-dom.html
           test -s /tmp/rupaykg-web-smoke.png
           echo "Chrome DOM exit: $dom_status; screenshot exit: $shot_status"
-      - name: Rehearse migration 101 as restricted non-superuser migration owner
+      - name: Rehearse migration 111 as restricted non-superuser migration owner
         env:
-          MIGRATION_FILE: migrations/101_shakti_mrv_provenance_tenant_rls.sql
+          MIGRATION_FILE: migrations/111_shakti_mrv_provenance_tenant_rls.sql
         run: bash ops/tenant-isolation/VERIFY_MIGRATION_OWNER_ACCEPTANCE.sh
       - name: Run tests including disposable PostgreSQL acceptance
         env:
