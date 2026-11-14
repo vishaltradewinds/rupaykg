@@ -83,7 +83,7 @@ test("CSV adapter quotes delimiters and preserves provenance columns", () => {
   assert.ok(csv.includes('"Material flow, ""October"""'));
   assert.ok(csv.includes("evidence-1"));
   assert.ok(csv.includes("sha256:abc"));
-  assert.ok(csv.includes("verification-1") === false);
+  assert.ok(csv.includes("verification-1"));
 });
 
 test("rejects invalid periods, duplicate rows and duplicate cell keys", () => {
