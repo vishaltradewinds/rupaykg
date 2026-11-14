@@ -21,8 +21,9 @@ const payload: AnchorPayload = {
 function withEnvironment<T>(fn: () => Promise<T>) {
   const previousNetwork = process.env.HEDERA_NETWORK;
   const previousTopic = process.env.HEDERA_TOPIC_ID;
-  const previousTimeout = process.env.HEDERA_MIRROR_NODE_TIMEOUT_MS;
-  const previousMaxBytes = process.env.HEDERA_MIRROR_NODE_MAX_RESPONSE_BYTES;
+  const previousTimeout = process.env.HEDERA_MIRROR_TIMEOUT_MS;
+  const previousMaxResponse = process.env.HEDERA_MIRROR_MAX_RESPONSE_BYTES;
+  const previousMaxMessage = process.env.HEDERA_MIRROR_MAX_MESSAGE_BYTES;
   const previousFetch = globalThis.fetch;
   process.env.HEDERA_NETWORK = "testnet";
   process.env.HEDERA_TOPIC_ID = topicId;
@@ -32,10 +33,12 @@ function withEnvironment<T>(fn: () => Promise<T>) {
     else process.env.HEDERA_NETWORK = previousNetwork;
     if (previousTopic === undefined) delete process.env.HEDERA_TOPIC_ID;
     else process.env.HEDERA_TOPIC_ID = previousTopic;
-    if (previousTimeout === undefined) delete process.env.HEDERA_MIRROR_NODE_TIMEOUT_MS;
-    else process.env.HEDERA_MIRROR_NODE_TIMEOUT_MS = previousTimeout;
-    if (previousMaxBytes === undefined) delete process.env.HEDERA_MIRROR_NODE_MAX_RESPONSE_BYTES;
-    else process.env.HEDERA_MIRROR_NODE_MAX_RESPONSE_BYTES = previousMaxBytes;
+    if (previousTimeout === undefined) delete process.env.HEDERA_MIRROR_TIMEOUT_MS;
+    else process.env.HEDERA_MIRROR_TIMEOUT_MS = previousTimeout;
+    if (previousMaxResponse === undefined) delete process.env.HEDERA_MIRROR_MAX_RESPONSE_BYTES;
+    else process.env.HEDERA_MIRROR_MAX_RESPONSE_BYTES = previousMaxResponse;
+    if (previousMaxMessage === undefined) delete process.env.HEDERA_MIRROR_MAX_MESSAGE_BYTES;
+    else process.env.HEDERA_MIRROR_MAX_MESSAGE_BYTES = previousMaxMessage;
   });
 }
 
@@ -82,31 +85,7 @@ test("MRV integrity hash survives JSON serialization when optional fields are un
 });
 
 
-test("Mirror Node verification fails closed on an oversized response body", async () => {
-  await withEnvironment(async () => {
-    process.env.HEDERA_MIRROR_NODE_MAX_RESPONSE_BYTES = "1024";
-    globalThis.fetch = async () => new Response("x".repeat(2048), { status: 200 });
-    const result = await verifyHcsMessage(timestamp, topicId);
-    assert.equal(result.verified, false);
-    assert.match(String(result.error), /size limit/);
-  });
-});
-
-test("Mirror Node verification fails closed when the request times out", async () => {
-  await withEnvironment(async () => {
-    process.env.HEDERA_MIRROR_NODE_TIMEOUT_MS = "500";
-    globalThis.fetch = async (_input, init) => new Promise<Response>((_resolve, reject) => {
-      const signal = init?.signal;
-      if (signal?.aborted) reject(new DOMException("Aborted", "AbortError"));
-      else signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
-    });
-    const result = await verifyHcsMessage(timestamp, topicId);
-    assert.equal(result.verified, false);
-    assert.match(String(result.error), /timed out/);
-  });
-});
-
-test("Mirror Node verification rejects a message returned under a different topic", async () => {
+test("Mirror Node verification rejects a mismatched topic identifier", async () => {
   await withEnvironment(async () => {
     const hash = integrityHash(payload);
     const anchored = { ...payload, integrityHash: hash, anchoredAt: "2026-10-10T00:00:00.000Z" };
@@ -116,8 +95,77 @@ test("Mirror Node verification rejects a message returned under a different topi
       topic_id: "0.0.99999",
       message: Buffer.from(JSON.stringify(anchored), "utf8").toString("base64"),
     }] }), { status: 200, headers: { "content-type": "application/json" } });
-    const result = await verifyHcsMessage(timestamp, topicId, hash, payload.activityId, payload.verificationId, payload.evidenceId, payload.guardianExecutionId);
+    const result = await verifyHcsMessage(timestamp, topicId, hash);
     assert.equal(result.verified, false);
-    assert.match(String(result.error), /not found/);
+    assert.equal("errorCode" in result ? result.errorCode : null, "MIRROR_NODE_TOPIC_MISMATCH");
+  });
+});
+
+test("Mirror Node verification rejects malformed JSON with a stable error code", async () => {
+  await withEnvironment(async () => {
+    globalThis.fetch = async () => new Response("{not-json", {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+    const result = await verifyHcsMessage(timestamp, topicId);
+    assert.equal(result.verified, false);
+    assert.equal("errorCode" in result ? result.errorCode : null, "MIRROR_NODE_INVALID_JSON");
+  });
+});
+
+test("Mirror Node verification rejects non-success HTTP responses", async () => {
+  await withEnvironment(async () => {
+    globalThis.fetch = async () => new Response("upstream unavailable", { status: 503 });
+    const result = await verifyHcsMessage(timestamp, topicId);
+    assert.equal(result.verified, false);
+    assert.equal("errorCode" in result ? result.errorCode : null, "MIRROR_NODE_HTTP_ERROR");
+  });
+});
+
+test("Mirror Node verification bounds the response body before JSON parsing", async () => {
+  await withEnvironment(async () => {
+    process.env.HEDERA_MIRROR_MAX_RESPONSE_BYTES = "1024";
+    globalThis.fetch = async () => new Response(new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(2048));
+        controller.close();
+      },
+    }), { status: 200, headers: { "content-type": "application/json" } });
+    const result = await verifyHcsMessage(timestamp, topicId);
+    assert.equal(result.verified, false);
+    assert.equal("errorCode" in result ? result.errorCode : null, "MIRROR_NODE_RESPONSE_TOO_LARGE");
+  });
+});
+
+test("Mirror Node verification bounds the decoded HCS message", async () => {
+  await withEnvironment(async () => {
+    process.env.HEDERA_MIRROR_MAX_MESSAGE_BYTES = "1024";
+    const oversizedMessage = Buffer.alloc(1025, 65).toString("base64");
+    globalThis.fetch = async () => new Response(JSON.stringify({ messages: [{
+      consensus_timestamp: timestamp,
+      sequence_number: 10,
+      topic_id: topicId,
+      message: oversizedMessage,
+    }] }), { status: 200, headers: { "content-type": "application/json" } });
+    const result = await verifyHcsMessage(timestamp, topicId);
+    assert.equal(result.verified, false);
+    assert.equal("errorCode" in result ? result.errorCode : null, "MIRROR_NODE_MESSAGE_TOO_LARGE");
+  });
+});
+
+test("Mirror Node verification enforces a bounded request timeout", async () => {
+  await withEnvironment(async () => {
+    process.env.HEDERA_MIRROR_TIMEOUT_MS = "1000";
+    globalThis.fetch = async (_input, init) => await new Promise<Response>((_resolve, reject) => {
+      const signal = init?.signal;
+      if (signal?.aborted) {
+        reject(new DOMException("aborted", "AbortError"));
+        return;
+      }
+      signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true });
+    });
+    const result = await verifyHcsMessage(timestamp, topicId);
+    assert.equal(result.verified, false);
+    assert.equal("errorCode" in result ? result.errorCode : null, "MIRROR_NODE_TIMEOUT");
   });
 });
