@@ -84,10 +84,14 @@ test("CSV adapter quotes delimiters and preserves provenance columns", () => {
   assert.ok(csv.includes("evidence-1"));
   assert.ok(csv.includes("sha256:abc"));
   assert.ok(csv.includes("verification-1"));
+  const formulaSafe = reportSnapshotToCsv(buildReportSnapshot({ ...base, rows: [{ ...base.rows[0]!, cells: [{ ...base.rows[0]!.cells[0]!, value: "=HYPERLINK(\"https://example.com\")" }] }] }));
+  assert.ok(formulaSafe.includes("\'=HYPERLINK"));
 });
 
 test("rejects invalid periods, duplicate rows and duplicate cell keys", () => {
   assert.throws(() => buildReportSnapshot({ ...base, periodStart: "2026-02-31" }));
+  assert.throws(() => buildReportSnapshot({ ...base, rows: [] }));
+  assert.throws(() => buildReportSnapshot({ ...base, rows: [{ ...base.rows[0]!, cells: [{ ...base.rows[0]!.cells[0]!, value: Number.POSITIVE_INFINITY }] }] }));
   assert.throws(() => buildReportSnapshot({ ...base, periodStart: "2026-11-01", periodEnd: "2026-10-01" }));
   assert.throws(() => buildReportSnapshot({ ...base, rows: [base.rows[0]!, base.rows[0]!] }));
   assert.throws(() => buildReportSnapshot({ ...base, rows: [{ ...base.rows[0]!, cells: [base.rows[0]!.cells[0]!, base.rows[0]!.cells[0]!] }] }));
