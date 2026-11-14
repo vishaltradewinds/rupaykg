@@ -16,7 +16,7 @@ function isDate(value: unknown): value is string {
     !Number.isNaN(Date.parse(value + "T00:00:00Z")) &&
     new Date(value + "T00:00:00Z").toISOString().slice(0, 10) === value;
 }
-function quality(value: string | null): ReportQuality {
+export function normalizeReportQuality(value: string | null): ReportQuality {
   const status = value?.trim().toUpperCase();
   if (status === "ESTIMATED") return "ESTIMATED";
   if (status === "DISPUTED") return "DISPUTED";
@@ -28,7 +28,7 @@ function stakeholderFromActivity(_activityType: string): ReportRow["stakeholder"
   // Activity type is not a validated stakeholder identity. Do not infer Generator/Aggregator/etc.
   return "OTHER";
 }
-function parseQuery(query: Query): { periodStart: string; periodEnd: string; context: Context; geographyId?: string } | null {
+export function parseSwmReportQuery(query: Query): { periodStart: string; periodEnd: string; context: Context; geographyId?: string } | null {
   if (!isDate(query.periodStart) || !isDate(query.periodEnd) || query.periodStart > query.periodEnd) return null;
   if (query.context !== "urban" && query.context !== "rural") return null;
   if (query.geographyId !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(query.geographyId)) return null;
@@ -60,7 +60,7 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
        order by a.occurred_at,a.id limit 501`,
       values,
     );
-    const activities = activityResult.rows;
+    const truncated = activityResult.rows.length > 500;\n    const activities = activityResult.rows.slice(0, 500);
     const activityIds = activities.map(row => row.id);
     if (!activityIds.length) {
       throw Object.assign(new Error("No source activities found for the selected tenant, period and geography context"), { code: "REPORT_NO_SOURCE_DATA" });
@@ -111,7 +111,7 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
           key: `measurement:${measurement.id}`,
           value: Number.isFinite(numericValue) ? numericValue : null,
           unit: measurement.unit,
-          quality: Number.isFinite(numericValue) ? quality(measurement.quality_status) : "MISSING" as const,
+          quality: Number.isFinite(numericValue) ? normalizeReportQuality(measurement.quality_status) : "MISSING" as const,
           sourceRecordId: activity.id,
           evidence: evidenceRefs,
           note: `Method: ${measurement.method}; source: ${measurement.source}; activity type: ${activity.activity_type}`,
@@ -156,7 +156,7 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
         ...(activities.length > 500 ? ["Preview capped at 500 activities; narrow the period or geography for a complete extract."] : []),
       ],
     });
-    return { snapshot, truncated: activities.length > 500 };
+    return { snapshot, truncated };
   });
 }
 
@@ -167,7 +167,7 @@ export async function registerReportingRoutes(app: FastifyInstance, pool: Pool |
     try { auth = await authenticate(request, pool); }
     catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication unavailable", code: "AUTH_UNAVAILABLE", syntheticData: false }); }
     if (!auth) return reply.code(401).send(bearerChallenge());
-    const params = parseQuery(request.query as Query);
+    const params = parseSwmReportQuery(request.query as Query);
     if (!params) return reply.code(400).send({ error: "Valid periodStart, periodEnd and context=urban|rural are required; geographyId must be a UUID", code: "INVALID_REPORT_QUERY", syntheticData: false });
     try {
       const data = await loadSwmReport(pool, auth, params);
