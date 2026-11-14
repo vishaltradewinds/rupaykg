@@ -89,6 +89,12 @@ test("CSV adapter quotes delimiters and preserves provenance columns", () => {
 });
 
 
+test("unavailable source revision cannot produce a review-ready report", () => {
+  const report = buildReportSnapshot({ ...base, sourceRevision: "unavailable" });
+  assert.equal(report.status, "DRAFT");
+  assert.ok(report.issues.some(issue => issue.code === "SOURCE_REVISION_UNAVAILABLE"));
+});
+
 test("unmapped stakeholder attribution cannot produce a review-ready report", () => {
   const report = buildReportSnapshot({
     ...base,
