@@ -139,12 +139,18 @@ begin
     (v_identity_a, now()+interval '5 minutes', 'shakti-rls-a:'||v_suffix),
     (v_identity_b, now()+interval '5 minutes', 'shakti-rls-b:'||v_suffix);
 
+  -- The bootstrap function is intentionally executable only by the
+  -- non-BYPASSRLS runtime role. Enter that role for the same authenticated
+  -- path used by the application; do not broaden function grants to the
+  -- DDL/operator role just to make this fixture run.
+  execute 'set local role rupaykg_app_runtime';
   select context_token into v_context_token_a
     from app.authenticate_bearer_session('shakti-rls-a:'||v_suffix)
    where organization_id=v_org_a;
   select context_token into v_context_token_b
     from app.authenticate_bearer_session('shakti-rls-b:'||v_suffix)
    where organization_id=v_org_b;
+  reset role;
 
   if v_context_token_a is null or v_context_token_b is null then
     raise exception 'RLS_NEGATIVE_TEST_FAILED: bearer bootstrap did not issue context grants';
