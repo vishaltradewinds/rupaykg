@@ -254,10 +254,21 @@
       "decision": "ADAPT",
       "rupaykgLayer": "Carbon registry interoperability",
       "evidenceRequired": [
-        "data model mapping",
-        "lifecycle tests",
-        "double-counting controls",
-        "exchange tests"
+        "pinned official CAD Trust v2 API guide and schema version",
+        "field-level RupayKg-to-CADT v2 crosswalk",
+        "schema and picklist validation fixtures",
+        "read-only connector contract and negative write-path tests",
+        "tenant isolation and data-minimisation evidence",
+        "duplicate/probable-match/false-positive reconciliation tests",
+        "upstream endpoint resilience and consumer acceptance",
+        "separate registry-participant eligibility and approval before any publishing"
+      ],
+      "implementation": "docs/CAD_TRUST_INTEROPERABILITY_PROFILE.md (architecture/discovery profile only; no runtime connector claimed)",
+      "boundaries": [
+        "CAD Trust is an external carbon-registry metadata interoperability layer, not RupayKg's physical waste/MRV system of record",
+        "read-only observer path first; no write credentials or registry publishing in initial phase",
+        "no absence-from-CAD-Trust inference; registry coverage may be incomplete",
+        "no Chia node or new production infrastructure until separately justified and approved"
       ]
     },
     {
