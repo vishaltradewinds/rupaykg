@@ -77,7 +77,8 @@ export function buildReportSnapshot(input: ReportSnapshotInput): ReportSnapshot 
   if (!Number.isFinite(Date.parse(input.generatedAt))) throw new Error("generatedAt must be a valid timestamp");
   if (!input.rows.length) throw new Error("A report must contain at least one source row");
   const rowIds = new Set<string>();
-  const issues: ReportIssue[] = [];\n  if (input.sourceRevision === "unavailable") issues.push({ code: "SOURCE_REVISION_UNAVAILABLE", rowId: "__report__", cellKey: "sourceRevision", detail: "Source code revision is unavailable; report reproducibility cannot be confirmed." });
+  const issues: ReportIssue[] = [];
+  if (input.sourceRevision === "unavailable") issues.push({ code: "SOURCE_REVISION_UNAVAILABLE", rowId: "__report__", cellKey: "sourceRevision", detail: "Source code revision is unavailable; report reproducibility cannot be confirmed." });
   const sourceRecordIds = new Set<string>();
   const evidenceHashes = new Set<string>();
   for (const row of input.rows) {
