@@ -22,6 +22,7 @@ export type ReportCell = {
 export type ReportRow = {
   id: string;
   stakeholder: "GENERATOR" | "AGGREGATOR" | "TRANSPORTER" | "RECYCLER" | "PROCESSOR" | "ULB" | "GRAM_PANCHAYAT" | "BWG" | "OTHER";
+  stakeholderAttribution?: "VERIFIED" | "UNMAPPED";
   label: string;
   cells: ReportCell[];
 };
