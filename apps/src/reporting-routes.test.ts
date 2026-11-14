@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizeReportQuality, parseSwmReportQuery } from "./reporting-routes.js";
+import { normalizeReportQuality, parseReportRunId, parseSwmReportQuery } from "./reporting-routes.js";
 
 test("SWM report query accepts explicit urban and rural periods", () => {
   assert.deepEqual(parseSwmReportQuery({ periodStart: "2026-04-01", periodEnd: "2026-04-30", context: "urban" }), {
@@ -30,4 +30,11 @@ test("unknown and absent measurement quality never upgrades to observed", () => 
   assert.equal(normalizeReportQuality("ESTIMATED"), "ESTIMATED");
   assert.equal(normalizeReportQuality("DISPUTED"), "DISPUTED");
   assert.equal(normalizeReportQuality("OBSERVED"), "OBSERVED");
+});
+
+test("saved report run IDs accept only canonical UUIDs", () => {
+  const valid = "123e4567-e89b-42d3-a456-426614174000";
+  assert.equal(parseReportRunId(valid), valid);
+  assert.equal(parseReportRunId("not-a-uuid"), null);
+  assert.equal(parseReportRunId(undefined), null);
 });

@@ -36,7 +36,7 @@ export function parseSwmReportQuery(query: Query): { periodStart: string; period
   if (query.geographyId !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(query.geographyId)) return null;
   return { periodStart: query.periodStart, periodEnd: query.periodEnd, context: query.context, ...(query.geographyId ? { geographyId: query.geographyId } : {}) };
 }
-async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<ReturnType<typeof parseSwmReportQuery>>): Promise<ReportData> {
+async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<ReturnType<typeof parseSwmReportQuery>>, generatedAt?: string): Promise<ReportData> {
   if (!auth.activeOrganizationId || !auth.memberships.some(m => m.status === "VERIFIED" && m.organization_id === auth.activeOrganizationId)) {
     throw Object.assign(new Error("Verified active organization membership is required"), { code: "REPORT_FORBIDDEN" });
   }
@@ -171,7 +171,7 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
         id: activity.id,
         stakeholder: stakeholderFromActivity(activity.activity_type),
         stakeholderAttribution: "UNMAPPED",
-        label: [activity.activity_type, activity.geography_name ?? "Unlabelled geography"].join(" — "),
+        label: [activity.activity_type, activity.geography_name ?? "Unlabelled geography"].join(" - "),
         cells,
       };
     });
@@ -181,7 +181,7 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
         id: "resource-flow:" + flow.id,
         stakeholder: "OTHER",
         stakeholderAttribution: "UNMAPPED",
-        label: "Declared material flow — " + flow.material_code,
+        label: "Declared material flow - " + flow.material_code,
         cells: [{
           key: "declared_quantity",
           value: Number.isFinite(declared) ? declared : null,
@@ -192,7 +192,6 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
         }],
       });
     }
-    if (!rows.length) {
     for (const custody of custodyResult.rows.slice(0, 500)) {
       const evidenceRefs: ReportEvidence[] = custody.evidence_id ? [{
         sourceRecordId: custody.id,
@@ -218,6 +217,7 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
         }],
       });
     }
+    if (!rows.length) {
       throw Object.assign(new Error("No source activities, material flows or custody links found for the selected tenant, period and geography context"), { code: "REPORT_NO_SOURCE_DATA" });
     }
     const sourceRevision = process.env.RENDER_GIT_COMMIT ?? process.env.GITHUB_SHA ?? "unavailable";
@@ -228,10 +228,11 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
       periodStart: params.periodStart,
       periodEnd: params.periodEnd,
       geographyMode: params.context.toUpperCase() as "URBAN" | "RURAL",
+      geographyScopeId: params.geographyId ?? null,
       methodologyCode: "SWM-2026-ACTIVITY-EVIDENCE",
       methodologyVersion: "1.0.0",
       sourceRevision,
-      generatedAt: new Date().toISOString(),
+      generatedAt: generatedAt ?? new Date().toISOString(),
       rows,
       assumptions: [
         "This is an internal reporting preview, not a CPCB filing, statutory submission, certificate or assurance opinion.",
@@ -243,6 +244,49 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
       ],
     });
     return { snapshot, truncated: truncated || flowResult.rows.length > 500 || custodyResult.rows.length > 500 };
+  });
+}
+
+export function parseReportRunId(value: unknown): string | null {
+  return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value) ? value : null;
+}
+
+type ReportRunRow = {
+  id: string;
+  report_type: string;
+  title: string;
+  period_start: string;
+  period_end: string;
+  geography_mode: string;
+  status: string;
+  snapshot_hash: string;
+  snapshot: ReportSnapshot;
+  created_at: Date | string;
+};
+
+async function requireReportRead(client: import("pg").PoolClient, auth: AuthContext): Promise<void> {
+  if (!auth.activeOrganizationId ||
+      !auth.memberships.some(m => m.status === "VERIFIED" && m.organization_id === auth.activeOrganizationId) ||
+      !await hasOrganizationPermission(client, auth, auth.activeOrganizationId, ["reports:read", "swm:read"])) {
+    throw Object.assign(new Error("SWM report read permission required"), { code: "REPORT_FORBIDDEN" });
+  }
+}
+
+async function loadSavedReportRun(pool: Pool, auth: AuthContext, runId: string): Promise<ReportRunRow | null> {
+  return withTenantTransaction(pool, auth, async client => {
+    await requireReportRead(client, auth);
+    const result = await client.query<ReportRunRow>(
+      `select id,report_type,title,period_start::text,period_end::text,geography_mode,status,
+              snapshot_hash,snapshot,created_at
+         from report_runs
+        where id=$1::uuid and organization_id=$2::uuid`,
+      [runId, auth.activeOrganizationId],
+    );
+    const row = result.rows[0] ?? null;
+    if (row && row.snapshot?.snapshotHash !== row.snapshot_hash) {
+      throw Object.assign(new Error("Stored report snapshot hash does not match its immutable record"), { code: "REPORT_SNAPSHOT_INTEGRITY" });
+    }
+    return row;
   });
 }
 
@@ -267,6 +311,126 @@ export async function registerReportingRoutes(app: FastifyInstance, pool: Pool |
       return reply.code(503).send({ error: "SWM report preview unavailable", code: "REPORT_UNAVAILABLE", syntheticData: false });
     }
   });
+  app.post("/api/v1/reports/swm-2026/runs", async (request, reply) => {
+    if (!pool) return reply.code(503).send({ error: "Reporting database unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false });
+    let auth: AuthContext | null;
+    try { auth = await authenticate(request, pool); }
+    catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication unavailable", code: "AUTH_UNAVAILABLE", syntheticData: false }); }
+    if (!auth) return reply.code(401).send(bearerChallenge());
+    const body = request.body as Query & { snapshotHash?: string; generatedAt?: string };
+    const params = parseSwmReportQuery(body ?? {});
+    if (!params || typeof body?.snapshotHash !== "string" || !/^[0-9a-f]{64}$/i.test(body.snapshotHash) || typeof body.generatedAt !== "string" || Number.isNaN(Date.parse(body.generatedAt)) || new Date(body.generatedAt).toISOString() !== body.generatedAt) {
+      return reply.code(400).send({ error: "Valid reporting period, context, generatedAt and preview snapshotHash are required", code: "INVALID_REPORT_RUN", syntheticData: false });
+    }
+    try {
+      const data = await loadSwmReport(pool, auth, params, body.generatedAt);
+      if (data.snapshot.snapshotHash !== body.snapshotHash) {
+        return reply.code(409).send({ error: "Source records changed after preview. Generate a fresh preview before saving.", code: "REPORT_PREVIEW_STALE", syntheticData: false, currentSnapshotHash: data.snapshot.snapshotHash });
+      }
+      const saved = await withTenantTransaction(pool, auth, async client => {
+        await requireReportRead(client, auth!);
+        const result = await client.query<{ id: string; created_at: Date | string }>(
+          `insert into report_runs
+            (organization_id,created_by_identity_id,report_type,title,period_start,period_end,geography_mode,
+             methodology_code,methodology_version,source_revision,generated_at,status,snapshot_hash,snapshot)
+           values ($1::uuid,$2::uuid,$3,$4,$5::date,$6::date,$7,$8,$9,$10,$11::timestamptz,$12,$13,$14::jsonb)
+           returning id,created_at`,
+          [auth!.activeOrganizationId, auth!.identityId, data.snapshot.reportType, data.snapshot.title,
+            data.snapshot.periodStart, data.snapshot.periodEnd, data.snapshot.geographyMode,
+            data.snapshot.methodologyCode, data.snapshot.methodologyVersion, data.snapshot.sourceRevision,
+            data.snapshot.generatedAt, data.snapshot.status, data.snapshot.snapshotHash, JSON.stringify(data.snapshot)],
+        );
+        return result.rows[0];
+      });
+      return reply.code(201).send({ source: "postgresql", syntheticData: false, run: { ...saved, reportType: data.snapshot.reportType, status: data.snapshot.status, snapshotHash: data.snapshot.snapshotHash } });
+    } catch (error) {
+      const code = (error as { code?: string })?.code;
+      if (code === "REPORT_FORBIDDEN") return reply.code(403).send({ error: "SWM report read permission required", code, syntheticData: false });
+      if (code === "GEOGRAPHY_FORBIDDEN") return reply.code(403).send({ error: "Geography outside organization authorization scope", code, syntheticData: false });
+      if (code === "REPORT_NO_SOURCE_DATA") return reply.code(404).send({ error: "No source activities found for the selected reporting scope", code, syntheticData: false });
+      request.log.error(error);
+      return reply.code(503).send({ error: "Unable to persist immutable report run", code: "REPORT_RUN_UNAVAILABLE", syntheticData: false });
+    }
+  });
+
+  app.get("/api/v1/reports/runs", async (request, reply) => {
+    if (!pool) return reply.code(503).send({ error: "Reporting database unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false });
+    let auth: AuthContext | null;
+    try { auth = await authenticate(request, pool); }
+    catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication unavailable", code: "AUTH_UNAVAILABLE", syntheticData: false }); }
+    if (!auth) return reply.code(401).send(bearerChallenge());
+    const query = request.query as { limit?: string; reportType?: string };
+    const parsedLimit = Number(query?.limit ?? 20);
+    const limit = Number.isInteger(parsedLimit) ? Math.min(50, Math.max(1, parsedLimit)) : 20;
+    try {
+      const runs = await withTenantTransaction(pool, auth, async client => {
+        await requireReportRead(client, auth!);
+        const result = await client.query(
+          `select id,report_type as "reportType",title,period_start::text as "periodStart",
+                  period_end::text as "periodEnd",geography_mode as "geographyMode",status,
+                  snapshot_hash as "snapshotHash",created_at as "createdAt"
+             from report_runs
+            where organization_id=$1::uuid and ($2::text is null or report_type=$2)
+            order by created_at desc,id desc limit $3`,
+          [auth!.activeOrganizationId, query?.reportType?.trim() || null, limit],
+        );
+        return result.rows;
+      });
+      return { source: "postgresql", syntheticData: false, runs };
+    } catch (error) {
+      const code = (error as { code?: string })?.code;
+      if (code === "REPORT_FORBIDDEN") return reply.code(403).send({ error: "SWM report read permission required", code, syntheticData: false });
+      request.log.error(error);
+      return reply.code(503).send({ error: "Report history unavailable", code: "REPORT_HISTORY_UNAVAILABLE", syntheticData: false });
+    }
+  });
+
+  app.get("/api/v1/reports/runs/:runId.csv", async (request, reply) => {
+    if (!pool) return reply.code(503).send({ error: "Reporting database unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false });
+    let auth: AuthContext | null;
+    try { auth = await authenticate(request, pool); }
+    catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication unavailable", code: "AUTH_UNAVAILABLE", syntheticData: false }); }
+    if (!auth) return reply.code(401).send(bearerChallenge());
+    const runId = parseReportRunId((request.params as { runId?: string }).runId);
+    if (!runId) return reply.code(400).send({ error: "A valid report run UUID is required", code: "INVALID_REPORT_RUN_ID", syntheticData: false });
+    try {
+      const run = await loadSavedReportRun(pool, auth, runId);
+      if (!run) return reply.code(404).send({ error: "Report run not found", code: "REPORT_RUN_NOT_FOUND", syntheticData: false });
+      reply.header("content-type", "text/csv; charset=utf-8");
+      reply.header("content-disposition", `attachment; filename="rupaykg-report-${run.id}.csv"`);
+      reply.header("x-rupaykg-report-status", run.status);
+      reply.header("x-rupaykg-report-hash", run.snapshot_hash);
+      return reportSnapshotToCsv(run.snapshot);
+    } catch (error) {
+      const code = (error as { code?: string })?.code;
+      if (code === "REPORT_FORBIDDEN") return reply.code(403).send({ error: "SWM report read permission required", code, syntheticData: false });
+      if (code === "REPORT_SNAPSHOT_INTEGRITY") return reply.code(409).send({ error: "Stored report snapshot integrity check failed", code, syntheticData: false });
+      request.log.error(error);
+      return reply.code(503).send({ error: "Saved report export unavailable", code: "REPORT_EXPORT_UNAVAILABLE", syntheticData: false });
+    }
+  });
+
+  app.get("/api/v1/reports/runs/:runId", async (request, reply) => {
+    if (!pool) return reply.code(503).send({ error: "Reporting database unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false });
+    let auth: AuthContext | null;
+    try { auth = await authenticate(request, pool); }
+    catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication unavailable", code: "AUTH_UNAVAILABLE", syntheticData: false }); }
+    if (!auth) return reply.code(401).send(bearerChallenge());
+    const runId = parseReportRunId((request.params as { runId?: string }).runId);
+    if (!runId) return reply.code(400).send({ error: "A valid report run UUID is required", code: "INVALID_REPORT_RUN_ID", syntheticData: false });
+    try {
+      const run = await loadSavedReportRun(pool, auth, runId);
+      if (!run) return reply.code(404).send({ error: "Report run not found", code: "REPORT_RUN_NOT_FOUND", syntheticData: false });
+      return { source: "postgresql", syntheticData: false, run };
+    } catch (error) {
+      const code = (error as { code?: string })?.code;
+      if (code === "REPORT_FORBIDDEN") return reply.code(403).send({ error: "SWM report read permission required", code, syntheticData: false });
+      if (code === "REPORT_SNAPSHOT_INTEGRITY") return reply.code(409).send({ error: "Stored report snapshot integrity check failed", code, syntheticData: false });
+      request.log.error(error);
+      return reply.code(503).send({ error: "Saved report unavailable", code: "REPORT_RUN_UNAVAILABLE", syntheticData: false });
+    }
+  });
+
   app.get("/api/v1/reports/swm-2026/preview.csv", async (request, reply) => {
     if (!pool) return reply.code(503).send({ error: "Reporting database unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false });
     let auth: AuthContext | null;

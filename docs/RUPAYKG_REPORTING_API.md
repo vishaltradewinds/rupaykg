@@ -65,9 +65,17 @@ Declared `resource_flows.declared_quantity` values remain explicitly `DECLARED`;
 
 Every snapshot includes a schema version, report type, organization, reporting period, Urban/Rural mode, internal methodology version, source revision, generation timestamp, source record IDs, evidence hashes, data-quality issues, assumptions, and a deterministic SHA-256 snapshot hash. CSV preserves the corresponding row, field, unit, quality, source, evidence, verification, and stakeholder-attribution fields. CSV text fields are escaped against spreadsheet formula injection.
 
+## Immutable report-run history
+
+- POST /api/v1/reports/swm-2026/runs persists a report snapshot only when the caller supplies the exact preview hash and generation timestamp. The server rebuilds the snapshot in the same tenant scope and returns 409 REPORT_PREVIEW_STALE if source data changed.
+- GET /api/v1/reports/runs?reportType=CPCB_SWMP_2026&limit=20 lists the active organization's recent saved runs.
+- GET /api/v1/reports/runs/:runId retrieves the immutable stored snapshot.
+- GET /api/v1/reports/runs/:runId.csv exports the stored snapshot rather than recalculating current source data.
+- Migration 108_reporting_run_history.sql creates report_runs with forced RLS, organization/creator checks, and runtime SELECT/INSERT privileges only. The runtime role has no update/delete grant, making saved snapshots append-only through the application.
+- Custody-link read policy now allows the verified owner of a resource flow to read its attached custody sequence while preserving the actor-organization policy.
+
 ## Not yet included
 
-- Persisted report-run history and immutable export retrieval by report ID
 - PDF and XLSX adapters
 - authoritative Generator â†’ Aggregator â†’ Transporter â†’ Recycler relationship resolution and mass-balance reconciliation
 - EPR and BRSR adapters

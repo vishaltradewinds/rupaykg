@@ -33,6 +33,7 @@ export type ReportSnapshotInput = {
   periodStart: string;
   periodEnd: string;
   geographyMode: "URBAN" | "RURAL" | "CROSS_CONTEXT";
+  geographyScopeId?: string | null;
   methodologyCode: string;
   methodologyVersion: string;
   sourceRevision: string;
