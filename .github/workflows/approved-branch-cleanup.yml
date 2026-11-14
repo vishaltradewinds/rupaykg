@@ -44,4 +44,5 @@ jobs:
           INPUT_EXPECTED_SHA: ${{ inputs.expected_sha }}
           INPUT_CONFIRMATION: ${{ inputs.confirmation }}
           GH_API_URL: ${{ github.api_url }}
+          BRANCH_MAINTENANCE_ENABLED: ${{ vars.BRANCH_MAINTENANCE_ENABLED }}
         run: node ops/github/approved-branch-cleanup.mjs
