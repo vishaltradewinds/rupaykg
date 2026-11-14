@@ -88,6 +88,17 @@ test("CSV adapter quotes delimiters and preserves provenance columns", () => {
   assert.ok(formulaSafe.includes("\'=HYPERLINK"));
 });
 
+
+test("declared material quantities remain drafts until independently evidenced", () => {
+  const report = buildReportSnapshot({
+    ...base,
+    rows: [{ ...base.rows[0]!, cells: [{ ...base.rows[0]!.cells[0]!, quality: "DECLARED", evidence: [] }] }],
+  });
+  assert.equal(report.status, "DRAFT");
+  assert.ok(report.issues.some(issue => issue.code === "DECLARED_VALUE"));
+  assert.ok(report.issues.some(issue => issue.code === "MISSING_EVIDENCE"));
+});
+
 test("rejects invalid periods, duplicate rows and duplicate cell keys", () => {
   assert.throws(() => buildReportSnapshot({ ...base, periodStart: "2026-02-31" }));
   assert.throws(() => buildReportSnapshot({ ...base, rows: [] }));
