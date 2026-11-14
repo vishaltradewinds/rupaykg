@@ -32,6 +32,8 @@ Observer flow: CAD Trust public data → read-only client → schema validation 
 
 Any future publisher flow is separate and requires a new approval decision.
 
+The field-level reconciliation against the inspected RupayKg Neon schema is recorded in [CAD Trust v2 Field Crosswalk](CAD_TRUST_V2_FIELD_CROSSWALK.md). The upstream schema was pinned to commit `45639f36fcedc73a6545e6bb6952b001fa7bf550`; the RupayKg assessment used an isolated Neon acceptance branch, not production.
+
 ## 4. Data-model crosswalk
 
 The CAD Trust v2 repository identifies a machine-readable schema (`cadtrust-schema-v2.0.2.json`), field metadata, picklists, parent-before-child insert order and a staging/commit workflow. This is a **conceptual crosswalk**, not a claim of an existing one-to-one schema match.
