@@ -126,6 +126,9 @@ try {
       await client.query(`grant usage on schema app, public to ${securityDefinerRole}`);
       await client.query(`grant create on schema app to ${securityDefinerRole}`);
       await client.query("grant select on public.geography, public.methodology_versions to rupaykg_app_runtime");
+      // Migration 108 evaluates policies that reference geography while running as the DDL role.
+      // Grant only for this atomic migration transaction; revoke before commit.
+      await client.query(`grant select on public.geography to ${ddlRole}`);
 
       // The organization-owned domain tables were introduced after the
       // original migration-100 ownership split. Transfer them to the controlled
@@ -159,6 +162,7 @@ try {
       }
 
       await client.query("reset role");
+      await client.query(`revoke select on public.geography from ${ddlRole}`);
       await client.query(`revoke ${securityDefinerRole} from ${ddlRole}`);
       await client.query(`alter role ${ddlRole} noinherit`);
       await client.query(`revoke create on schema app from ${securityDefinerRole}`);
