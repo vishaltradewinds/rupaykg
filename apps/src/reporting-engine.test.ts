@@ -89,6 +89,15 @@ test("CSV adapter quotes delimiters and preserves provenance columns", () => {
 });
 
 
+test("verified evidence status without a verification record reference stays a draft", () => {
+  const report = buildReportSnapshot({
+    ...base,
+    rows: [{ ...base.rows[0]!, cells: [{ ...base.rows[0]!.cells[0]!, evidence: [{ sourceRecordId: "activity-1", evidenceId: "evidence-1", evidenceHash: "sha256:abc", verificationStatus: "VERIFIED" }] }] }],
+  });
+  assert.equal(report.status, "DRAFT");
+  assert.ok(report.issues.some(issue => issue.code === "MISSING_VERIFICATION_REFERENCE"));
+});
+
 test("unavailable source revision cannot produce a review-ready report", () => {
   const report = buildReportSnapshot({ ...base, sourceRevision: "unavailable" });
   assert.equal(report.status, "DRAFT");
