@@ -229,6 +229,53 @@ group by owner_role.oid, owner_role.rolcanlogin, owner_role.rolsuper,
          owner_role.rolinherit, owner_role.rolbypassrls, owner_role.rolcreatedb,
          owner_role.rolcreaterole, owner_role.rolreplication;
 
+-- Emit exact ownership coverage before the hard assertion so CI failures
+-- identify missing or unexpectedly owned functions instead of only dividing by zero.
+select expected.function_name,
+       coalesce(owner_role.rolname, '<missing-owner-role>') as isolated_owner_role,
+       coalesce(p.proowner = owner_role.oid, false) as owned_by_isolated_role
+  from unnest(array[
+    'set_request_context',
+    'is_verified_org_member',
+    'authenticate_bearer_session',
+    'current_identity_id',
+    'current_organization_id',
+    'current_credential_owner_id',
+    'organization_has_verified_members',
+    'is_verified_organization',
+    'activity_belongs_to_organization',
+    'activity_has_verified_geography_scope',
+    'credential_has_verified_mrv_provenance',
+    'credential_is_acceptance_fixture'
+  ]) as expected(function_name)
+  left join pg_roles owner_role on owner_role.rolname = 'rupaykg_security_definer'
+  left join pg_proc p
+    on p.pronamespace = 'app'::regnamespace
+   and p.proname = expected.function_name
+   and p.prosecdef
+   and p.proowner = owner_role.oid
+ order by expected.function_name;
+
+select count(*) as legacy_security_definer_functions_owned
+  from pg_proc p
+  join pg_roles owner_role on owner_role.rolname = 'rupaykg_security_definer'
+ where p.pronamespace = 'app'::regnamespace
+   and p.prosecdef
+   and p.proname = any(array[
+     'set_request_context',
+     'is_verified_org_member',
+     'authenticate_bearer_session',
+     'current_identity_id',
+     'current_organization_id',
+     'current_credential_owner_id',
+     'organization_has_verified_members',
+     'is_verified_organization',
+     'activity_belongs_to_organization',
+     'activity_has_verified_geography_scope',
+     'credential_has_verified_mrv_provenance',
+     'credential_is_acceptance_fixture'
+   ]);
+
 select 1 / case
   when exists (
     select 1
