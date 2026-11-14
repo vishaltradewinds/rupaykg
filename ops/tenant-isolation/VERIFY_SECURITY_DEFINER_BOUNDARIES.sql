@@ -16,7 +16,11 @@ with expected(function_name, identity_args) as (
     ('app.activity_belongs_to_organization', 'target_activity_id uuid, target_organization_id uuid'),
     ('app.activity_has_verified_geography_scope', 'target_activity_id uuid, target_organization_id uuid'),
     ('app.credential_has_verified_mrv_provenance', 'target_activity_id uuid, target_verification_id uuid'),
-    ('app.credential_is_acceptance_fixture', 'target_activity_id uuid, target_verification_id uuid')
+    ('app.credential_is_acceptance_fixture', 'target_activity_id uuid, target_verification_id uuid'),
+    ('app.review_authority_allowed', 'p_identity_id uuid, p_approval_level text, p_geography_id uuid, p_geography_kind geography_kind'),
+    ('app.onboarding_review_queue', 'p_identity_id uuid'),
+    ('app.onboarding_verify_legal', 'p_identity_id uuid, p_application_id uuid, p_status text, p_note text'),
+    ('app.onboarding_decide', 'p_identity_id uuid, p_application_id uuid, p_action text, p_note text')
 ),
 actual as (
   select
