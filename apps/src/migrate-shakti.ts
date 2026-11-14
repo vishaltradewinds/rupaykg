@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 
 // This runner is deliberately separate from application startup. It requires
+// Date-prefixed controlled migrations stay outside the numeric baseline validator.
 // the database-owner migration connection and applies Shakti migrations 101-20261114
 // as one atomic transaction so the application never sees a partial RLS state.
 const databaseUrl = process.env.MIGRATION_DATABASE_URL;
