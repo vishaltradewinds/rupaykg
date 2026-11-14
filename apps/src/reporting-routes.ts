@@ -27,6 +27,15 @@ export function normalizeReportQuality(value: string | null): ReportQuality {
   if (["OBSERVED", "MEASURED", "ACCEPTED", "VERIFIED"].includes(status)) return "OBSERVED";
   return "MISSING";
 }
+export function exactNumericText(value: unknown): string | null {
+  const text = typeof value === "string"
+    ? value.trim()
+    : typeof value === "number" && Number.isFinite(value)
+      ? String(value)
+      : "";
+  if (!text || !/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(text) || !Number.isFinite(Number(text))) return null;
+  return text;
+}
 export function stakeholderFromVerifiedRole(roleName: string | null, roleCount: number): {
   stakeholder: ReportRow["stakeholder"];
   attribution: "VERIFIED" | "UNMAPPED";
@@ -182,12 +191,12 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
           verificationId: item.verification_id,
           verificationStatus: item.verification_decision ?? (item.status === "VERIFIED" ? "VERIFIED" : item.status),
         }));
-        const numericValue = Number(measurement.value);
+        const numericValue = exactNumericText(measurement.value);
         return {
           key: `measurement:${measurement.id}`,
-          value: Number.isFinite(numericValue) ? numericValue : null,
+          value: numericValue,
           unit: measurement.unit,
-          quality: Number.isFinite(numericValue) ? normalizeReportQuality(measurement.quality_status) : "MISSING" as const,
+          quality: numericValue !== null ? normalizeReportQuality(measurement.quality_status) : "MISSING" as const,
           sourceRecordId: activity.id,
           evidence: evidenceRefs,
           note: "Method: " + measurement.method + "; source: " + measurement.source + "; activity type: " + activity.activity_type + "; activity status: " + activity.status + "; verified actor role: " + (activity.actor_role_name ?? "unmapped"),
@@ -215,7 +224,7 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
       };
     });
     for (const flow of flowResult.rows.slice(0, 500)) {
-      const declared = Number(flow.declared_quantity);
+      const declared = exactNumericText(flow.declared_quantity);
       rows.push({
         id: "resource-flow:" + flow.id,
         stakeholder: "OTHER",
@@ -223,9 +232,9 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
         label: "Declared material flow - " + flow.material_code,
         cells: [{
           key: "declared_quantity",
-          value: Number.isFinite(declared) ? declared : null,
+          value: declared,
           unit: flow.unit,
-          quality: Number.isFinite(declared) ? "DECLARED" : "MISSING",
+          quality: declared !== null ? "DECLARED" : "MISSING",
           sourceRecordId: flow.id,
           note: "Origin type: " + flow.origin_type + "; resource form: " + flow.resource_form + "; status: " + flow.status + "; source: " + (flow.source_geography_name ?? "not recorded") + "; destination: " + (flow.destination_geography_name ?? "not recorded"),
         }],
@@ -239,7 +248,7 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
         verificationId: custody.verification_id,
         verificationStatus: custody.verification_decision ?? (custody.evidence_status === "VERIFIED" ? "VERIFIED" : custody.evidence_status ?? "NOT_REPORTED"),
       }] : [];
-      const quantity = Number(custody.quantity);
+      const quantity = exactNumericText(custody.quantity);
       rows.push({
         id: "custody:" + custody.id,
         stakeholder: "OTHER",
@@ -247,9 +256,9 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
         label: "Chain-of-custody sequence " + custody.sequence_no,
         cells: [{
           key: "custody_quantity",
-          value: Number.isFinite(quantity) ? quantity : null,
+          value: quantity,
           unit: custody.unit,
-          quality: Number.isFinite(quantity) ? "DECLARED" : "MISSING",
+          quality: quantity !== null ? "DECLARED" : "MISSING",
           sourceRecordId: custody.id,
           evidence: evidenceRefs,
           note: "Resource flow: " + custody.resource_flow_id + "; actor organization: " + (custody.actor_organization_id ?? "not recorded") + "; activity: " + (custody.activity_id ?? "not recorded") + "; from: " + (custody.from_geography_name ?? "not recorded") + "; to: " + (custody.to_geography_name ?? "not recorded") + "; recorded: " + new Date(custody.recorded_at).toISOString(),
