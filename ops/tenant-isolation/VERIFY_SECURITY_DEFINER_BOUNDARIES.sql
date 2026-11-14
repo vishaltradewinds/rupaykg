@@ -319,9 +319,31 @@ select 1 / case
        and not has_any_column_privilege(owner_role.oid, 'public.identity_sessions', 'INSERT')
        and not has_any_column_privilege(owner_role.oid, 'public.identity_sessions', 'UPDATE')
        and not has_any_column_privilege(owner_role.oid, 'public.organization_memberships', 'INSERT')
-       and not has_any_column_privilege(owner_role.oid, 'public.organization_memberships', 'UPDATE')
+       and not has_table_privilege(owner_role.oid, 'public.organization_memberships', 'UPDATE')
+       and has_column_privilege(owner_role.oid, 'public.organization_memberships', 'status', 'UPDATE')
        and not has_any_column_privilege(owner_role.oid, 'public.organizations', 'INSERT')
-       and not has_any_column_privilege(owner_role.oid, 'public.organizations', 'UPDATE')
+       and not has_table_privilege(owner_role.oid, 'public.organizations', 'UPDATE')
+       and has_column_privilege(owner_role.oid, 'public.organizations', 'status', 'UPDATE')
+       and has_column_privilege(owner_role.oid, 'public.organizations', 'verification_status', 'UPDATE')
+       and has_column_privilege(owner_role.oid, 'public.organizations', 'verification_note', 'UPDATE')
+       and has_column_privilege(owner_role.oid, 'public.organizations', 'verified_by_identity_id', 'UPDATE')
+       and has_column_privilege(owner_role.oid, 'public.organizations', 'verified_at', 'UPDATE')
+       and not exists (
+         select 1
+           from information_schema.columns column_row
+          where (column_row.table_schema, column_row.table_name) in (
+            ('public','organization_memberships'), ('public','organizations')
+          )
+            and not (
+              (column_row.table_name = 'organization_memberships' and column_row.column_name = 'status')
+              or (column_row.table_name = 'organizations' and column_row.column_name = any(array[
+                'status','verification_status','verification_note','verified_by_identity_id','verified_at'
+              ]))
+            )
+            and has_column_privilege(owner_role.oid,
+              format('%I.%I', column_row.table_schema, column_row.table_name),
+              column_row.column_name, 'UPDATE')
+       )
        and not has_any_column_privilege(owner_role.oid, 'app.request_context_grants', 'UPDATE')
        and has_column_privilege(owner_role.oid, 'public.identities', 'id', 'SELECT')
        and has_column_privilege(owner_role.oid, 'public.identities', 'status', 'SELECT')
