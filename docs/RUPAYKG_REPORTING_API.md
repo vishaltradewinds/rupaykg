@@ -57,6 +57,8 @@ The preview is capped at 500 activities, 500 declared material flows, and 500 cu
 - `DRAFT`: declared or estimated values, missing evidence, missing verification references, unverified evidence, unmapped stakeholder attribution, or unavailable source revision remain unresolved.
 - `READY_FOR_REVIEW`: required source, evidence, verification and stakeholder attribution checks pass. This means internal review-ready only; it is not an external approval or assurance result.
 
+Activity stakeholder attribution is resolved only when the activity actor has exactly one recognized stakeholder role through a VERIFIED organization membership and the organization-local role record. Canonical role names map to Generator, Aggregator, Transporter, Recycler, Processor, BWG, ULB, or Gram Panchayat. Multiple or unknown roles remain OTHER/UNMAPPED. Custody links currently identify actor_organization_id but not actor_identity_id, so custody stakeholder attribution remains UNMAPPED until the source schema can establish the acting identity or another authoritative role binding.
+
 Evidence is not considered verified solely because a client supplies a status. The snapshot requires evidence ID, content hash, verification record ID, and an accepted verification decision/status. Unknown stakeholder roles remain `OTHER`/`UNMAPPED`; the report does not infer Generator, Aggregator, Transporter, Recycler, or Processor identity from free-text activity types or an actor organization ID alone.
 
 Declared `resource_flows.declared_quantity` values remain explicitly `DECLARED`; they are not represented as independently measured quantities. The methodology code/version in this increment identifies an internal reporting template, not an official CPCB-approved calculation methodology.
@@ -72,6 +74,7 @@ Every snapshot includes a schema version, report type, organization, reporting p
 - GET /api/v1/reports/runs/:runId retrieves the immutable stored snapshot.
 - GET /api/v1/reports/runs/:runId.csv exports the stored snapshot rather than recalculating current source data.
 - Migration 108_reporting_run_history.sql creates report_runs with forced RLS, organization/creator checks, and runtime SELECT/INSERT privileges only. The runtime role has no update/delete grant, making saved snapshots append-only through the application.
+- Migration 109_circular_stakeholder_role_defaults.sql adds least-privilege report/evidence permissions for recycler, transporter, collector_transporter, generator, BWG, ULB and Gram Panchayat onboarding roles. It is a baseline function migration, not a tenant-table/RLS migration.
 - Custody-link read policy now allows the verified owner of a resource flow to read its attached custody sequence while preserving the actor-organization policy.
 
 ## Not yet included

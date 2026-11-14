@@ -6,7 +6,7 @@ import { buildReportSnapshot, reportSnapshotToCsv, type ReportEvidence, type Rep
 
 type Context = "urban" | "rural";
 type Query = { periodStart?: string; periodEnd?: string; context?: string; geographyId?: string };
-type ActivityRow = { id: string; activity_type: string; status: string; occurred_at: Date | string; geography_id: string | null; geography_name: string | null; geography_kind: string | null };
+type ActivityRow = { id: string; activity_type: string; status: string; occurred_at: Date | string; geography_id: string | null; geography_name: string | null; geography_kind: string | null; actor_role_name: string | null; actor_role_count: number };
 type MeasurementRow = { id: string; activity_id: string; value: string | number; unit: string; method: string; source: string; measured_at: Date | string; quality_status: string | null };
 type EvidenceRow = { id: string; activity_id: string; measurement_id: string | null; content_hash: string | null; status: string; verification_id: string | null; verification_decision: string | null };
 type FlowRow = { id: string; origin_type: string; resource_form: string; material_code: string; declared_quantity: string | number; unit: string; status: string; source_geography_name: string | null; destination_geography_name: string | null };
@@ -26,9 +26,32 @@ export function normalizeReportQuality(value: string | null): ReportQuality {
   if (["OBSERVED", "MEASURED", "ACCEPTED", "VERIFIED"].includes(status)) return "OBSERVED";
   return "MISSING";
 }
-function stakeholderFromActivity(_activityType: string): ReportRow["stakeholder"] {
-  // Activity type is not a validated stakeholder identity. Do not infer Generator/Aggregator/etc.
-  return "OTHER";
+export function stakeholderFromVerifiedRole(roleName: string | null, roleCount: number): {
+  stakeholder: ReportRow["stakeholder"];
+  attribution: "VERIFIED" | "UNMAPPED";
+} {
+  const role = roleName?.trim().toLowerCase();
+  if (!role || roleCount !== 1) return { stakeholder: "OTHER", attribution: "UNMAPPED" };
+  const roleMap: Record<string, ReportRow["stakeholder"]> = {
+    aggregator: "AGGREGATOR",
+    processor: "PROCESSOR",
+    recycler: "RECYCLER",
+    transporter: "TRANSPORTER",
+    collector_transporter: "TRANSPORTER",
+    generator: "GENERATOR",
+    municipal_generator: "GENERATOR",
+    industry_generator: "GENERATOR",
+    commercial_generator: "GENERATOR",
+    institution_generator: "GENERATOR",
+    bwg: "BWG",
+    bulk_waste_generator: "BWG",
+    municipal_admin: "ULB",
+    ulb_admin: "ULB",
+    gram_panchayat_admin: "GRAM_PANCHAYAT",
+    panchayat_admin: "GRAM_PANCHAYAT",
+  };
+  const stakeholder = roleMap[role];
+  return stakeholder ? { stakeholder, attribution: "VERIFIED" } : { stakeholder: "OTHER", attribution: "UNMAPPED" };
 }
 export function parseSwmReportQuery(query: Query): { periodStart: string; periodEnd: string; context: Context; geographyId?: string } | null {
   if (!isDate(query.periodStart) || !isDate(query.periodEnd) || query.periodStart > query.periodEnd) return null;
@@ -57,8 +80,27 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
     const geographyClause = params.geographyId ? " and a.geography_id=$5::uuid" : "";
     if (params.geographyId) values.push(params.geographyId);
     const activityResult = await client.query<ActivityRow>(
-      `select a.id,a.activity_type,a.status,a.occurred_at,a.geography_id,g.name as geography_name,g.kind::text as geography_kind
-       from activities a left join geography g on g.id=a.geography_id
+      `select a.id,a.activity_type,a.status,a.occurred_at,a.geography_id,g.name as geography_name,g.kind::text as geography_kind,
+              actor_role.role_name as actor_role_name,coalesce(actor_role.role_count,0)::int as actor_role_count
+       from activities a
+       left join geography g on g.id=a.geography_id
+       left join lateral (
+         select min(lower(r.name)) filter (where lower(r.name) in (
+                  'aggregator','processor','recycler','transporter','collector_transporter','generator',
+                  'municipal_generator','industry_generator','commercial_generator','institution_generator',
+                  'bwg','bulk_waste_generator','municipal_admin','ulb_admin','gram_panchayat_admin','panchayat_admin'
+                )) as role_name,
+                count(distinct lower(r.name)) filter (where lower(r.name) in (
+                  'aggregator','processor','recycler','transporter','collector_transporter','generator',
+                  'municipal_generator','industry_generator','commercial_generator','institution_generator',
+                  'bwg','bulk_waste_generator','municipal_admin','ulb_admin','gram_panchayat_admin','panchayat_admin'
+                ))::int as role_count
+           from organization_memberships om
+           join roles r on r.id=om.role_id and r.organization_id=om.organization_id
+          where om.identity_id=a.actor_identity_id
+            and om.organization_id=a.organization_id
+            and om.status='VERIFIED'
+       ) actor_role on true
        where a.organization_id=$1::uuid and a.occurred_at >= $2::date and a.occurred_at < ($3::date + interval '1 day')
        and organization_has_geography_scope(a.organization_id,a.geography_id)
        and exists(select 1 from geography context_geo where context_geo.id=a.geography_id and context_geo.kind::text=any($4::text[]))
@@ -135,6 +177,7 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
     const rows: ReportRow[] = activities.map(activity => {
       const measurements = measurementsByActivity.get(activity.id) ?? [];
       const evidence = evidenceByActivity.get(activity.id) ?? [];
+      const stakeholder = stakeholderFromVerifiedRole(activity.actor_role_name, activity.actor_role_count);
       const cells = measurements.length ? measurements.map(measurement => {
         const related = evidence.filter(item => item.measurement_id === measurement.id || item.measurement_id === null);
         const evidenceRefs: ReportEvidence[] = related.map(item => ({
@@ -152,7 +195,7 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
           quality: Number.isFinite(numericValue) ? normalizeReportQuality(measurement.quality_status) : "MISSING" as const,
           sourceRecordId: activity.id,
           evidence: evidenceRefs,
-          note: `Method: ${measurement.method}; source: ${measurement.source}; activity type: ${activity.activity_type}`,
+          note: "Method: " + measurement.method + "; source: " + measurement.source + "; activity type: " + activity.activity_type + "; verified actor role: " + (activity.actor_role_name ?? "unmapped"),
         };
       }) : [{
         key: "measurement:missing",
@@ -165,12 +208,12 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
           verificationId: item.verification_id,
           verificationStatus: item.verification_decision ?? (item.status === "VERIFIED" ? "VERIFIED" : item.status),
         })),
-        note: `No measurement recorded; activity type: ${activity.activity_type}`,
+        note: "No measurement recorded; activity type: " + activity.activity_type + "; verified actor role: " + (activity.actor_role_name ?? "unmapped"),
       }];
       return {
         id: activity.id,
-        stakeholder: stakeholderFromActivity(activity.activity_type),
-        stakeholderAttribution: "UNMAPPED",
+        stakeholder: stakeholder.stakeholder,
+        stakeholderAttribution: stakeholder.attribution,
         label: [activity.activity_type, activity.geography_name ?? "Unlabelled geography"].join(" - "),
         cells,
       };
@@ -238,7 +281,8 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
         "This is an internal reporting preview, not a CPCB filing, statutory submission, certificate or assurance opinion.",
         "The methodology code and version identify this internal reporting template; they are not an official CPCB-approved calculation methodology.",
         ...(sourceRevision === "unavailable" ? ["Source code revision was unavailable at generation time; the report is not review-ready."] : []),
-        "Activity and custody records are not assigned Generator/Aggregator/Transporter/Recycler roles without an authoritative role relationship; stakeholder attribution remains OTHER/UNMAPPED.",
+        "Activity stakeholder categories are resolved only from exactly one recognized role attached to the activity actor through a VERIFIED organization membership; ambiguous and unknown roles remain OTHER/UNMAPPED.",
+        "Custody-link actor organization references do not identify the acting identity, so custody stakeholder attribution remains OTHER/UNMAPPED.",
         "Only active-organization activities, measurements, linked evidence, declared material flows and recorded custody links are included; declared quantities remain separately identified.",
         ...(activities.length > 500 || flowResult.rows.length > 500 || custodyResult.rows.length > 500 ? ["Preview capped at 500 activities, 500 declared material flows and 500 custody links; narrow the period or geography for a complete extract."] : []),
       ],

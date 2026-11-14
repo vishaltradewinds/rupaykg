@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizeReportQuality, parseReportRunId, parseSwmReportQuery } from "./reporting-routes.js";
+import { normalizeReportQuality, parseReportRunId, parseSwmReportQuery, stakeholderFromVerifiedRole } from "./reporting-routes.js";
 
 test("SWM report query accepts explicit urban and rural periods", () => {
   assert.deepEqual(parseSwmReportQuery({ periodStart: "2026-04-01", periodEnd: "2026-04-30", context: "urban" }), {
@@ -37,4 +37,17 @@ test("saved report run IDs accept only canonical UUIDs", () => {
   assert.equal(parseReportRunId(valid), valid);
   assert.equal(parseReportRunId("not-a-uuid"), null);
   assert.equal(parseReportRunId(undefined), null);
+});
+test("stakeholder attribution requires exactly one verified canonical role", () => {
+  assert.deepEqual(stakeholderFromVerifiedRole("aggregator", 1), { stakeholder: "AGGREGATOR", attribution: "VERIFIED" });
+  assert.deepEqual(stakeholderFromVerifiedRole("industry_generator", 1), { stakeholder: "GENERATOR", attribution: "VERIFIED" });
+  assert.deepEqual(stakeholderFromVerifiedRole("collector_transporter", 1), { stakeholder: "TRANSPORTER", attribution: "VERIFIED" });
+  assert.deepEqual(stakeholderFromVerifiedRole("recycler", 1), { stakeholder: "RECYCLER", attribution: "VERIFIED" });
+  assert.deepEqual(stakeholderFromVerifiedRole("processor", 1), { stakeholder: "PROCESSOR", attribution: "VERIFIED" });
+  assert.deepEqual(stakeholderFromVerifiedRole("bwg", 1), { stakeholder: "BWG", attribution: "VERIFIED" });
+  assert.deepEqual(stakeholderFromVerifiedRole("municipal_admin", 1), { stakeholder: "ULB", attribution: "VERIFIED" });
+  assert.deepEqual(stakeholderFromVerifiedRole("gram_panchayat_admin", 1), { stakeholder: "GRAM_PANCHAYAT", attribution: "VERIFIED" });
+  assert.deepEqual(stakeholderFromVerifiedRole("aggregator", 2), { stakeholder: "OTHER", attribution: "UNMAPPED" });
+  assert.deepEqual(stakeholderFromVerifiedRole("custom_role", 1), { stakeholder: "OTHER", attribution: "UNMAPPED" });
+  assert.deepEqual(stakeholderFromVerifiedRole(null, 0), { stakeholder: "OTHER", attribution: "UNMAPPED" });
 });

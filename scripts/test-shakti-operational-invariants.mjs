@@ -33,6 +33,7 @@ for (const [filename, pattern] of protectedMigrationPatterns) {
 }
 if (!/108_reporting_run_history\.sql/.test(migrationRunner) || !/108_reporting_run_history\.sql/.test(shaktiMigrationRunner)) failures.push("Migration invariant missing: report-run RLS migration must use the controlled Shakti DDL handoff.");
 if (!/const pending = versions\.filter/.test(shaktiMigrationRunner) || !/versions\.slice\(firstPendingIndex\)\.some/.test(shaktiMigrationRunner)) failures.push("Migration invariant missing: controlled Shakti runner must apply a contiguous pending suffix without rejecting already-applied earlier migrations.");
+if (/109_circular_stakeholder_role_defaults\.sql/.test(shaktiMigrationRunner) || /109_circular_stakeholder_role_defaults\.sql/.test(migrationRunner.match(/const controlledTenantMigrations[\s\S]*?\]\);/)?.[0] ?? "")) failures.push("Migration invariant missing: role-default function migration 109 must remain on the baseline migration path, not the controlled tenant-table DDL path.");
 
 const requiredMigrationInvariants = [
   ["explicit protected gate", /RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS/],
