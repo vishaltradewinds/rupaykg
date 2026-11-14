@@ -43,6 +43,7 @@ try {
     "106_credential_lifecycle_verification_boundary.sql",
     "107_shakti_tenant_direct_domain_activation.sql",
     "108_shakti_tenant_organization_domain_activation.sql",
+    "20261114_shakti_platform_review_boundary.sql",
   ]);
   const baselineFiles = files.filter((name) => !controlledTenantMigrations.has(name));
 
