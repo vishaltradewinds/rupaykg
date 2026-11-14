@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import Fastify from "fastify";
-import { registerEmailRecoveryRoutes } from "./auth-email-recovery.js";
+import { normalizeRecoveryOrigin, registerEmailRecoveryRoutes } from "./auth-email-recovery.js";
 
 function fakePool(options: { identity?: { id: string; email: string } | null } = {}) {
   const calls: string[] = [];
@@ -65,4 +65,10 @@ test("verification resend does not disclose whether an account exists", async ()
   assert.equal(response.statusCode, 200);
   assert.match(response.json().message, /If the account requires verification/);
   await app.close();
+});
+
+test("recovery links normalize a configured origin with a trailing slash", () => {
+  assert.equal(normalizeRecoveryOrigin("https://rupaykg.example/"), "https://rupaykg.example");
+  assert.equal(normalizeRecoveryOrigin("https://rupaykg.example/,https://other.example"), "https://rupaykg.example");
+  assert.equal(normalizeRecoveryOrigin(undefined), null);
 });
