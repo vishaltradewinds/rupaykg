@@ -1,0 +1,48 @@
+name: Approved Branch Cleanup
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Exact branch name from ops/github/branch-cleanup-manifest.json
+        required: true
+        type: string
+      expected_sha:
+        description: Full 40-character SHA recorded in the manifest
+        required: true
+        type: string
+      confirmation:
+        description: Type DELETE followed by the exact branch name
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rupaykg-approved-branch-cleanup
+  cancel-in-progress: false
+
+jobs:
+  delete-approved-branch:
+    name: Validate and delete one approved branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: branch-maintenance
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - name: Checkout manifest
+        uses: actions/checkout@v4
+
+      - name: Validate safeguards and delete exact ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+          INPUT_BRANCH: ${{ inputs.branch }}
+          INPUT_EXPECTED_SHA: ${{ inputs.expected_sha }}
+          INPUT_CONFIRMATION: ${{ inputs.confirmation }}
+          GH_API_URL: ${{ github.api_url }}
+          BRANCH_MAINTENANCE_ENABLED: ${{ vars.BRANCH_MAINTENANCE_ENABLED }}
+        run: node ops/github/approved-branch-cleanup.mjs

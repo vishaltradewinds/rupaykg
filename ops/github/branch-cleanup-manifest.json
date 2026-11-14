@@ -1,0 +1,16 @@
+{
+  "repository": "vishaltradewinds/rupaykg",
+  "generated_from_main": "e62c67b47fa0f743ac1c53713b07859c115eab4",
+  "purpose": "Explicit allow-list for manually approved cleanup workflow. Entries are candidates, not deletion authorizations.",
+  "branches": [
+    {"name":"e2e-field-acceptance-temp","sha":"2ad6b41bd4d0f8b45dca535b97bf87fb193b05b0"},
+    {"name":"field-sync-route-acceptance-temp","sha":"2ad6b41bd4d0f8b45dca535b97bf87fb193b05b0"},
+    {"name":"field-sync-route-acceptance-temp2","sha":"2ad6b41bd4d0f8b45dca535b97bf87fb193b05b0"},
+    {"name":"field-sync-route-acceptance-temp3","sha":"2ad6b41bd4d0f8b45dca535b97bf87fb193b05b0"},
+    {"name":"field-sync-route-acceptance-temp4","sha":"2ad6b41bd4d0f8b45dca535b97bf87fb193b05b0"},
+    {"name":"field-sync-route-acceptance-temp5","sha":"2ad6b41bd4d0f8b45dca535b97bf87fb193b05b0"},
+    {"name":"field-sync-route-acceptance-temp6","sha":"2ad6b41bd4d0f8b45dca535b97bf87fb193b05b0"},
+    {"name":"field-sync-route-acceptance-temp7","sha":"2ad6b41bd4d0f8b45dca535b97bf87fb193b05b0"},
+    {"name":"field-sync-route-acceptance-temp8","sha":"2ad6b41bd4d0f8b45dca535b97bf87fb193b05b0"}
+  ]
+}
