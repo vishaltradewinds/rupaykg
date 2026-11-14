@@ -14,6 +14,22 @@ const ddlRole = process.env.RUPAYKG_MIGRATION_DDL_ROLE ?? "rupaykg_ddl";
 const securityDefinerRole = "rupaykg_security_definer";
 if (!/^[a-z_][a-z0-9_]*$/.test(ddlRole)) throw new Error("RUPAYKG_MIGRATION_DDL_ROLE must be a plain PostgreSQL role identifier");
 
+const tenantDomainTables = [
+  "bwg_profiles",
+  "bwg_reporting_periods",
+  "carbon_projects",
+  "cpcb_swm_stakeholder_workspaces",
+  "cpcb_swm_status_history",
+  "epr_returns",
+  "esg_reporting_periods",
+  "organization_bwg_assessments",
+  "organization_epr_applicability",
+  "organization_statutory_profiles",
+  "organization_verification_evidence",
+  "stakeholder_applications",
+  "stakeholder_application_approvals",
+] as const;
+
 const controlledMigrationOrder = [
   "101_shakti_tenant_isolation_activation.sql",
   "102_shakti_runtime_auth_handoff.sql",
@@ -102,6 +118,25 @@ try {
       await client.query(`grant usage on schema app, public to ${securityDefinerRole}`);
       await client.query(`grant create on schema app to ${securityDefinerRole}`);
       await client.query("grant select on public.geography, public.methodology_versions to rupaykg_app_runtime");
+
+      // The organization-owned domain tables were introduced after the
+      // original migration-100 ownership split. Transfer them to the controlled
+      // NOLOGIN DDL role in this same transaction, refusing unexpected owners.
+      for (const tableName of tenantDomainTables) {
+        const ownerResult = await client.query<{ owner: string | null }>(
+          `select pg_get_userbyid(c.relowner) as owner
+             from pg_class c join pg_namespace n on n.oid=c.relnamespace
+            where n.nspname='public' and c.relname=$1 and c.relkind='r'`,
+          [tableName],
+        );
+        const owner = ownerResult.rows[0]?.owner;
+        if (!owner) throw new Error(`Tenant domain table is missing: public.${tableName}`);
+        if (owner === identity.rows[0]?.session_user) {
+          await client.query(`alter table public.${tableName} owner to ${ddlRole}`);
+        } else if (owner !== ddlRole) {
+          throw new Error(`Unexpected owner for public.${tableName}: ${owner}`);
+        }
+      }
 
       // Temporarily inherit the isolated function-owner privileges so the DDL
       // role can replace its functions. Both changes are rolled back on failure.
