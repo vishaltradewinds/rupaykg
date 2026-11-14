@@ -194,14 +194,16 @@
     },
     {
       "referenceId": "cad-trust",
-      "status": "PARTIAL",
+      "status": "DOCUMENTED-PROFILE",
       "implementation": [
+        "docs/CAD_TRUST_INTEROPERABILITY_PROFILE.md",
         "apps/src/registry-routes.ts",
-        "apps/src/guardian-mrv.ts"
+        "apps/src/guardian-mrv.ts",
+        "existing external integration mediator and adapter registry (provider connector not yet verified)"
       ],
-      "gap": "No CAD Trust exchange profile or interoperability evidence.",
+      "gap": "The architecture/discovery profile is documented, but no field-level CAD Trust v2 schema mapping, read-only connector, schema/tenant/security tests, external consumer acceptance or registry-participant approval is evidenced.",
       "decision": "ADAPT",
-      "nextAction": "Map after authoritative carbon registry model is frozen."
+      "nextAction": "Pin the official CAD Trust v2 schema/API artefacts; complete a field-level mapping against the frozen RupayKg carbon/registry domain; build fixture-based validation; only then propose a read-only adapter behind the existing integration mediator. Keep publishing and Chia infrastructure deferred."
     },
     {
       "referenceId": "unfccc-article-6-4-patterns",
@@ -293,6 +295,12 @@
       "item": "ASPI policy intelligence crosswalk",
       "status": "DOCUMENTED-RESEARCH-REFERENCE",
       "reason": "September 2024 India CCTS/ETS policy paper is mapped to existing carbon controls; current official-source validation and any customer/authority-specific finance reporting use case remain conditional."
+    },
+    {
+      "priority": "P2",
+      "item": "CAD Trust v2 read-only interoperability",
+      "status": "DOCUMENTED-PROFILE / NOT-IMPLEMENTED",
+      "reason": "Architecture profile exists; schema pinning, field-level mapping, fixture tests, secure read-only adapter and external consumer acceptance remain."
     }
   ]
 }
