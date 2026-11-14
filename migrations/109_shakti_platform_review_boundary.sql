@@ -37,6 +37,8 @@ grant update on public.stakeholder_applications,
   public.organization_geography_scopes
   to rupaykg_security_definer;
 
+grant select on public.organization_geography_scopes to rupaykg_security_definer;
+
 -- RLS is intentionally permissive only for the isolated function owner on the
 -- review-domain tables. The owner is not a runtime member and is NOLOGIN.
 do $$
@@ -60,6 +62,27 @@ begin
   create policy shakti_review_owner_write_approvals
     on public.stakeholder_application_approvals
     for update to rupaykg_security_definer using (true) with check (true);
+
+  drop policy if exists shakti_review_owner_read_organizations on public.organizations;
+  create policy shakti_review_owner_read_organizations
+    on public.organizations for select to rupaykg_security_definer using (true);
+  drop policy if exists shakti_review_owner_write_organizations on public.organizations;
+  create policy shakti_review_owner_write_organizations
+    on public.organizations for update to rupaykg_security_definer using (true) with check (true);
+
+  drop policy if exists shakti_review_owner_read_memberships on public.organization_memberships;
+  create policy shakti_review_owner_read_memberships
+    on public.organization_memberships for select to rupaykg_security_definer using (true);
+  drop policy if exists shakti_review_owner_write_memberships on public.organization_memberships;
+  create policy shakti_review_owner_write_memberships
+    on public.organization_memberships for update to rupaykg_security_definer using (true) with check (true);
+
+  drop policy if exists shakti_review_owner_read_geography_scopes on public.organization_geography_scopes;
+  create policy shakti_review_owner_read_geography_scopes
+    on public.organization_geography_scopes for select to rupaykg_security_definer using (true);
+  drop policy if exists shakti_review_owner_write_geography_scopes on public.organization_geography_scopes;
+  create policy shakti_review_owner_write_geography_scopes
+    on public.organization_geography_scopes for update to rupaykg_security_definer using (true) with check (true);
 
   drop policy if exists shakti_review_owner_read_evidence on public.organization_verification_evidence;
   create policy shakti_review_owner_read_evidence
