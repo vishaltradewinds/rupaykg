@@ -31,6 +31,7 @@ try {
   const files = (await readdir(migrationDir))
     .filter((name) => /^\d+_.+\.sql$/.test(name))
     .sort();
+<<<<<<< HEAD
   // Tenant-isolation migrations 101-107 are deliberately excluded from this
   // application/baseline runner. They require the separate privileged,
   // temporary-role handoff implemented by migrate-shakti.ts.
@@ -49,13 +50,24 @@ try {
   for (const filename of baselineFiles) {
     const prefix = filename.slice(0, filename.indexOf("_"));
     prefixCounts.set(prefix, (prefixCounts.get(prefix) ?? 0) + 1);
+=======
+  // A migration's numeric prefix is its immutable ledger identity. Duplicate
+  // prefixes are rejected instead of changing an already-applied migration's
+  // identity based on the current set of files.
+  const filenameByVersion = new Map<string, string>();
+  for (const filename of files) {
+    const version = filename.slice(0, filename.indexOf("_"));
+    const prior = filenameByVersion.get(version);
+    if (prior) throw new Error(`Duplicate migration version ${version}: ${prior} and ${filename}`);
+    filenameByVersion.set(version, filename);
+>>>>>>> e8cba8b2 (fix(migrations): preserve immutable numeric ledger versions)
   }
   const protectedMigrations = new Set([
     "097_shakti_tenant_isolation_runtime_contract.sql",
     "098_shakti_authentication_bootstrap.sql",
     "099_shakti_rls_policy_foundation.sql",
     "100_shakti_production_ddl_runtime_role_split.sql",
-    "101_shakti_mrv_provenance_tenant_rls.sql",
+    "111_shakti_mrv_provenance_tenant_rls.sql",
   ]);
   const allowProtected = process.env.RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS === "1";
   const protectedApplied = await pool.query<{ filename: string }>("select filename from schema_migrations where filename = any($1::text[])", [[...protectedMigrations]]);
@@ -63,10 +75,15 @@ try {
   const pendingProtected = baselineFiles.filter((name) => protectedMigrations.has(name) && !appliedProtected.has(name));
   if (pendingProtected.length && !allowProtected) throw new Error(`Protected Shakti migrations require RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS=1: ${pendingProtected.join(", ")}`);
 
+<<<<<<< HEAD
   for (const filename of baselineFiles) {
     const stem = filename.replace(/\.sql$/, "");
     const prefix = filename.slice(0, filename.indexOf("_"));
     const version = (prefixCounts.get(prefix) ?? 0) > 1 ? stem : prefix;
+=======
+  for (const filename of files) {
+    const version = filename.slice(0, filename.indexOf("_"));
+>>>>>>> e8cba8b2 (fix(migrations): preserve immutable numeric ledger versions)
     const existing = await pool.query<{ version: string; filename: string }>(
       "select version, filename from schema_migrations where version = $1",
       [version],
