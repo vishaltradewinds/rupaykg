@@ -1,6 +1,10 @@
 name: Weekly Branch Hygiene (Read Only)
 
 on:
+  pull_request:
+    paths:
+      - 'ops/github/branch-hygiene.mjs'
+      - '.github/workflows/branch-hygiene.yml'
   workflow_dispatch:
   schedule:
     - cron: "30 8 * * 1"
@@ -34,15 +38,15 @@ jobs:
 
       - name: Generate read-only branch hygiene report
         env:
-          GITHUB_TOKEN: \${{ github.token }}
-          GITHUB_REPOSITORY: \${{ github.repository }}
-          GITHUB_API_URL: \${{ github.api_url }}
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_API_URL: ${{ github.api_url }}
         run: node ops/github/branch-hygiene.mjs
 
       - name: Upload report
         uses: actions/upload-artifact@v4
         with:
-          name: rupaykg-branch-hygiene-\${{ github.run_number }}
+          name: rupaykg-branch-hygiene-${{ github.run_number }}
           path: branch-hygiene-report/
           if-no-files-found: error
           retention-days: 90
