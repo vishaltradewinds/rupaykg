@@ -91,6 +91,26 @@ jobs:
           grep -q 'RupayKG' /tmp/rupaykg-web-dom.html
           test -s /tmp/rupaykg-web-smoke.png
           echo "Chrome DOM exit: $dom_status; screenshot exit: $shot_status"
+      - name: Run Shakti tenant-boundary inventory rehearsal
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/test-tenant-boundary-inventory.sql
+      - name: Run Shakti tenant-isolation RLS rehearsal
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/test-tenant-isolation-rls-rehearsal.sql
+      - name: Run Shakti direct tenant-anchor Batch D RLS assurance
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/test-direct-tenant-anchors-batch-d.sql
+      - name: Run Shakti policy-family CRUD assurance rehearsal
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/test-policy-family-crud-assurance.sql
+      - name: Run Shakti multi-party authorization boundary rehearsal
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/test-multi-party-authorization-boundaries.sql
+      - name: Run Shakti executable multi-party authorization assurance
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/test-multi-party-authorization-executable.sql
+      - name: Run Shakti multi-party domain contract reconciliation
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/test-multi-party-domain-contract.sql
+      - name: Run Shakti multi-party concurrency assurance rehearsal
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/test-multi-party-concurrency-assurance.sql
+      - name: Run Shakti concrete multi-party concurrency race assurance
+        run: bash scripts/test-multi-party-concurrency-races.sh
+      - name: Run Shakti pool context and worker boundary rehearsal
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/test-pool-context-worker-boundary.sql
       - name: Run tests including disposable PostgreSQL acceptance
         env:
           RUPAYKG_RUN_DB_INTEGRATION_TESTS: "1"
