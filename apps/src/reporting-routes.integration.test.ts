@@ -106,7 +106,7 @@ test("SWM report resolves verified stakeholder roles and persists immutable tena
       [organizationIds[0], transporterIdentityId, geographyId],
     )).rows[0]!.id;
     await pool.query(
-      "insert into measurements(activity_id,value,unit,method,source,measured_at,quality_status) values($1,100,'kg','WEIGHBRIDGE','FIELD',now(),'VERIFIED'),($2,200,'kg','WEIGHBRIDGE','FIELD',now(),'VERIFIED'),($3,300,'kg','WEIGHBRIDGE','FIELD',now(),'VERIFIED')",
+      "insert into measurements(activity_id,value,unit,method,source,measured_at,quality_status) values($1,99999999999999.999999,'kg','WEIGHBRIDGE','FIELD',now(),'VERIFIED'),($2,200,'kg','WEIGHBRIDGE','FIELD',now(),'VERIFIED'),($3,300,'kg','WEIGHBRIDGE','FIELD',now(),'VERIFIED')",
       [activityId, recyclerActivityId, transporterActivityId],
     );
 
@@ -118,12 +118,14 @@ test("SWM report resolves verified stakeholder roles and persists immutable tena
     const previewUrl = "/api/v1/reports/swm-2026/preview?periodStart=" + day + "&periodEnd=" + day + "&context=urban";
     const preview = await app.inject({ method: "GET", url: previewUrl, headers: headers(ownerToken, organizationIds[0]!) });
     assert.equal(preview.statusCode, 200, preview.body);
-    const report = preview.json().report as { snapshotHash: string; generatedAt: string; rows: Array<{ id: string; stakeholder: string; stakeholderAttribution: string; activityStatus?: string }> };
+    const report = preview.json().report as { snapshotHash: string; generatedAt: string; rows: Array<{ id: string; stakeholder: string; stakeholderAttribution: string; activityStatus?: string; cells?: Array<{ key: string; value: string | number | null }> }> };
     const activityRow = report.rows.find(row => row.id === activityId);
     assert.ok(activityRow, "activity must be included in the report snapshot");
     assert.equal(activityRow.stakeholder, "AGGREGATOR");
     assert.equal(activityRow.stakeholderAttribution, "VERIFIED");
     assert.equal(activityRow.activityStatus, "COMPLETED");
+    const exactMeasurement = activityRow.cells?.find(cell => cell.key.startsWith("measurement:"));
+    assert.equal(exactMeasurement?.value, "99999999999999.999999");
     const previewCsv = await app.inject({ method: "GET", url: previewUrl.replace("/preview?", "/preview.csv?"), headers: headers(ownerToken, organizationIds[0]!) });
     assert.equal(previewCsv.statusCode, 200, previewCsv.body);
     assert.match(previewCsv.headers["content-type"] ?? "", /text\/csv/);
