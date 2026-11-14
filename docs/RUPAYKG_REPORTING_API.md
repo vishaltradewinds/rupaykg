@@ -1,4 +1,4 @@
-﻿# RupayKg reporting API contract
+# RupayKg reporting API contract
 
 ## Scope
 
@@ -46,9 +46,9 @@ The preview reads:
 - `measurements` attached to those activities
 - `evidence` attached to those activities or measurements
 - latest `verifications` for each evidence record
-- `resource_flows` in the same organization, reporting period, and Urban/Rural geography rail
+- `resource_flows` in the same organization, reporting period, and Urban/Rural geography rail`r`n- `chain_of_custody_links` attached to those flows, including sequence, actor organization reference, quantity, handover geographies, linked evidence, and latest verification
 
-The preview is capped at 500 activities and 500 declared material flows. The response sets `truncated: true` when either cap is exceeded. Narrow the date range or geography before treating the extract as complete.
+The preview is capped at 500 activities, 500 declared material flows, and 500 custody links. The response sets `truncated: true` when either cap is exceeded. Narrow the date range or geography before treating the extract as complete.
 
 ## Data-quality and report states
 
