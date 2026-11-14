@@ -8,6 +8,7 @@ const expectedSha = process.env.INPUT_EXPECTED_SHA || "";
 const confirmation = process.env.INPUT_CONFIRMATION || "";
 
 if (!token || !repository) throw new Error("Missing GitHub Actions credentials/context.");
+if (process.env.BRANCH_MAINTENANCE_ENABLED !== "true") throw new Error("Cleanup is disabled. Configure the protected branch-maintenance environment and set BRANCH_MAINTENANCE_ENABLED=true only after verifying required reviewers.");
 if (!/^[0-9a-f]{40}$/i.test(expectedSha)) throw new Error("Expected SHA must be a full 40-character commit SHA.");
 if (confirmation !== "DELETE " + branch) throw new Error("Confirmation text does not exactly match DELETE <branch>.");
 
