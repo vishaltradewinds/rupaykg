@@ -194,16 +194,17 @@
     },
     {
       "referenceId": "cad-trust",
-      "status": "DOCUMENTED-PROFILE",
+      "status": "FIELD-CROSSWALK-COMPLETED",
       "implementation": [
         "docs/CAD_TRUST_INTEROPERABILITY_PROFILE.md",
+        "docs/CAD_TRUST_V2_FIELD_CROSSWALK.md",
         "apps/src/registry-routes.ts",
         "apps/src/guardian-mrv.ts",
         "existing external integration mediator and adapter registry (provider connector not yet verified)"
       ],
-      "gap": "The architecture/discovery profile is documented, but no field-level CAD Trust v2 schema mapping, read-only connector, schema/tenant/security tests, external consumer acceptance or registry-participant approval is evidenced.",
+      "gap": "Pinned CAD Trust v2.0.2 field-by-field crosswalk completed against isolated Neon acceptance-branch schema. Reusable RupayKg domains exist, but no CADT-specific programme, project-methodology junction, project stakeholder relationship, distinct validation, issuance batch, carbon-unit, rating, co-benefit or unit-label model was identified. No runtime mapper, connector, tests or external consumer acceptance is evidenced.",
       "decision": "ADAPT",
-      "nextAction": "Pin the official CAD Trust v2 schema/API artefacts; complete a field-level mapping against the frozen RupayKg carbon/registry domain; build fixture-based validation; only then propose a read-only adapter behind the existing integration mediator. Keep publishing and Chia infrastructure deferred."
+      "nextAction": "Implement a pure versioned mapping/validation package and fixture suite only after the mapping contract is reviewed. Keep initial adapter read-only (GET only); add no mirrored CADT tables. Confirm whether multiple methodologies per carbon project and project-specific stakeholder roles are product requirements before considering domain schema extensions. Never map EPR credits to CADT carbon units."
     },
     {
       "referenceId": "unfccc-article-6-4-patterns",
