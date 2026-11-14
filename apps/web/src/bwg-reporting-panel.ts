@@ -6,6 +6,7 @@ type Membership = { organization_id: string; status: string; permissions?: strin
 type Session = { sessionToken: string; memberships: Membership[] };
 type Profile = { organization_id: string; jurisdiction_id: string; floor_area_sqm: number; water_consumption_lpd: number; waste_generation_kg_day: number; establishment_type: string; applicability_status: string; regulatory_registration_status?: string; regulatory_registration_reference?: string | null };
 type Workspace = { profiles: Profile[]; periods: any[]; wasteReports: any[]; eprReports: any[]; esgReports: any[]; jurisdictions: { id: string; name: string }[]; schemes: { id: string; code: string; name: string; authority: string; jurisdiction_id: string | null }[]; organizations: { organizationId: string; profileUpdate: boolean; periodCreate: boolean; wasteRecord: boolean; eprManage: boolean; esgWrite: boolean }[] };
+type SwmPreview = { status: string; snapshotHash: string; rows: { id: string; label: string; stakeholder: string; cells: { key: string; value: string | number | boolean | null; unit?: string | null; quality: string }[] }[]; issues: { code: string; rowId: string; cellKey: string; detail: string }[]; assumptions?: string[]; sourceRevision: string };
 
 const firebaseConfig = { apiKey: import.meta.env.VITE_FIREBASE_API_KEY, authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN, projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID, appId: import.meta.env.VITE_FIREBASE_APP_ID };
 const firebaseApp = getApps().some((app) => app.name === "bwg-reporting") ? getApp("bwg-reporting") : initializeApp(firebaseConfig, "bwg-reporting");
@@ -18,6 +19,8 @@ let workspace: Workspace = { profiles: [], periods: [], wasteReports: [], eprRep
 let selectedOrganizationId = "";
 let message = "";
 let messageKind: "status" | "error" = "status";
+let swmReportMessage = "";
+let swmPreview: SwmPreview | null = null;
 const organizationKey = "rupaykg.activeOrganizationId";
 const activeOrganizationId = () => localStorage.getItem(organizationKey) ?? "";
 const persistOrganization = (id: string) => { if (id) localStorage.setItem(organizationKey, id); };
@@ -63,13 +66,76 @@ function render() {
 <form id="period" class="esg-form"><h3>2. Reporting period</h3><div class="esg-form__row"><label>Start<input id="start" required type="date"></label><label>End<input id="end" required type="date"></label></div><label>Basis<select id="basis"><option value="SWM_2026">SWM 2026</option><option value="EPR">EPR</option><option value="ESG">ESG</option><option value="BRSR_VALUE_CHAIN">BRSR value chain</option></select></label><button type="submit" ${disabled(capability("periodCreate"))}>Create period</button></form>
 <form id="waste" class="esg-form"><h3>3. Waste report</h3><label>Period<select id="wperiod" required>${periods || `<option value="">Create a period first</option>`}</select></label><label>Waste stream<input id="stream" required placeholder="e.g. wet, dry, sanitary, special care"></label><div class="esg-form__row"><label>Generated<input id="generated" required type="number" min="0" step="0.001"></label><label>Segregated<input id="segregated" type="number" min="0" step="0.001" value="0"></label></div><div class="esg-form__row"><label>Channelised<input id="channelized" type="number" min="0" step="0.001" value="0"></label><label>Processed<input id="processed" type="number" min="0" step="0.001" value="0"></label></div><label>Unit<input id="unit" value="kg" required></label><label>Verified evidence UUID<input id="wevidence" placeholder="Optional until evidence is available"></label><label>Approved verification UUID<input id="wverification" placeholder="Requires verified evidence"></label><button type="submit" ${disabled(capability("wasteRecord"), workspace.periods.length === 0)}>Record waste</button></form>
 <form id="epr" class="esg-form"><h3>4. EPR report</h3><label>Period<select id="eperiod" required>${periods || `<option value="">Create a period first</option>`}</select></label><label>Authoritative EPR scheme<select id="scheme" required>${schemes || `<option value="">No verified EPR scheme available</option>`}</select></label><label>Category code<input id="category" required placeholder="Authoritative category code"></label><div class="esg-form__row"><label>Obligated<input id="obligated" required type="number" min="0" step="0.001"></label><label>Fulfilled<input id="fulfilled" required type="number" min="0" step="0.001"></label></div><label>Verified evidence UUID<input id="eevidence" placeholder="Optional until evidence is available"></label><label>Approved verification UUID<input id="everification" placeholder="Requires verified evidence"></label><button type="submit" ${disabled(capability("eprManage"), workspace.periods.length === 0)}>Record EPR</button><p class="field-help">EPR scheme selection is restricted to backend-verified schemes. For plastic packaging, CPCB's current Common EPR Portal is authoritative; RupayKG does not infer CPCB registration, certificate transfer or acceptance.</p></form>
-<form id="esg" class="esg-form"><h3>5. ESG metric</h3><label>Period<select id="gperiod" required>${periods || `<option value="">Create a period first</option>`}</select></label><label>Metric code<input id="metric" required placeholder="Authoritative metric code"></label><div class="esg-form__row"><label>Scope<select id="scope" required><option value="1">Scope 1</option><option value="2">Scope 2</option><option value="3">Scope 3</option><option value="IMPACT">Impact</option></select></label><label>Unit<input id="gunit" required></label></div><label>Value<input id="gvalue" required type="number" min="0" step="any"></label><label>Verified evidence UUID<input id="gevidence" placeholder="Optional until evidence is available"></label><label>Approved verification UUID<input id="gverification" placeholder="Requires verified evidence"></label><button type="submit" ${disabled(capability("esgWrite"), workspace.periods.length === 0)}>Record ESG metric</button><p class="field-help">BRSR/BRSR Core applicability depends on the reporting entity and current SEBI requirements. The platform records source data and evidence; it does not claim regulatory filing or assurance unless an authoritative state is present.</p></form></div><div class="compliance-list"><h3>Authoritative records</h3><p class="field-help">Profiles: ${workspace.profiles.length} · periods: ${workspace.periods.length} · waste: ${workspace.wasteReports.length} · EPR: ${workspace.eprReports.length} · ESG: ${workspace.esgReports.length}</p></div></section>`;
+<form id="esg" class="esg-form"><h3>5. ESG metric</h3><label>Period<select id="gperiod" required>${periods || `<option value="">Create a period first</option>`}</select></label><label>Metric code<input id="metric" required placeholder="Authoritative metric code"></label><div class="esg-form__row"><label>Scope<select id="scope" required><option value="1">Scope 1</option><option value="2">Scope 2</option><option value="3">Scope 3</option><option value="IMPACT">Impact</option></select></label><label>Unit<input id="gunit" required></label></div><label>Value<input id="gvalue" required type="number" min="0" step="any"></label><label>Verified evidence UUID<input id="gevidence" placeholder="Optional until evidence is available"></label><label>Approved verification UUID<input id="gverification" placeholder="Requires verified evidence"></label><button type="submit" ${disabled(capability("esgWrite"), workspace.periods.length === 0)}>Record ESG metric</button><p class="field-help">BRSR/BRSR Core applicability depends on the reporting entity and current SEBI requirements. The platform records source data and evidence; it does not claim regulatory filing or assurance unless an authoritative state is present.</p></form></div><section id="swm-report" class="esg-form" aria-labelledby="swm-report-title">
+  <h3 id="swm-report-title">6. SWM 2026 consolidated report preview</h3>
+  <p class="field-help">Build an internal, tenant-scoped report from existing activities, measurements, evidence, verification records and declared material flows. This is not a CPCB filing or assurance opinion.</p>
+  <div class="esg-form__row"><label>Operating context<select id="swm-context"><option value="urban">Urban · ULB / Ward</option><option value="rural">Rural · Gram Panchayat / Village / Cluster</option></select></label><label>Geography UUID (optional)<input id="swm-geography" placeholder="Authorized geography UUID"></label></div>
+  <div class="esg-form__row"><label>Period start<input id="swm-start" required type="date"></label><label>Period end<input id="swm-end" required type="date"></label></div>
+  <div class="esg-form__row"><button id="swm-preview" type="button">Generate preview</button><button id="swm-csv" type="button">Download CSV</button></div>
+  <div id="swm-report-result" class="field-help" aria-live="polite">${esc(swmReportMessage || "Select a period and generate a preview.")}</div>
+</section><div class="compliance-list"><h3>Authoritative records</h3><p class="field-help">Profiles: ${workspace.profiles.length} · periods: ${workspace.periods.length} · waste: ${workspace.wasteReports.length} · EPR: ${workspace.eprReports.length} · ESG: ${workspace.esgReports.length}</p></div></section>`;
   root.querySelector("#organization")?.addEventListener("change", (e) => { selectedOrganizationId = (e.target as HTMLSelectElement).value; persistOrganization(selectedOrganizationId); message = ""; void load(); });
   root.querySelector("#profile")?.addEventListener("submit", (e) => { e.preventDefault(); void save("/api/v1/bwg/profile", { organizationId: org.organization_id, jurisdictionId: value("jurisdiction"), establishmentType: value("etype"), floorAreaSqm: num("area"), waterConsumptionLpd: num("water"), wasteGenerationKgDay: num("dailywaste") }); });
   root.querySelector("#period")?.addEventListener("submit", (e) => { e.preventDefault(); if (value("end") < value("start")) { messageKind = "error"; message = "Reporting period end date must be on or after the start date."; render(); return; } void save("/api/v1/bwg/reporting-periods", { organizationId: org.organization_id, periodStart: value("start"), periodEnd: value("end"), reportingBasis: value("basis") }); });
   root.querySelector("#waste")?.addEventListener("submit", (e) => { e.preventDefault(); const generated = num("generated"); if (num("segregated") > generated || num("channelized") > generated || num("processed") > num("channelized")) { messageKind = "error"; message = "Waste quantities must satisfy segregated ≤ generated, channelised ≤ generated, and processed ≤ channelised."; render(); return; } const id = value("wperiod"); void save(`/api/v1/bwg/reporting-periods/${encodeURIComponent(id)}/waste`, { wasteStream: value("stream"), generatedQuantity: generated, segregatedQuantity: num("segregated"), channelizedQuantity: num("channelized"), processedQuantity: num("processed"), unit: value("unit"), evidenceId: value("wevidence") || undefined, verificationId: value("wverification") || undefined }); });
   root.querySelector("#epr")?.addEventListener("submit", (e) => { e.preventDefault(); const id = value("eperiod"); void save(`/api/v1/bwg/reporting-periods/${encodeURIComponent(id)}/epr`, { schemeId: value("scheme"), categoryCode: value("category"), obligatedQuantity: num("obligated"), fulfilledQuantity: num("fulfilled"), evidenceId: value("eevidence") || undefined, verificationId: value("everification") || undefined }); });
   root.querySelector("#esg")?.addEventListener("submit", (e) => { e.preventDefault(); const id = value("gperiod"); void save(`/api/v1/bwg/reporting-periods/${encodeURIComponent(id)}/esg`, { metricCode: value("metric"), scope: value("scope"), unit: value("gunit"), value: num("gvalue"), evidenceId: value("gevidence") || undefined, verificationId: value("gverification") || undefined }); });
+  root.querySelector("#swm-preview")?.addEventListener("click", () => void generateSwmPreview());
+  root.querySelector("#swm-csv")?.addEventListener("click", () => void downloadSwmCsv());
+  renderSwmReportResult();
+}
+
+
+function renderSwmReportResult() {
+  const target = document.getElementById("swm-report-result");
+  if (!target) return;
+  if (!swmPreview) { target.textContent = swmReportMessage || "Select a period and generate a preview."; return; }
+  const issues = swmPreview.issues ?? [];
+  target.innerHTML = `<div class="compliance-state">Report state: ${esc(swmPreview.status)} · Rows: ${swmPreview.rows.length} · Issues: ${issues.length}</div><p>Snapshot SHA-256: <code>${esc(swmPreview.snapshotHash)}</code></p><p>Source revision: ${esc(swmPreview.sourceRevision)}</p><ul>${issues.slice(0, 12).map(issue => `<li>${esc(issue.code)} · ${esc(issue.detail)}</li>`).join("")}</ul><p>${(swmPreview.assumptions ?? []).map(esc).join(" · ")}</p>`;
+}
+async function generateSwmPreview() {
+  try {
+    const start = value("swm-start"), end = value("swm-end"), context = value("swm-context"), geographyId = value("swm-geography");
+    if (!start || !end || end < start) throw new Error("Choose a valid reporting period.");
+    const query = new URLSearchParams({ periodStart: start, periodEnd: end, context });
+    if (geographyId) query.set("geographyId", geographyId);
+    const response = await api(`/api/v1/reports/swm-2026/preview?${query.toString()}`);
+    swmPreview = response.report as SwmPreview;
+    swmReportMessage = response.truncated ? "Preview is capped; narrow the period or geography for a complete extract." : "";
+    renderSwmReportResult();
+  } catch (error) {
+    swmPreview = null;
+    swmReportMessage = error instanceof Error ? error.message : "SWM report preview failed.";
+    renderSwmReportResult();
+  }
+}
+async function downloadSwmCsv() {
+  try {
+    const start = value("swm-start"), end = value("swm-end"), context = value("swm-context"), geographyId = value("swm-geography");
+    if (!start || !end || end < start) throw new Error("Choose a valid reporting period.");
+    if (!session) throw new Error("Sign in before downloading reports.");
+    const query = new URLSearchParams({ periodStart: start, periodEnd: end, context });
+    if (geographyId) query.set("geographyId", geographyId);
+    const headers = new Headers({ Authorization: `Bearer ${session.sessionToken}` });
+    const org = activeOrganizationId();
+    if (org) headers.set("X-RupayKG-Organization-Id", org);
+    const response = await fetch(`/api/v1/reports/swm-2026/preview.csv?${query.toString()}`, { headers });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.error ?? `CSV export failed (${response.status})`);
+    }
+    const blob = await response.blob();
+    const href = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = href;
+    link.download = `rupaykg-swm-2026-${context}-${start}-${end}.csv`;
+    document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(href);
+    swmReportMessage = "CSV downloaded. The report status and provenance are embedded in the export.";
+    renderSwmReportResult();
+  } catch (error) {
+    swmReportMessage = error instanceof Error ? error.message : "CSV export failed.";
+    renderSwmReportResult();
+  }
 }
 
 async function load() {
