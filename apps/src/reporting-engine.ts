@@ -132,7 +132,7 @@ export function reportSnapshotToCsv(snapshot: ReportSnapshot): string {
   const header = ["report_type", "report_title", "organization_id", "period_start", "period_end", "geography_mode", "methodology_code", "methodology_version", "snapshot_hash", "report_status", "row_id", "stakeholder", "stakeholder_attribution", "row_label", "field", "value", "unit", "quality", "source_record_id", "evidence_ids", "evidence_hashes", "verification_ids", "verification_status", "note"];
   const rows = snapshot.rows.flatMap(row => row.cells.map(cell => [
     snapshot.reportType, snapshot.title, snapshot.organizationId, snapshot.periodStart, snapshot.periodEnd, snapshot.geographyMode,
-    snapshot.methodologyCode, snapshot.methodologyVersion, snapshot.snapshotHash, snapshot.status, row.id, row.stakeholder,
+    snapshot.methodologyCode, snapshot.methodologyVersion, snapshot.snapshotHash, snapshot.status, row.id, row.stakeholder, row.stakeholderAttribution ?? "NOT_REPORTED",
     row.label, cell.key, cell.value, cell.unit ?? "", cell.quality, cell.sourceRecordId,
     (cell.evidence ?? []).map(item => item.evidenceId ?? "").join(";"),
     (cell.evidence ?? []).map(item => item.evidenceHash ?? "").join(";"),
