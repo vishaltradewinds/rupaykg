@@ -5,7 +5,6 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Pool, type PoolClient, type PoolConfig } from "pg";
 import { authenticate, bearerChallenge, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
-import { registerAuthRoutes } from "./auth-routes.js";
 import { registerOnboardingHierarchyRoutes } from "./onboarding-hierarchy-routes.js";
 import { registerValueRoutes } from "./value-routes.js";
 import { registerRegistryRoutes } from "./registry-routes.js";
@@ -65,8 +64,6 @@ function requireOrganization(auth: AuthContext, organizationId: string, reply: {
 async function canReadGeography(client: PoolClient, auth: AuthContext, geographyId: string): Promise<boolean> { if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(geographyId)) return false; const result = await client.query<{ ok: boolean }>(`select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,$2)) as ok`, [auth.identityId, geographyId]); return result.rows[0]?.ok === true; }
 async function canWriteActivity(client: Pool | PoolClient, auth: AuthContext, activityId: string): Promise<boolean> { const result = await client.query<{ organization_id: string }>(`select a.organization_id from activities a join organization_memberships om on om.organization_id=a.organization_id and om.identity_id=$2 and om.status='VERIFIED' where a.id=$1 and a.geography_id is not null and organization_has_geography_scope(om.organization_id,a.geography_id)`, [activityId, auth.identityId]); const organizationId = result.rows[0]?.organization_id; return !!organizationId && await hasOrganizationPermission(client, auth, organizationId, ['waste:record']); }
 async function canWriteGeography(client: Pool | PoolClient, auth: AuthContext, organizationId: string, geographyId: string): Promise<boolean> { if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(geographyId)) return false; const result = await client.query<{ ok: boolean }>(`select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,$3)) as ok`, [auth.identityId, organizationId, geographyId]); return result.rows[0]?.ok === true; }
-
-await registerAuthRoutes(app, pool);
 
 app.get("/health", async (_request, reply) => { let database: "AVAILABLE" | "UNAVAILABLE" = "UNAVAILABLE"; if (pool) { try { await pool.query("select 1"); database = "AVAILABLE"; } catch {} } const healthy = database === "AVAILABLE"; return reply.code(healthy ? 200 : 503).send({ status: healthy ? "READY" : "DEGRADED", database, syntheticData: false }); });
 app.get("/api/v1/status", async () => ({ service: "rupaykg-api", version: "0.1.0", sourceOfTruth: "postgresql", syntheticData: false }));
