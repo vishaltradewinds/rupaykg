@@ -9,6 +9,7 @@ type Query = { periodStart?: string; periodEnd?: string; context?: string; geogr
 type ActivityRow = { id: string; activity_type: string; status: string; occurred_at: Date | string; geography_id: string | null; geography_name: string | null; geography_kind: string | null };
 type MeasurementRow = { id: string; activity_id: string; value: string | number; unit: string; method: string; source: string; measured_at: Date | string; quality_status: string | null };
 type EvidenceRow = { id: string; activity_id: string; measurement_id: string | null; content_hash: string | null; status: string; verification_id: string | null; verification_decision: string | null };
+type FlowRow = { id: string; origin_type: string; resource_form: string; material_code: string; declared_quantity: string | number; unit: string; status: string; source_geography_name: string | null; destination_geography_name: string | null };
 type ReportData = { snapshot: ReportSnapshot; truncated: boolean };
 
 function isDate(value: unknown): value is string {
@@ -62,10 +63,7 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
     );
     const truncated = activityResult.rows.length > 500;\n    const activities = activityResult.rows.slice(0, 500);
     const activityIds = activities.map(row => row.id);
-    if (!activityIds.length) {
-      throw Object.assign(new Error("No source activities found for the selected tenant, period and geography context"), { code: "REPORT_NO_SOURCE_DATA" });
-    }
-    const [measurementResult, evidenceResult] = await Promise.all([
+    const [measurementResult, evidenceResult, flowResult] = await Promise.all([
       client.query<MeasurementRow>(
         `select m.id,m.activity_id,m.value,m.unit,m.method,m.source,m.measured_at,m.quality_status
          from measurements m join activities a on a.id=m.activity_id
@@ -82,6 +80,21 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
          and organization_has_geography_scope(a.organization_id,a.geography_id)
          order by e.captured_at,e.id`,
         [auth.activeOrganizationId, activityIds],
+      ),
+      client.query<FlowRow>(
+        `select rf.id,rf.origin_type,rf.resource_form,rf.material_code,rf.declared_quantity,rf.unit,rf.status,
+                sg.name as source_geography_name,dg.name as destination_geography_name
+         from resource_flows rf
+         left join geography sg on sg.id=rf.source_geography_id
+         left join geography dg on dg.id=rf.destination_geography_id
+         where rf.organization_id=$1::uuid and rf.created_at >= $2::date and rf.created_at < ($3::date + interval '1 day')
+         and ((rf.source_geography_id is not null and organization_has_geography_scope(rf.organization_id,rf.source_geography_id))
+           or (rf.destination_geography_id is not null and organization_has_geography_scope(rf.organization_id,rf.destination_geography_id)))
+         and (exists(select 1 from geography source_geo where source_geo.id=rf.source_geography_id and source_geo.kind::text=any($4::text[]))
+           or exists(select 1 from geography destination_geo where destination_geo.id=rf.destination_geography_id and destination_geo.kind::text=any($4::text[])))
+         ${params.geographyId ? "and (rf.source_geography_id=$5::uuid or rf.destination_geography_id=$5::uuid)" : ""}
+         order by rf.created_at,rf.id limit 501` ,
+        values,
       ),
     ]);
     const measurementsByActivity = new Map<string, MeasurementRow[]>();
@@ -136,6 +149,25 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
         cells,
       };
     });
+    for (const flow of flowResult.rows.slice(0, 500)) {
+      const declared = Number(flow.declared_quantity);
+      rows.push({
+        id: "resource-flow:" + flow.id,
+        stakeholder: "OTHER",
+        label: "Declared material flow — " + flow.material_code,
+        cells: [{
+          key: "declared_quantity",
+          value: Number.isFinite(declared) ? declared : null,
+          unit: flow.unit,
+          quality: Number.isFinite(declared) ? "DECLARED" : "MISSING",
+          sourceRecordId: flow.id,
+          note: "Origin type: " + flow.origin_type + "; resource form: " + flow.resource_form + "; status: " + flow.status + "; source: " + (flow.source_geography_name ?? "not recorded") + "; destination: " + (flow.destination_geography_name ?? "not recorded"),
+        }],
+      });
+    }
+    if (!rows.length) {
+      throw Object.assign(new Error("No source activities or material flows found for the selected tenant, period and geography context"), { code: "REPORT_NO_SOURCE_DATA" });
+    }
     const sourceRevision = process.env.RENDER_GIT_COMMIT ?? process.env.GITHUB_SHA ?? "unavailable";
     const snapshot = buildReportSnapshot({
       reportType: "CPCB_SWMP_2026",
@@ -153,10 +185,10 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
         "This is an internal reporting preview, not a CPCB filing, statutory submission, certificate or assurance opinion.",
         "Activity types are not treated as verified stakeholder roles; stakeholder attribution remains OTHER until an authoritative role relationship is available.",
         "Only activity measurements and linked evidence available to the active organization are included.",
-        ...(activities.length > 500 ? ["Preview capped at 500 activities; narrow the period or geography for a complete extract."] : []),
+        ...(activities.length > 500 || flowResult.rows.length > 500 ? ["Preview capped at 500 activities and 500 declared material flows; narrow the period or geography for a complete extract."] : []),
       ],
     });
-    return { snapshot, truncated };
+    return { snapshot, truncated: truncated || flowResult.rows.length > 500 };
   });
 }
 
