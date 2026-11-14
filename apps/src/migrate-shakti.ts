@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 
 // This runner is deliberately separate from application startup. It requires
-// the database-owner migration connection and applies Shakti migrations 101-107
+// the database-owner migration connection and applies Shakti migrations 101-108
 // as one atomic transaction so the application never sees a partial RLS state.
 const databaseUrl = process.env.MIGRATION_DATABASE_URL;
 if (!databaseUrl) throw new Error("MIGRATION_DATABASE_URL is required; do not use the application runtime connection for schema migrations");
