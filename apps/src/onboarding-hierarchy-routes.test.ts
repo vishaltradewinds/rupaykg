@@ -14,15 +14,13 @@ function testPool(boundaryResult: unknown, boundaryError?: Error): Pool {
         if (sql.includes("app.authenticate_bearer_session")) return {
           rows: [{ identity_id: identityId, organization_id: organizationId, role_id: "323e4567-e89b-42d3-a456-426614174000", status: "VERIFIED", context_token: "423e4567-e89b-42d3-a456-426614174000" }],
         };
+        if (sql.includes("app.onboarding_") && boundaryError) throw boundaryError;
+        if (sql.includes("app.onboarding_review_queue")) return { rows: [{ queue: boundaryResult }] };
+        if (sql.includes("app.onboarding_")) return { rows: [{ result: boundaryResult }] };
         return { rows: [] };
       },
       release: () => undefined,
     }),
-    query: async (sql: string) => {
-      if (boundaryError) throw boundaryError;
-      if (sql.includes("app.onboarding_review_queue")) return { rows: [{ queue: boundaryResult }] };
-      return { rows: [{ result: boundaryResult }] };
-    },
   } as unknown as Pool;
 }
 
@@ -33,7 +31,7 @@ const headers = {
 
 test("cross-organization review queue is served through the controlled database boundary", async () => {
   const app = Fastify({ logger: false });
-  const queue = [{ id: "app-1", organization_id: "other-org", can_review: true }];
+  const queue = [{ id: "app-1", organization_id: "other-org", canReview: true, canVerifyLegal: false, nextApproval: { approval_level: "PLATFORM", status: "PENDING" } }];
   await registerOnboardingHierarchyRoutes(app, testPool(queue));
   const response = await app.inject({ method: "GET", url: "/api/v1/onboarding/review-queue", headers });
   assert.equal(response.statusCode, 200, response.body);
