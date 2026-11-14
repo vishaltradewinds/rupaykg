@@ -100,3 +100,9 @@ The methodology code/version identifies an internal reporting template, not an o
 - External CPCB submission, receipt, acceptance, certification or assurance integrations.
 
 Migrations 108 and 109 are proposed on PR #358 and have been exercised in disposable CI PostgreSQL only. No production Neon migration, Render configuration change, merge or deployment has occurred.
+
+## Lifecycle and export integrity
+
+- Activity rows preserve the source activities.status value in the immutable snapshot and CSV/PDF/XLSX exports. Only COMPLETED activities can produce a review-ready report; other lifecycle states create a blocking ACTIVITY_NOT_COMPLETED issue.
+- Stakeholder attribution counts every VERIFIED role held by the activity actor in the organization. A recognized role combined with any additional custom or unknown role remains OTHER/UNMAPPED.
+- CSV includes activity_status and a report_issues_json field containing every issue code, row, field and detail; a BLOCKED/DRAFT export therefore retains its explanation.

@@ -23,6 +23,7 @@ export type ReportRow = {
   id: string;
   stakeholder: "GENERATOR" | "AGGREGATOR" | "TRANSPORTER" | "RECYCLER" | "PROCESSOR" | "ULB" | "GRAM_PANCHAYAT" | "BWG" | "OTHER";
   stakeholderAttribution?: "VERIFIED" | "UNMAPPED";
+  activityStatus?: string | null;
   label: string;
   cells: ReportCell[];
 };
@@ -42,7 +43,7 @@ export type ReportSnapshotInput = {
   assumptions?: string[];
 };
 export type ReportIssue = {
-  code: "MISSING_VALUE" | "DECLARED_VALUE" | "ESTIMATED_VALUE" | "DISPUTED_VALUE" | "MISSING_EVIDENCE" | "UNVERIFIED_EVIDENCE" | "UNMAPPED_STAKEHOLDER" | "SOURCE_REVISION_UNAVAILABLE" | "MISSING_VERIFICATION_REFERENCE";
+  code: "MISSING_VALUE" | "DECLARED_VALUE" | "ESTIMATED_VALUE" | "DISPUTED_VALUE" | "MISSING_EVIDENCE" | "UNVERIFIED_EVIDENCE" | "UNMAPPED_STAKEHOLDER" | "SOURCE_REVISION_UNAVAILABLE" | "MISSING_VERIFICATION_REFERENCE" | "ACTIVITY_NOT_COMPLETED";
   rowId: string;
   cellKey: string;
   detail: string;
@@ -104,6 +105,7 @@ export function buildReportSnapshot(input: ReportSnapshotInput): ReportSnapshot 
     if (!row.id.trim() || rowIds.has(row.id)) throw new Error("Report row IDs must be non-empty and unique");
     rowIds.add(row.id);
     if (row.stakeholderAttribution === "UNMAPPED") issues.push({ code: "UNMAPPED_STAKEHOLDER", rowId: row.id, cellKey: "__stakeholder__", detail: "Stakeholder role is not backed by an authoritative organization-role relationship." });
+    if (row.activityStatus !== undefined && row.activityStatus?.toUpperCase() !== "COMPLETED") issues.push({ code: "ACTIVITY_NOT_COMPLETED", rowId: row.id, cellKey: "__activity_status__", detail: "Activity lifecycle status is " + String(row.activityStatus) + "; only COMPLETED activities are eligible for review-ready reporting." });
     const keys = new Set<string>();
     for (const cell of row.cells) {
       if (!cell.key.trim() || keys.has(cell.key)) throw new Error(`Cell keys must be unique within row ${row.id}`);
@@ -130,7 +132,7 @@ export function buildReportSnapshot(input: ReportSnapshotInput): ReportSnapshot 
       }
     }
   }
-  const blocking = issues.some(issue => ["MISSING_VALUE", "DISPUTED_VALUE"].includes(issue.code));
+  const blocking = issues.some(issue => ["MISSING_VALUE", "DISPUTED_VALUE", "ACTIVITY_NOT_COMPLETED"].includes(issue.code));
   const status: ReportStatus = blocking ? "BLOCKED" : issues.length ? "DRAFT" : "READY_FOR_REVIEW";
   const base = {
     ...source,
@@ -151,12 +153,12 @@ function csv(value: unknown): string {
 
 /** A lossless, machine-readable long-form CSV adapter for a report snapshot. */
 export function reportSnapshotToCsv(snapshot: ReportSnapshot): string {
-  const header = ["report_type", "report_title", "organization_id", "period_start", "period_end", "geography_mode", "geography_scope_id", "methodology_code", "methodology_version", "source_revision", "generated_at", "assumptions", "schema_version", "snapshot_hash", "report_status", "row_id", "stakeholder", "stakeholder_attribution", "row_label", "field", "value", "unit", "quality", "source_record_id", "evidence_ids", "evidence_hashes", "verification_ids", "verification_status", "note"];
+  const header = ["report_type", "report_title", "organization_id", "period_start", "period_end", "geography_mode", "geography_scope_id", "methodology_code", "methodology_version", "source_revision", "generated_at", "assumptions", "report_issues_json", "schema_version", "snapshot_hash", "report_status", "row_id", "stakeholder", "stakeholder_attribution", "activity_status", "row_label", "field", "value", "unit", "quality", "source_record_id", "evidence_ids", "evidence_hashes", "verification_ids", "verification_status", "note"];
   const rows = snapshot.rows.flatMap(row => row.cells.map(cell => [
     snapshot.reportType, snapshot.title, snapshot.organizationId, snapshot.periodStart, snapshot.periodEnd, snapshot.geographyMode,
     snapshot.geographyScopeId ?? "", snapshot.methodologyCode, snapshot.methodologyVersion, snapshot.sourceRevision, snapshot.generatedAt,
-    (snapshot.assumptions ?? []).join("; "), snapshot.schemaVersion, snapshot.snapshotHash, snapshot.status, row.id, row.stakeholder, row.stakeholderAttribution ?? "NOT_REPORTED",
-    row.label, cell.key, cell.value, cell.unit ?? "", cell.quality, cell.sourceRecordId,
+    (snapshot.assumptions ?? []).join("; "), JSON.stringify(snapshot.issues), snapshot.schemaVersion, snapshot.snapshotHash, snapshot.status, row.id, row.stakeholder, row.stakeholderAttribution ?? "NOT_REPORTED",
+    row.activityStatus ?? "", row.label, cell.key, cell.value, cell.unit ?? "", cell.quality, cell.sourceRecordId,
     (cell.evidence ?? []).map(item => item.evidenceId ?? "").join(";"),
     (cell.evidence ?? []).map(item => item.evidenceHash ?? "").join(";"),
     (cell.evidence ?? []).map(item => item.verificationId ?? "").join(";"),

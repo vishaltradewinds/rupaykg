@@ -118,11 +118,12 @@ test("SWM report resolves verified stakeholder roles and persists immutable tena
     const previewUrl = "/api/v1/reports/swm-2026/preview?periodStart=" + day + "&periodEnd=" + day + "&context=urban";
     const preview = await app.inject({ method: "GET", url: previewUrl, headers: headers(ownerToken, organizationIds[0]!) });
     assert.equal(preview.statusCode, 200, preview.body);
-    const report = preview.json().report as { snapshotHash: string; generatedAt: string; rows: Array<{ id: string; stakeholder: string; stakeholderAttribution: string }> };
+    const report = preview.json().report as { snapshotHash: string; generatedAt: string; rows: Array<{ id: string; stakeholder: string; stakeholderAttribution: string; activityStatus?: string }> };
     const activityRow = report.rows.find(row => row.id === activityId);
     assert.ok(activityRow, "activity must be included in the report snapshot");
     assert.equal(activityRow.stakeholder, "AGGREGATOR");
     assert.equal(activityRow.stakeholderAttribution, "VERIFIED");
+    assert.equal(activityRow.activityStatus, "COMPLETED");
     const previewCsv = await app.inject({ method: "GET", url: previewUrl.replace("/preview?", "/preview.csv?"), headers: headers(ownerToken, organizationIds[0]!) });
     assert.equal(previewCsv.statusCode, 200, previewCsv.body);
     assert.match(previewCsv.headers["content-type"] ?? "", /text\/csv/);

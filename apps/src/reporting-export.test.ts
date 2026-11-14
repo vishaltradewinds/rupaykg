@@ -20,6 +20,7 @@ const base: ReportSnapshotInput = {
     id: "activity-1",
     stakeholder: "AGGREGATOR",
     stakeholderAttribution: "VERIFIED",
+    activityStatus: "COMPLETED",
     label: "कचरा संग्रहण",
     cells: [{
       key: "quantity",
@@ -75,6 +76,7 @@ test("XLSX export is an OOXML workbook with provenance, quality and formula-safe
   const quality = strFromU8(files["xl/worksheets/sheet4.xml"]!);
   assert.match(rows, /AGGREGATOR/);
   assert.match(rows, /VERIFIED/);
+  assert.match(rows, /COMPLETED/);
   assert.match(rows, /&apos;=HYPERLINK/);
   assert.doesNotMatch(rows, /<f[ >]/i);
   assert.match(provenance, /evidence-1/);

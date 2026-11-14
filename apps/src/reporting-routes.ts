@@ -89,11 +89,7 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
                   'municipal_generator','industry_generator','commercial_generator','institution_generator',
                   'bwg','bulk_waste_generator','municipal_admin','ulb_admin','gram_panchayat_admin','panchayat_admin'
                 )) as role_name,
-                count(distinct lower(r.name)) filter (where lower(r.name) in (
-                  'aggregator','processor','recycler','transporter','collector_transporter','generator',
-                  'municipal_generator','industry_generator','commercial_generator','institution_generator',
-                  'bwg','bulk_waste_generator','municipal_admin','ulb_admin','gram_panchayat_admin','panchayat_admin'
-                ))::int as role_count
+                count(distinct lower(r.name))::int as role_count
            from organization_memberships om
            join roles r on r.id=om.role_id and r.organization_id=om.organization_id
           where om.identity_id=a.actor_identity_id
@@ -194,7 +190,7 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
           quality: Number.isFinite(numericValue) ? normalizeReportQuality(measurement.quality_status) : "MISSING" as const,
           sourceRecordId: activity.id,
           evidence: evidenceRefs,
-          note: "Method: " + measurement.method + "; source: " + measurement.source + "; activity type: " + activity.activity_type + "; verified actor role: " + (activity.actor_role_name ?? "unmapped"),
+          note: "Method: " + measurement.method + "; source: " + measurement.source + "; activity type: " + activity.activity_type + "; activity status: " + activity.status + "; verified actor role: " + (activity.actor_role_name ?? "unmapped"),
         };
       }) : [{
         key: "measurement:missing",
@@ -213,6 +209,7 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
         id: activity.id,
         stakeholder: stakeholder.stakeholder,
         stakeholderAttribution: stakeholder.attribution,
+        activityStatus: activity.status,
         label: [activity.activity_type, activity.geography_name ?? "Unlabelled geography"].join(" - "),
         cells,
       };

@@ -54,7 +54,7 @@ function sheetXml(rows: unknown[][], options: SheetOptions = {}): string {
 
 function buildWorkbook(snapshot: ReportSnapshot): Buffer {
   const rowRecords: unknown[][] = [[
-    "Row ID", "Stakeholder", "Stakeholder Attribution", "Row Label", "Field", "Value", "Unit", "Data Quality",
+    "Row ID", "Stakeholder", "Stakeholder Attribution", "Activity Status", "Row Label", "Field", "Value", "Unit", "Data Quality",
     "Source Record ID", "Evidence IDs", "Evidence Hashes", "Verification IDs", "Verification Statuses", "Notes",
   ]];
   const provenance: unknown[][] = [[
@@ -64,7 +64,7 @@ function buildWorkbook(snapshot: ReportSnapshot): Buffer {
     for (const cell of row.cells) {
       const evidence = cell.evidence ?? [];
       rowRecords.push([
-        row.id, row.stakeholder, row.stakeholderAttribution ?? "NOT_REPORTED", row.label, cell.key, cell.value,
+        row.id, row.stakeholder, row.stakeholderAttribution ?? "NOT_REPORTED", row.activityStatus ?? "NOT_REPORTED", row.label, cell.key, cell.value,
         cell.unit ?? "", cell.quality, cell.sourceRecordId,
         evidence.map(item => item.evidenceId ?? "").join("; "),
         evidence.map(item => item.evidenceHash ?? "").join("; "),
@@ -157,7 +157,7 @@ function buildWorkbook(snapshot: ReportSnapshot): Buffer {
     "xl/_rels/workbook.xml.rels": strToU8(workbookRels),
     "xl/styles.xml": strToU8(styles),
     "xl/worksheets/sheet1.xml": strToU8(sheetXml(summary, { title: true, widths: [28, 84] })),
-    "xl/worksheets/sheet2.xml": strToU8(sheetXml(rowRecords, { header: true, freeze: true, filter: true, widths: [38, 22, 24, 42, 24, 18, 12, 16, 40, 44, 68, 44, 34, 72] })),
+    "xl/worksheets/sheet2.xml": strToU8(sheetXml(rowRecords, { header: true, freeze: true, filter: true, widths: [38, 22, 24, 20, 42, 24, 18, 12, 16, 40, 44, 68, 44, 34, 72] })),
     "xl/worksheets/sheet3.xml": strToU8(sheetXml(provenance, { header: true, freeze: true, filter: true, widths: [38, 24, 40, 40, 68, 40, 28] })),
     "xl/worksheets/sheet4.xml": strToU8(sheetXml(qualityRows, { header: true, freeze: true, filter: true, widths: [18, 32, 38, 24, 100] })),
     "docProps/core.xml": strToU8(core),
@@ -232,7 +232,7 @@ export async function createReportPdf(snapshot: ReportSnapshot): Promise<Buffer>
       snapshot.rows.forEach((row, rowIndex) => {
         ensureSpace(54);
         doc.font(fontPath).fontSize(10).fillColor("#0f172a").text((rowIndex + 1) + ". " + row.label, { width: pageWidth });
-        doc.font(fontPath).fontSize(8).fillColor("#475569").text("Stakeholder: " + row.stakeholder + " | Attribution: " + (row.stakeholderAttribution ?? "NOT_REPORTED") + " | Row ID: " + row.id, { width: pageWidth });
+        doc.font(fontPath).fontSize(8).fillColor("#475569").text("Stakeholder: " + row.stakeholder + " | Attribution: " + (row.stakeholderAttribution ?? "NOT_REPORTED") + " | Activity Status: " + (row.activityStatus ?? "NOT_REPORTED") + " | Row ID: " + row.id, { width: pageWidth });
         for (const cell of row.cells) {
           ensureSpace(42);
           const value = cell.value === null ? "MISSING" : String(cell.value);

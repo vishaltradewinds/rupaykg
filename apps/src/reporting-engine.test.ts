@@ -123,6 +123,35 @@ test("CSV preserves snapshot-level provenance and escapes minus-prefixed text bu
   assert.ok(csv.includes(",-10,kg"));
 });
 
+test("non-completed activity lifecycle blocks report readiness", () => {
+  const report = buildReportSnapshot({
+    ...base,
+    rows: [{ ...base.rows[0]!, activityStatus: "DRAFT" }],
+  });
+  assert.equal(report.status, "BLOCKED");
+  assert.ok(report.issues.some(issue => issue.code === "ACTIVITY_NOT_COMPLETED"));
+});
+
+test("CSV exports include activity lifecycle and complete issue details", () => {
+  const report = buildReportSnapshot({
+    ...base,
+    rows: [{
+      ...base.rows[0]!,
+      activityStatus: "REJECTED",
+      cells: [{ ...base.rows[0]!.cells[0]!, value: null, quality: "MISSING", evidence: [] }],
+    }],
+  });
+  const csv = reportSnapshotToCsv(report);
+  const header = csv.split("\r\n")[0]!;
+  assert.ok(header.includes("activity_status"));
+  assert.ok(header.includes("report_issues_json"));
+  assert.ok(csv.includes(",REJECTED,"));
+  assert.ok(csv.includes("ACTIVITY_NOT_COMPLETED"));
+  assert.ok(csv.includes("Activity lifecycle status is REJECTED"));
+  assert.ok(csv.includes("MISSING_VALUE"));
+  assert.ok(csv.includes("MISSING_EVIDENCE"));
+});
+
 test("verified evidence status without a verification record reference stays a draft", () => {
   const report = buildReportSnapshot({
     ...base,
