@@ -37,6 +37,7 @@ export function parseSwmReportQuery(query: Query): { periodStart: string; period
 }
 async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<ReturnType<typeof parseSwmReportQuery>>): Promise<ReportData> {
   return withTenantTransaction(pool, auth, async client => {
+    if (!auth.activeOrganizationId) throw Object.assign(new Error("Active organization is required"), { code: "REPORT_FORBIDDEN" });
     if (!auth.activeOrganizationId || !await hasOrganizationPermission(client, auth, auth.activeOrganizationId, ["reports:read", "swm:read"])) {
       throw Object.assign(new Error("SWM report read permission required"), { code: "REPORT_FORBIDDEN" });
     }
@@ -185,6 +186,8 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
       rows,
       assumptions: [
         "This is an internal reporting preview, not a CPCB filing, statutory submission, certificate or assurance opinion.",
+        "The methodology code and version identify this internal reporting template; they are not an official CPCB-approved calculation methodology.",
+        ...(sourceRevision === "unavailable" ? ["Source code revision was unavailable at generation time; the report is not review-ready."] : []),
         "Activity types are not treated as verified stakeholder roles; stakeholder attribution remains OTHER until an authoritative role relationship is available.",
         "Only activity measurements and linked evidence available to the active organization are included.",
         ...(activities.length > 500 || flowResult.rows.length > 500 ? ["Preview capped at 500 activities and 500 declared material flows; narrow the period or geography for a complete extract."] : []),
