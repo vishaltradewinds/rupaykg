@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { FastifyInstance } from "fastify";
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 
 type Body = Record<string, unknown>;
 const read = (body: Body, key: string) => typeof body[key] === "string" && body[key].trim() ? body[key].trim() : null;
@@ -25,17 +25,38 @@ async function deliver(to: string, subject: string, text: string): Promise<boole
   } catch { return false; }
 }
 
+// The database login does not inherit application privileges. Every auth
+// endpoint that touches tenant-protected identity/token tables must assume the
+// runtime role inside a transaction, matching authenticate() and tenant routes.
+async function withRuntimeRole<T>(pool: Pool, work: (client: PoolClient) => Promise<T>): Promise<T> {
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    await client.query("set local role rupaykg_app_runtime");
+    const result = await work(client);
+    await client.query("commit");
+    return result;
+  } catch (error) {
+    try { await client.query("rollback"); } catch {}
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 async function createToken(pool: Pool, table: "identity_email_verification_tokens" | "identity_password_reset_tokens", identityId: string): Promise<string | null> {
-  const recent = await pool.query<{ count: string; last_created_at: Date | null }>(
-    `select count(*)::text as count,max(created_at) as last_created_at from ${table} where identity_id=$1 and created_at>now()-interval '1 hour'`,
-    [identityId],
-  );
-  if (Number(recent.rows[0]?.count ?? 0) >= 5) return null;
-  if (recent.rows[0]?.last_created_at && recent.rows[0].last_created_at.getTime() > Date.now() - 60_000) return null;
-  const value = token();
-  await pool.query(`update ${table} set consumed_at=now() where identity_id=$1 and consumed_at is null`, [identityId]);
-  await pool.query(`insert into ${table}(identity_id,token_hash,expires_at) values($1,$2,now()+interval '30 minutes')`, [identityId,digest(value)]);
-  return value;
+  return withRuntimeRole(pool, async (client) => {
+    const recent = await client.query<{ count: string; last_created_at: Date | null }>(
+      `select count(*)::text as count,max(created_at) as last_created_at from ${table} where identity_id=$1 and created_at>now()-interval '1 hour'`,
+      [identityId],
+    );
+    if (Number(recent.rows[0]?.count ?? 0) >= 5) return null;
+    if (recent.rows[0]?.last_created_at && recent.rows[0].last_created_at.getTime() > Date.now() - 60_000) return null;
+    const value = token();
+    await client.query(`update ${table} set consumed_at=now() where identity_id=$1 and consumed_at is null`, [identityId]);
+    await client.query(`insert into ${table}(identity_id,token_hash,expires_at) values($1,$2,now()+interval '30 minutes')`, [identityId,digest(value)]);
+    return value;
+  });
 }
 
 export async function sendVerification(pool: Pool, identityId: string, email: string): Promise<boolean> {
@@ -54,6 +75,7 @@ export async function registerEmailRecoveryRoutes(app: FastifyInstance, pool: Po
     const client = await pool.connect();
     try {
       await client.query("begin");
+      await client.query("set local role rupaykg_app_runtime");
       const found = await client.query<{ identity_id: string }>(
         "select identity_id from identity_email_verification_tokens where token_hash=$1 and consumed_at is null and expires_at>now() for update",
         [digest(value)],
@@ -72,7 +94,7 @@ export async function registerEmailRecoveryRoutes(app: FastifyInstance, pool: Po
     if (!pool) return reply.code(503).send({ error: "Database unavailable", code: "DATABASE_UNAVAILABLE" });
     const email = read((request.body ?? {}) as Body, "email")?.toLowerCase();
     if (!email) return reply.code(400).send({ error: "Email is required", code: "INVALID_EMAIL" });
-    const result = await pool.query<{ id: string; email: string }>("select id,email from identities where lower(email)=lower($1) and status='PENDING' limit 1", [email]);
+    const result = await withRuntimeRole(pool, (client) => client.query<{ id: string; email: string }>("select id,email from identities where lower(email)=lower($1) and status='PENDING' limit 1", [email]));
     if (result.rows[0]) {
       const sent = await sendVerification(pool, result.rows[0].id, result.rows[0].email);
       if (!sent) request.log.warn("Email verification delivery is not configured or failed");
@@ -84,7 +106,7 @@ export async function registerEmailRecoveryRoutes(app: FastifyInstance, pool: Po
     if (!pool) return reply.code(503).send({ error: "Database unavailable", code: "DATABASE_UNAVAILABLE" });
     const email = read((request.body ?? {}) as Body, "email")?.toLowerCase();
     if (!email) return reply.code(400).send({ error: "Email is required", code: "INVALID_EMAIL" });
-    const result = await pool.query<{ id: string; email: string }>("select id,email from identities where lower(email)=lower($1) and status='VERIFIED' and suspended_at is null limit 1", [email]);
+    const result = await withRuntimeRole(pool, (client) => client.query<{ id: string; email: string }>("select id,email from identities where lower(email)=lower($1) and status='VERIFIED' and suspended_at is null limit 1", [email]));
     if (result.rows[0]) {
       const value = await createToken(pool, "identity_password_reset_tokens", result.rows[0].id);
       const origin = process.env.RUPAYKG_ALLOWED_ORIGINS?.split(",")[0]?.trim();
@@ -104,6 +126,7 @@ export async function registerEmailRecoveryRoutes(app: FastifyInstance, pool: Po
     const client = await pool.connect();
     try {
       await client.query("begin");
+      await client.query("set local role rupaykg_app_runtime");
       const found = await client.query<{ identity_id: string }>(
         "select identity_id from identity_password_reset_tokens where token_hash=$1 and consumed_at is null and expires_at>now() for update",
         [digest(value)],
