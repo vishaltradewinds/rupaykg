@@ -85,6 +85,7 @@ export function buildReportSnapshot(input: ReportSnapshotInput): ReportSnapshot 
   for (const row of input.rows) {
     if (!row.id.trim() || rowIds.has(row.id)) throw new Error("Report row IDs must be non-empty and unique");
     rowIds.add(row.id);
+    if (row.stakeholderAttribution === "UNMAPPED") issues.push({ code: "UNMAPPED_STAKEHOLDER", rowId: row.id, cellKey: "__stakeholder__", detail: "Stakeholder role is not backed by an authoritative organization-role relationship." });
     const keys = new Set<string>();
     for (const cell of row.cells) {
       if (!cell.key.trim() || keys.has(cell.key)) throw new Error(`Cell keys must be unique within row ${row.id}`);
