@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 export type ReportStatus = "BLOCKED" | "READY_FOR_REVIEW" | "DRAFT";
 export type ReportValue = string | number | boolean | null;
-export type ReportQuality = "OBSERVED" | "ESTIMATED" | "DISPUTED" | "MISSING";
+export type ReportQuality = "OBSERVED" | "DECLARED" | "ESTIMATED" | "DISPUTED" | "MISSING";
 export type ReportEvidence = {
   sourceRecordId: string;
   evidenceId?: string | null;
@@ -40,7 +40,7 @@ export type ReportSnapshotInput = {
   assumptions?: string[];
 };
 export type ReportIssue = {
-  code: "MISSING_VALUE" | "ESTIMATED_VALUE" | "DISPUTED_VALUE" | "MISSING_EVIDENCE" | "UNVERIFIED_EVIDENCE";
+  code: "MISSING_VALUE" | "DECLARED_VALUE" | "ESTIMATED_VALUE" | "DISPUTED_VALUE" | "MISSING_EVIDENCE" | "UNVERIFIED_EVIDENCE";
   rowId: string;
   cellKey: string;
   detail: string;
@@ -91,7 +91,7 @@ export function buildReportSnapshot(input: ReportSnapshotInput): ReportSnapshot 
       if (typeof cell.value === "number" && !Number.isFinite(cell.value)) throw new Error(`Report value must be finite for ${row.id}.${cell.key}`);
       sourceRecordIds.add(cell.sourceRecordId);
       if (cell.quality === "MISSING" || cell.value === null) issues.push({ code: "MISSING_VALUE", rowId: row.id, cellKey: cell.key, detail: "Value is missing; do not infer or silently substitute zero." });
-      if (cell.quality === "ESTIMATED") issues.push({ code: "ESTIMATED_VALUE", rowId: row.id, cellKey: cell.key, detail: "Value is estimated and must remain visibly identified." });
+      if (cell.quality === "DECLARED") issues.push({ code: "DECLARED_VALUE", rowId: row.id, cellKey: cell.key, detail: "Value is a stakeholder-declared quantity; it is not treated as independently measured." });\n      if (cell.quality === "ESTIMATED") issues.push({ code: "ESTIMATED_VALUE", rowId: row.id, cellKey: cell.key, detail: "Value is estimated and must remain visibly identified." });
       if (cell.quality === "DISPUTED") issues.push({ code: "DISPUTED_VALUE", rowId: row.id, cellKey: cell.key, detail: "Value is disputed and requires resolution." });
       if (cell.evidence?.length) {
         for (const evidence of cell.evidence) {
