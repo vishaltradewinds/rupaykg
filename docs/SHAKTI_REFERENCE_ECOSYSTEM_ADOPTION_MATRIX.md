@@ -188,3 +188,17 @@ Before any external reference is implemented:
 **RupayKg does not copy the reference ecosystem. RupayKg learns from it, verifies it, localises it, and selectively incorporates what survives Shakti review.**
 
 **Shakti remains the control plane. Indian statutory/regulatory authority remains the highest external authority. External ecosystems remain evidence-backed reference sources unless separately made authoritative.**
+
+
+## CAD Trust focused interoperability profile
+
+The detailed design is maintained in [CAD Trust Interoperability Profile](CAD_TRUST_INTEROPERABILITY_PROFILE.md).
+
+**Decision: ADAPT.** Initial work is schema discovery, field-level crosswalk and fixture-based validation. Any connector must sit behind the existing external-integration mediator/adapter registry; no parallel carbon registry or MRV subsystem is to be created.
+
+- First runtime mode: read-only observer/subscriber only, after endpoint and terms validation.
+- No CAD Trust publishing, write credentials, Chia node, tokenisation or production infrastructure in this phase.
+- Map CAD Trust v2 Program, Methodology, Project, Project-Methodology, Stakeholder, Validation/Verification, Issuance/Unit and lifecycle events to existing RupayKg domains; preserve Generator, Aggregator and Recycler as distinct stakeholder roles.
+- Use cross-registry matches as double-counting risk signals requiring provenance and review, not as proof of physical activity or automatic claim rejection.
+- Tenant isolation, data minimisation, schema versioning, failure handling and acceptance gates remain mandatory.
+- No TRL uplift or registry-participant status is implied.

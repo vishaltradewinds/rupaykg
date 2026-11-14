@@ -194,14 +194,17 @@
     },
     {
       "referenceId": "cad-trust",
-      "status": "PARTIAL",
+      "status": "FIELD-CROSSWALK-COMPLETED",
       "implementation": [
+        "docs/CAD_TRUST_INTEROPERABILITY_PROFILE.md",
+        "docs/CAD_TRUST_V2_FIELD_CROSSWALK.md",
         "apps/src/registry-routes.ts",
-        "apps/src/guardian-mrv.ts"
+        "apps/src/guardian-mrv.ts",
+        "existing external integration mediator and adapter registry (provider connector not yet verified)"
       ],
-      "gap": "No CAD Trust exchange profile or interoperability evidence.",
+      "gap": "Pinned CAD Trust v2.0.2 field-by-field crosswalk completed against isolated Neon acceptance-branch schema. Reusable RupayKg domains exist, but no CADT-specific programme, project-methodology junction, project stakeholder relationship, distinct validation, issuance batch, carbon-unit, rating, co-benefit or unit-label model was identified. No runtime mapper, connector, tests or external consumer acceptance is evidenced.",
       "decision": "ADAPT",
-      "nextAction": "Map after authoritative carbon registry model is frozen."
+      "nextAction": "Implement a pure versioned mapping/validation package and fixture suite only after the mapping contract is reviewed. Keep initial adapter read-only (GET only); add no mirrored CADT tables. Confirm whether multiple methodologies per carbon project and project-specific stakeholder roles are product requirements before considering domain schema extensions. Never map EPR credits to CADT carbon units."
     },
     {
       "referenceId": "unfccc-article-6-4-patterns",
@@ -293,6 +296,12 @@
       "item": "ASPI policy intelligence crosswalk",
       "status": "DOCUMENTED-RESEARCH-REFERENCE",
       "reason": "September 2024 India CCTS/ETS policy paper is mapped to existing carbon controls; current official-source validation and any customer/authority-specific finance reporting use case remain conditional."
+    },
+    {
+      "priority": "P2",
+      "item": "CAD Trust v2 read-only interoperability",
+      "status": "DOCUMENTED-PROFILE / NOT-IMPLEMENTED",
+      "reason": "Architecture profile exists; schema pinning, field-level mapping, fixture tests, secure read-only adapter and external consumer acceptance remain."
     }
   ]
 }

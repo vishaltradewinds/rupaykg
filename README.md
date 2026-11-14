@@ -18,5 +18,7 @@ Current validation target: statutory BWG nullability narrowing and type-safe onb
 - [Environmental Operating System Control Matrix](docs/RUPAYKG_ENVIRONMENTAL_OPERATING_SYSTEM_CONTROL_MATRIX.md)
 - [Shakti Production Gate](docs/SHAKTI_PRODUCTION_GATE_RUPAYKG.md)
 - [Shakti Tenant Isolation Gate](docs/SHAKTI_TENANT_ISOLATION_GATE.md)
+- [CAD Trust Interoperability Profile](docs/CAD_TRUST_INTEROPERABILITY_PROFILE.md)
+- [CAD Trust v2 Field Crosswalk](docs/CAD_TRUST_V2_FIELD_CROSSWALK.md)
 
 These documents are controlled engineering references. They do not by themselves establish regulatory approval, field acceptance, certification, or TRL 9.

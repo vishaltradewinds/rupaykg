@@ -13,6 +13,7 @@ This document defines how RupayKg may use external digital-infrastructure, stand
 | Digital Public Goods Alliance | Reusable open-source software, standards and interoperability patterns | Reference only |
 | Global DPI Repository | Proven digital-infrastructure architecture, governance and deployment patterns | Reference only |
 | Relevant Indian DPI ecosystems | National interoperability and implementation patterns | Use as applicable; authoritative status depends on the specific government source/interface |
+| Climate Action Data Trust (CAD Trust) | International carbon-market data interoperability initiative and shared registry data infrastructure; reference for schema exchange, registry transparency and cross-registry data consistency | Reference only; not a statutory standard, Indian regulatory authority, carbon-credit quality certification or substitute for CPCB/EPR/CCTS requirements |
 
 ## Mandatory adoption sequence
 
