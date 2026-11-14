@@ -71,19 +71,36 @@ function validDate(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value + "T00:00:00Z")) && new Date(value + "T00:00:00Z").toISOString().slice(0, 10) === value;
 }
 
+function deepFreeze<T>(value: T): T {
+  if (value && typeof value === "object" && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const nested of Object.values(value as Record<string, unknown>)) deepFreeze(nested);
+  }
+  return value;
+}
+
+/** Recomputes the canonical hash from snapshot content, ignoring any embedded hash field. */
+export function computeReportSnapshotHash(snapshot: Omit<ReportSnapshot, "snapshotHash"> | ReportSnapshot): string {
+  const content = { ...snapshot } as Record<string, unknown>;
+  delete content.snapshotHash;
+  return createHash("sha256").update(canonical(content)).digest("hex");
+}
+
 /** Builds an immutable, deterministic report snapshot; it never upgrades evidence or assurance states. */
 export function buildReportSnapshot(input: ReportSnapshotInput): ReportSnapshot {
-  if (!input.reportType.trim() || !input.title.trim() || !input.organizationId.trim()) throw new Error("Report type, title and organization are required");
-  if (!validDate(input.periodStart) || !validDate(input.periodEnd) || input.periodStart > input.periodEnd) throw new Error("A valid, ordered reporting period is required");
-  if (!input.methodologyCode.trim() || !input.methodologyVersion.trim() || !input.sourceRevision.trim()) throw new Error("Methodology version and source revision are required");
-  if (!Number.isFinite(Date.parse(input.generatedAt))) throw new Error("generatedAt must be a valid timestamp");
-  if (!input.rows.length) throw new Error("A report must contain at least one source row");
+  // Detach all nested caller-owned data before validation, hashing and freezing.
+  const source = JSON.parse(JSON.stringify(input)) as ReportSnapshotInput;
+  if (!source.reportType.trim() || !source.title.trim() || !source.organizationId.trim()) throw new Error("Report type, title and organization are required");
+  if (!validDate(source.periodStart) || !validDate(source.periodEnd) || source.periodStart > source.periodEnd) throw new Error("A valid, ordered reporting period is required");
+  if (!source.methodologyCode.trim() || !source.methodologyVersion.trim() || !source.sourceRevision.trim()) throw new Error("Methodology version and source revision are required");
+  if (!Number.isFinite(Date.parse(source.generatedAt))) throw new Error("generatedAt must be a valid timestamp");
+  if (!source.rows.length) throw new Error("A report must contain at least one source row");
   const rowIds = new Set<string>();
   const issues: ReportIssue[] = [];
-  if (input.sourceRevision === "unavailable") issues.push({ code: "SOURCE_REVISION_UNAVAILABLE", rowId: "__report__", cellKey: "sourceRevision", detail: "Source code revision is unavailable; report reproducibility cannot be confirmed." });
+  if (source.sourceRevision === "unavailable") issues.push({ code: "SOURCE_REVISION_UNAVAILABLE", rowId: "__report__", cellKey: "sourceRevision", detail: "Source code revision is unavailable; report reproducibility cannot be confirmed." });
   const sourceRecordIds = new Set<string>();
   const evidenceHashes = new Set<string>();
-  for (const row of input.rows) {
+  for (const row of source.rows) {
     if (!row.id.trim() || rowIds.has(row.id)) throw new Error("Report row IDs must be non-empty and unique");
     rowIds.add(row.id);
     if (row.stakeholderAttribution === "UNMAPPED") issues.push({ code: "UNMAPPED_STAKEHOLDER", rowId: row.id, cellKey: "__stakeholder__", detail: "Stakeholder role is not backed by an authoritative organization-role relationship." });
@@ -116,28 +133,29 @@ export function buildReportSnapshot(input: ReportSnapshotInput): ReportSnapshot 
   const blocking = issues.some(issue => ["MISSING_VALUE", "DISPUTED_VALUE"].includes(issue.code));
   const status: ReportStatus = blocking ? "BLOCKED" : issues.length ? "DRAFT" : "READY_FOR_REVIEW";
   const base = {
-    ...input,
+    ...source,
     schemaVersion: "rupaykg.report.v1" as const,
     status,
     issues,
     sourceRecordIds: [...sourceRecordIds].sort(),
     evidenceHashes: [...evidenceHashes].sort(),
   };
-  return { ...base, snapshotHash: createHash("sha256").update(canonical(base)).digest("hex") };
+  return deepFreeze({ ...base, snapshotHash: computeReportSnapshotHash(base) });
 }
 
 function csv(value: unknown): string {
   const raw = value === null || value === undefined ? "" : String(value);
-  const text = typeof value === "string" && /^[=+@\t\r]/.test(raw) ? "'" + raw : raw;
+  const text = typeof value === "string" && /^[=+\-@\t\r]/.test(raw) ? "'" + raw : raw;
   return /[",\r\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
 }
 
 /** A lossless, machine-readable long-form CSV adapter for a report snapshot. */
 export function reportSnapshotToCsv(snapshot: ReportSnapshot): string {
-  const header = ["report_type", "report_title", "organization_id", "period_start", "period_end", "geography_mode", "methodology_code", "methodology_version", "snapshot_hash", "report_status", "row_id", "stakeholder", "stakeholder_attribution", "row_label", "field", "value", "unit", "quality", "source_record_id", "evidence_ids", "evidence_hashes", "verification_ids", "verification_status", "note"];
+  const header = ["report_type", "report_title", "organization_id", "period_start", "period_end", "geography_mode", "geography_scope_id", "methodology_code", "methodology_version", "source_revision", "generated_at", "assumptions", "schema_version", "snapshot_hash", "report_status", "row_id", "stakeholder", "stakeholder_attribution", "row_label", "field", "value", "unit", "quality", "source_record_id", "evidence_ids", "evidence_hashes", "verification_ids", "verification_status", "note"];
   const rows = snapshot.rows.flatMap(row => row.cells.map(cell => [
     snapshot.reportType, snapshot.title, snapshot.organizationId, snapshot.periodStart, snapshot.periodEnd, snapshot.geographyMode,
-    snapshot.methodologyCode, snapshot.methodologyVersion, snapshot.snapshotHash, snapshot.status, row.id, row.stakeholder, row.stakeholderAttribution ?? "NOT_REPORTED",
+    snapshot.geographyScopeId ?? "", snapshot.methodologyCode, snapshot.methodologyVersion, snapshot.sourceRevision, snapshot.generatedAt,
+    (snapshot.assumptions ?? []).join("; "), snapshot.schemaVersion, snapshot.snapshotHash, snapshot.status, row.id, row.stakeholder, row.stakeholderAttribution ?? "NOT_REPORTED",
     row.label, cell.key, cell.value, cell.unit ?? "", cell.quality, cell.sourceRecordId,
     (cell.evidence ?? []).map(item => item.evidenceId ?? "").join(";"),
     (cell.evidence ?? []).map(item => item.evidenceHash ?? "").join(";"),
