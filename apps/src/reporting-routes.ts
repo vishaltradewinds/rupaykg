@@ -34,7 +34,7 @@ export function parseSwmReportQuery(query: Query): { periodStart: string; period
   if (query.geographyId !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(query.geographyId)) return null;
   return { periodStart: query.periodStart, periodEnd: query.periodEnd, context: query.context, ...(query.geographyId ? { geographyId: query.geographyId } : {}) };
 }
-async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<ReturnType<typeof parseQuery>>): Promise<ReportData> {
+async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<ReturnType<typeof parseSwmReportQuery>>): Promise<ReportData> {
   return withTenantTransaction(pool, auth, async client => {
     if (!auth.activeOrganizationId || !await hasOrganizationPermission(client, auth, auth.activeOrganizationId, ["reports:read", "swm:read"])) {
       throw Object.assign(new Error("SWM report read permission required"), { code: "REPORT_FORBIDDEN" });
@@ -187,7 +187,7 @@ export async function registerReportingRoutes(app: FastifyInstance, pool: Pool |
     try { auth = await authenticate(request, pool); }
     catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication unavailable", code: "AUTH_UNAVAILABLE", syntheticData: false }); }
     if (!auth) return reply.code(401).send(bearerChallenge());
-    const params = parseQuery(request.query as Query);
+    const params = parseSwmReportQuery(request.query as Query);
     if (!params) return reply.code(400).send({ error: "Valid periodStart, periodEnd and context=urban|rural are required; geographyId must be a UUID", code: "INVALID_REPORT_QUERY", syntheticData: false });
     try {
       const data = await loadSwmReport(pool, auth, params);
