@@ -92,7 +92,7 @@ export function buildReportSnapshot(input: ReportSnapshotInput): ReportSnapshot 
       sourceRecordIds.add(cell.sourceRecordId);
       if (cell.quality === "MISSING" || cell.value === null) issues.push({ code: "MISSING_VALUE", rowId: row.id, cellKey: cell.key, detail: "Value is missing; do not infer or silently substitute zero." });
       if (cell.quality === "DECLARED") issues.push({ code: "DECLARED_VALUE", rowId: row.id, cellKey: cell.key, detail: "Value is a stakeholder-declared quantity; it is not treated as independently measured." });
-      if (cell.quality === "ESTIMATED")undefined
+      if (cell.quality === "ESTIMATED") issues.push({ code: "ESTIMATED_VALUE", rowId: row.id, cellKey: cell.key, detail: "Value is estimated and must remain visibly identified." });
       if (cell.quality === "DISPUTED") issues.push({ code: "DISPUTED_VALUE", rowId: row.id, cellKey: cell.key, detail: "Value is disputed and requires resolution." });
       if (cell.evidence?.length) {
         for (const evidence of cell.evidence) {
