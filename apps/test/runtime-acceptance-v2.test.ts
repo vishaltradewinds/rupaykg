@@ -163,7 +163,7 @@ describe("runtime acceptance", () => {
     const evidenceApplied = await submitAndApply({ operationType: "EVIDENCE_CREATE", activityId, evidenceType: "WEIGHBRIDGE_RECORD", capturedAt: measuredAt, contentHash: `sha256:${suffix}`, measurementId }, actorToken, 3, `evidence-${suffix}`);
     evidenceId = evidenceApplied.entityId as string;
     const self = await request(`/api/v1/evidence/${evidenceId}/verification`, { method: "POST", body: JSON.stringify({ decision: "APPROVED", scope: "runtime", rationale: "Independent acceptance test review" }) }, actorToken);
-    assert.equal(self.status, 403);
+    assert.equal(self.status, 403); assert.equal((await body(self)).code, "VERIFIER_INDEPENDENCE_REQUIRED");
     const verified = await request(`/api/v1/evidence/${evidenceId}/verification`, { method: "POST", body: JSON.stringify({ decision: "APPROVED", scope: "runtime", rationale: "Independent acceptance test review" }) }, verifierToken);
     assert.equal(verified.status, 201);
     const state = await pool.query<{ activity_status: string; evidence_status: string }>("select a.status activity_status,e.status evidence_status from activities a join evidence e on e.activity_id=a.id where a.id=$1 and e.id=$2", [activityId, evidenceId]);

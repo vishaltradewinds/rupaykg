@@ -85,13 +85,53 @@ export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool |
   });
 
   app.post("/api/v1/evidence/:evidenceId/verification", async (request, reply) => {
-    if (!pool) return reply.code(503).send({error:"Evidence verification unavailable",code:"DATABASE_UNAVAILABLE",syntheticData:false}); let auth:AuthContext|null;
-    try{auth=await authenticate(request,pool);}catch(error){request.log.error(error);return reply.code(503).send({error:"Authentication service unavailable",code:"AUTH_UNAVAILABLE",syntheticData:false});} if(!auth)return reply.code(401).send(bearerChallenge());
-    const {evidenceId}=request.params as {evidenceId:string}; if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(evidenceId))return reply.code(400).send({error:"evidenceId must be a UUID",code:"INVALID_EVIDENCE_ID"});
-    const body=request.body&&typeof request.body==="object"?request.body as Record<string,unknown>:{};const decision=typeof body.decision==="string"?body.decision.trim().toUpperCase():"";const scope=typeof body.scope==="string"?body.scope.trim():"";if(decision!=="APPROVED"||!scope)return reply.code(400).send({error:"decision=APPROVED and scope are required",code:"INVALID_VERIFICATION"});
-    const client=await pool.connect();try{await client.query("BEGIN");const evidence=await client.query<{activity_id:string}>("select activity_id from evidence where id=$1 for update",[evidenceId]);const activityId=evidence.rows[0]?.activity_id;if(!activityId){await client.query("ROLLBACK");return reply.code(404).send({error:"Evidence not found",code:"EVIDENCE_NOT_FOUND"});}if(auth.activeOrganizationId){const scopeCheck=await client.query<{ok:boolean}>("select exists(select 1 from activities where id=$1 and organization_id=$2) as ok",[activityId,auth.activeOrganizationId]);if(!scopeCheck.rows[0]?.ok){await client.query("ROLLBACK");return reply.code(403).send({error:"Evidence is outside the active organization scope",code:"ORGANIZATION_FORBIDDEN"});}}const authorized=await canVerifyEvidence(client,auth.identityId,evidenceId);if(!authorized){await client.query("ROLLBACK");return reply.code(403).send({error:"Explicit verification permission required",code:"VERIFY_EVIDENCE_FORBIDDEN"});}const inserted=await client.query("insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope) values($1,$2,$3,$4,$5) returning id,evidence_id,activity_id,verifier_identity_id,decision,scope,decided_at",[evidenceId,activityId,auth.identityId,decision,scope]);await client.query("update evidence set status='VERIFIED' where id=$1",[evidenceId]);await client.query("COMMIT");return reply.code(201).send({source:"postgresql",syntheticData:false,authoritativeMutation:true,verification:inserted.rows[0]}); }catch(error){await client.query("ROLLBACK");request.log.error(error);return reply.code(503).send({error:"Evidence verification unavailable",code:"VERIFICATION_UNAVAILABLE",syntheticData:false});}finally{client.release();}
-  });
+    if (!pool) return reply.code(503).send({ error: "Evidence verification unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false });
+    let auth: AuthContext | null;
+    try { auth = await authenticate(request, pool); }
+    catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE", syntheticData: false }); }
+    if (!auth) return reply.code(401).send(bearerChallenge());
 
+    const { evidenceId } = request.params as { evidenceId: string };
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(evidenceId)) {
+      return reply.code(400).send({ error: "evidenceId must be a UUID", code: "INVALID_EVIDENCE_ID" });
+    }
+    const body = request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {};
+    const decision = typeof body.decision === "string" ? body.decision.trim().toUpperCase() : "";
+    const scope = typeof body.scope === "string" ? body.scope.trim() : "";
+    if (decision !== "APPROVED" || !scope) return reply.code(400).send({ error: "decision=APPROVED and scope are required", code: "INVALID_VERIFICATION" });
+
+    try {
+      const outcome = await withTenantTransaction(pool, auth, async (client) => {
+        const evidence = await client.query<{ activity_id: string; actor_identity_id: string; organization_id: string }>(
+          `select e.activity_id, a.actor_identity_id, a.organization_id
+             from evidence e join activities a on a.id = e.activity_id
+            where e.id = $1 for update of e`,
+          [evidenceId],
+        );
+        const row = evidence.rows[0];
+        if (!row) return { status: 404, body: { error: "Evidence not found", code: "EVIDENCE_NOT_FOUND" } };
+        if (auth.activeOrganizationId && row.organization_id !== auth.activeOrganizationId) {
+          return { status: 403, body: { error: "Evidence is outside the active organization scope", code: "ORGANIZATION_FORBIDDEN" } };
+        }
+        if (row.actor_identity_id === auth.identityId) {
+          return { status: 403, body: { error: "Evidence creator cannot verify their own activity", code: "VERIFIER_INDEPENDENCE_REQUIRED" } };
+        }
+        const authorized = await canVerifyEvidence(client, auth.identityId, evidenceId);
+        if (!authorized) return { status: 403, body: { error: "Explicit verification permission required", code: "VERIFY_EVIDENCE_FORBIDDEN" } };
+
+        const inserted = await client.query(
+          "insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope) values($1,$2,$3,$4,$5) returning id,evidence_id,activity_id,verifier_identity_id,decision,scope,decided_at",
+          [evidenceId, row.activity_id, auth.identityId, decision, scope],
+        );
+        await client.query("update evidence set status='VERIFIED' where id=$1", [evidenceId]);
+        return { status: 201, body: { source: "postgresql", syntheticData: false, authoritativeMutation: true, verification: inserted.rows[0] } };
+      });
+      return reply.code(outcome.status).send(outcome.body);
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(503).send({ error: "Evidence verification unavailable", code: "VERIFICATION_UNAVAILABLE", syntheticData: false });
+    }
+  });
   app.get("/api/v1/workspaces/compliance", async (request, reply) => {
     const auth=await requireAuth(app,pool,request,reply);if(!auth||!pool)return;const ids=orgIds(auth);if(!ids.length)return result({obligations:[]});const geographyId=requestedGeography(request);if(geographyId&&!await withTenantTransaction(pool, auth, client => authorizeGeography(client, auth, geographyId)))return reply.code(403).send({error:"Geography outside organization authorization scope",code:"GEOGRAPHY_FORBIDDEN"});
     try { return await withTenantTransaction(pool, auth, async client => {const params:unknown[]=[ids];if(geographyId)params.push(geographyId);const clause=geoClause(geographyId,"ob.jurisdiction_id");const rows=await client.query(`select ob.id,ob.organization_id,o.name as organization_name,ob.jurisdiction_id,g.name as jurisdiction_name,ob.obligation_type,ob.period_start,ob.period_end,ob.required_quantity,ob.status from obligations ob join organizations o on o.id=ob.organization_id left join geography g on g.id=ob.jurisdiction_id where ob.organization_id=any($1::uuid[]) and organization_has_geography_scope(ob.organization_id,ob.jurisdiction_id)${clause} order by ob.period_end desc limit 100`,params);return result({obligations:rows.rows});}); }catch(error){request.log.error(error);return reply.code(503).send({error:"Compliance workspace unavailable",syntheticData:false});}
