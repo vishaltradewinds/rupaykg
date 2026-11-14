@@ -3,6 +3,7 @@ set -euo pipefail
 
 : "${DATABASE_URL:?DATABASE_URL is required}"
 : "${MIGRATION_FILE:?MIGRATION_FILE is required}"
+test "$MIGRATION_FILE" = "migrations/111_shakti_mrv_provenance_tenant_rls.sql"
 
 # Disposable GitHub Actions PostgreSQL only. Reconstruct the production
 # migration-owner and ledger ownership path, then invoke the real application
@@ -30,13 +31,13 @@ GRANT EXECUTE ON FUNCTION app.current_organization_id() TO rupaykg;
 GRANT EXECUTE ON FUNCTION app.is_verified_org_member(uuid) TO rupaykg;
 GRANT rupaykg_ddl TO rupaykg WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;
 
--- Rewind only migration 101 in this disposable rehearsal so the application
+-- Rewind only migration 111 in this disposable rehearsal so the application
 -- runner must execute the protected SQL and write its own ledger row.
 DROP POLICY IF EXISTS mrv_provenance_events_tenant_select ON public.mrv_provenance_events;
 DROP POLICY IF EXISTS mrv_provenance_events_tenant_insert ON public.mrv_provenance_events;
 DROP POLICY IF EXISTS mrv_provenance_events_tenant_update ON public.mrv_provenance_events;
 DELETE FROM public.schema_migrations
- WHERE filename = '101_shakti_mrv_provenance_tenant_rls.sql';
+ WHERE filename = '111_shakti_mrv_provenance_tenant_rls.sql';
 SQL
 
 # Verify the actual migration executor can SET ROLE to the controlled DDL owner.
@@ -54,7 +55,7 @@ RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS=1 \
 npm run migrate -w @rupaykg/api
 
 # Assert the exact migration ledger record and the final table owner.
-test "$(psql "$DATABASE_URL" -tAc "select count(*) from public.schema_migrations where version='101' and filename='101_shakti_mrv_provenance_tenant_rls.sql'")" = "1"
+test "$(psql "$DATABASE_URL" -tAc "select count(*) from public.schema_migrations where version='111' and filename='111_shakti_mrv_provenance_tenant_rls.sql'")" = "1"
 test "$(psql "$DATABASE_URL" -tAc "select pg_get_userbyid(relowner) from pg_class where oid='public.mrv_provenance_events'::regclass")" = "rupaykg_ddl"
 
-echo "PASS: apps/src/migrate.ts executed migration 101 as LOGIN rupaykg; ledger row 101 committed and provenance owner transferred to rupaykg_ddl."
+echo "PASS: apps/src/migrate.ts executed migration 111 as LOGIN rupaykg; ledger row 101 committed and provenance owner transferred to rupaykg_ddl."
