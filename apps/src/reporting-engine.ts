@@ -40,7 +40,7 @@ export type ReportSnapshotInput = {
   assumptions?: string[];
 };
 export type ReportIssue = {
-  code: "MISSING_VALUE" | "DECLARED_VALUE" | "ESTIMATED_VALUE" | "DISPUTED_VALUE" | "MISSING_EVIDENCE" | "UNVERIFIED_EVIDENCE" | "UNMAPPED_STAKEHOLDER" | "SOURCE_REVISION_UNAVAILABLE";
+  code: "MISSING_VALUE" | "DECLARED_VALUE" | "ESTIMATED_VALUE" | "DISPUTED_VALUE" | "MISSING_EVIDENCE" | "UNVERIFIED_EVIDENCE" | "UNMAPPED_STAKEHOLDER" | "SOURCE_REVISION_UNAVAILABLE" | "MISSING_VERIFICATION_REFERENCE";
   rowId: string;
   cellKey: string;
   detail: string;
@@ -100,6 +100,7 @@ export function buildReportSnapshot(input: ReportSnapshotInput): ReportSnapshot 
           if (evidence.sourceRecordId !== cell.sourceRecordId) throw new Error("Evidence source record must match its report cell");
           if (!evidence.evidenceId || !evidence.evidenceHash) issues.push({ code: "MISSING_EVIDENCE", rowId: row.id, cellKey: cell.key, detail: "Evidence reference or content hash is missing." });
           else evidenceHashes.add(evidence.evidenceHash);
+          if (!evidence.verificationId) issues.push({ code: "MISSING_VERIFICATION_REFERENCE", rowId: row.id, cellKey: cell.key, detail: "A verification record reference is required; evidence status alone is not sufficient." });
           if (!evidence.verificationStatus || !["VERIFIED", "APPROVED", "ASSURED"].includes(evidence.verificationStatus)) {
             issues.push({ code: "UNVERIFIED_EVIDENCE", rowId: row.id, cellKey: cell.key, detail: `Evidence status is ${evidence.verificationStatus}; it is not treated as verified.` });
           }
