@@ -2,11 +2,12 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { request } from "node:http";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 
 // Tests execute from apps/api/dist/test after compilation, so move from the
 // compiled test directory back to the workspace API root.
-const appRoot = resolve(new URL("../..", import.meta.url).pathname);
+const appRoot = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const serverPath = resolve(appRoot, "dist/src/server.js");
 const port = 39127;
 

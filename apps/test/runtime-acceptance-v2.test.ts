@@ -44,6 +44,9 @@ async function waitFor(url: string, status: number, child: ChildProcess): Promis
 async function request(path: string, init: RequestInit = {}, bearer?: string): Promise<Response> {
   const headers = new Headers(init.headers);
   if (bearer) headers.set("authorization", `Bearer ${bearer}`);
+  // Acceptance requests always select their tenant explicitly, matching the
+  // production contract for identities that can belong to multiple orgs.
+  if (orgId && !headers.has("x-rupaykg-organization-id")) headers.set("x-rupaykg-organization-id", orgId);
   if (init.body && !headers.has("content-type")) headers.set("content-type", "application/json");
   return fetch(`${baseUrl}${path}`, { ...init, headers });
 }
@@ -54,8 +57,16 @@ async function submitAndApply(payload: Record<string, unknown>, identityToken: s
   assert.equal(accepted.status, 202);
   const acceptedBody = await body(accepted);
   const id = acceptedBody.envelope.id as string;
+  if (pool) {
+    const received = await pool.query<{ status: string }>("select status from field_sync_envelopes where id=$1", [id]);
+    assert.equal(received.rows[0]?.status, "RECEIVED", "202 must be returned only after the envelope is committed");
+  }
   const applied = await request(`/api/v1/field-sync/envelopes/${id}/apply`, { method: "POST", body: "{}" }, identityToken);
   assert.equal(applied.status, 200);
+  if (pool) {
+    const committed = await pool.query<{ status: string }>("select status from field_sync_envelopes where id=$1", [id]);
+    assert.equal(committed.rows[0]?.status, "APPLIED", "200 must be returned only after the envelope application is committed");
+  }
   return body(applied);
 }
 
@@ -70,7 +81,7 @@ before(async () => {
     await c.query("insert into organization_geography_scopes(organization_id,geography_id) values($1,$2)", [orgId, geographyId]);
     actorId = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`runtime-actor-${suffix}`, "Runtime Actor"])).rows[0]!.id;
     verifierId = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`runtime-verifier-${suffix}`, "Runtime Verifier"])).rows[0]!.id;
-    const actorRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,'[\"FIELD_SYNC\",\"waste:record\",\"evidence:upload\",\"projects:manage\"]') returning id", [orgId, `ACTOR-${suffix}`])).rows[0]!.id;
+    const actorRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,'[\"FIELD_SYNC\",\"waste:record\",\"evidence:upload\",\"projects:manage\",\"VERIFY_EVIDENCE\"]') returning id", [orgId, `ACTOR-${suffix}`])).rows[0]!.id;
     const verifierRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,'[\"VERIFY_EVIDENCE\"]') returning id", [orgId, `VERIFIER-${suffix}`])).rows[0]!.id;
     await c.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED'),($4,$2,$5,'VERIFIED')", [actorId, orgId, actorRole, verifierId, verifierRole]);
     actorToken = token(); verifierToken = token();
@@ -151,9 +162,9 @@ describe("runtime acceptance", () => {
     const measurementId = measurementApplied.entityId as string;
     const evidenceApplied = await submitAndApply({ operationType: "EVIDENCE_CREATE", activityId, evidenceType: "WEIGHBRIDGE_RECORD", capturedAt: measuredAt, contentHash: `sha256:${suffix}`, measurementId }, actorToken, 3, `evidence-${suffix}`);
     evidenceId = evidenceApplied.entityId as string;
-    const self = await request(`/api/v1/evidence/${evidenceId}/verification`, { method: "POST", body: JSON.stringify({ decision: "APPROVED", scope: "runtime" }) }, actorToken);
-    assert.equal(self.status, 403);
-    const verified = await request(`/api/v1/evidence/${evidenceId}/verification`, { method: "POST", body: JSON.stringify({ decision: "APPROVED", scope: "runtime" }) }, verifierToken);
+    const self = await request(`/api/v1/evidence/${evidenceId}/verification`, { method: "POST", body: JSON.stringify({ decision: "APPROVED", scope: "runtime", rationale: "Independent acceptance test review" }) }, actorToken);
+    assert.equal(self.status, 403); assert.equal((await body(self)).code, "VERIFIER_INDEPENDENCE_REQUIRED");
+    const verified = await request(`/api/v1/evidence/${evidenceId}/verification`, { method: "POST", body: JSON.stringify({ decision: "APPROVED", scope: "runtime", rationale: "Independent acceptance test review" }) }, verifierToken);
     assert.equal(verified.status, 201);
     const state = await pool.query<{ activity_status: string; evidence_status: string }>("select a.status activity_status,e.status evidence_status from activities a join evidence e on e.activity_id=a.id where a.id=$1 and e.id=$2", [activityId, evidenceId]);
     assert.equal(state.rows[0]?.activity_status, "DRAFT"); assert.equal(state.rows[0]?.evidence_status, "VERIFIED");
