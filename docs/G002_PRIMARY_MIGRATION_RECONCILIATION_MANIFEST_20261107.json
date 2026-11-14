@@ -1,0 +1,1505 @@
+{
+  "manifest_version": "1.0",
+  "generated_at": "2026-11-07T11:30:43.843Z",
+  "repository": "vishaltradewinds/rupaykg",
+  "release_commit_sha": "a93cf0aac66247f6b82336b1d956a7f9af62b205",
+  "production_ledger_source": "docs/G002_PRODUCTION_MIGRATION_LEDGER_SNAPSHOT_20261107.md",
+  "production_ledger_row_count": 92,
+  "repository_migration_sql_count": 92,
+  "production_ledger_versions": [
+    {
+      "version": "001",
+      "filename": "001_core.sql"
+    },
+    {
+      "version": "002",
+      "filename": "002_regulatory.sql"
+    },
+    {
+      "version": "003",
+      "filename": "003_identity_geography_operations.sql"
+    },
+    {
+      "version": "004",
+      "filename": "004_security_auth.sql"
+    },
+    {
+      "version": "005",
+      "filename": "005_carbon_epr_esg.sql"
+    },
+    {
+      "version": "006",
+      "filename": "006_registry_settlement_guardrails.sql"
+    },
+    {
+      "version": "007",
+      "filename": "007_resource_flow_mrv.sql"
+    },
+    {
+      "version": "008",
+      "filename": "008_verification_integrity.sql"
+    },
+    {
+      "version": "009",
+      "filename": "009_field_sync.sql"
+    },
+    {
+      "version": "010",
+      "filename": "010_integrity_controls.sql"
+    },
+    {
+      "version": "011",
+      "filename": "011_field_sync_application.sql"
+    },
+    {
+      "version": "012",
+      "filename": "012_geography_authorization.sql"
+    },
+    {
+      "version": "013",
+      "filename": "013_settlement_external_confirmation.sql"
+    },
+    {
+      "version": "014",
+      "filename": "014_registry_settlement_idempotency.sql"
+    },
+    {
+      "version": "015",
+      "filename": "015_guardian_hedera_mrv.sql"
+    },
+    {
+      "version": "016",
+      "filename": "016_field_device_enrollment.sql"
+    },
+    {
+      "version": "017",
+      "filename": "017_field_device_provenance.sql"
+    },
+    {
+      "version": "018",
+      "filename": "018_value_mutation_permissions.sql"
+    },
+    {
+      "version": "019",
+      "filename": "019_settlement_reconciliation_immutability.sql"
+    },
+    {
+      "version": "020",
+      "filename": "020_carbon_calculation_provenance.sql"
+    },
+    {
+      "version": "021",
+      "filename": "021_methodology_governance.sql"
+    },
+    {
+      "version": "022",
+      "filename": "022_carbon_provenance_integrity.sql"
+    },
+    {
+      "version": "023",
+      "filename": "023_lifecycle_state_guards.sql"
+    },
+    {
+      "version": "024",
+      "filename": "024_methodology_governance_immutability.sql"
+    },
+    {
+      "version": "025",
+      "filename": "025_methodology_reconciliation_evidence.sql"
+    },
+    {
+      "version": "026",
+      "filename": "026_regulatory_source_provenance.sql"
+    },
+    {
+      "version": "027",
+      "filename": "027_verification_permission_hardening.sql"
+    },
+    {
+      "version": "028",
+      "filename": "028_settlement_retired_credential_guard.sql"
+    },
+    {
+      "version": "029",
+      "filename": "029_stakeholder_onboarding.sql"
+    },
+    {
+      "version": "030",
+      "filename": "030_authorization_role_defaults.sql"
+    },
+    {
+      "version": "031",
+      "filename": "031_settlement_credential_owner_authorization.sql"
+    },
+    {
+      "version": "032",
+      "filename": "032_authorization_lifecycle_hardening.sql"
+    },
+    {
+      "version": "033",
+      "filename": "033_field_sync_tenant_integrity.sql"
+    },
+    {
+      "version": "034",
+      "filename": "034_operation_sync_device_binding.sql"
+    },
+    {
+      "version": "035",
+      "filename": "035_cpcb_epr_portal_baseline.sql"
+    },
+    {
+      "version": "036",
+      "filename": "036_bwg_epr_esg_reporting.sql"
+    },
+    {
+      "version": "037",
+      "filename": "037_bwg_regulatory_registration_state.sql"
+    },
+    {
+      "version": "038",
+      "filename": "038_bwg_registration_unknown_default.sql"
+    },
+    {
+      "version": "039",
+      "filename": "039_india_regulatory_requirements.sql"
+    },
+    {
+      "version": "040",
+      "filename": "040_india_regulatory_extensions.sql"
+    },
+    {
+      "version": "041",
+      "filename": "041_high_risk_action_permissions.sql"
+    },
+    {
+      "version": "042",
+      "filename": "042_india_regulatory_requirement_catalog.sql"
+    },
+    {
+      "version": "043",
+      "filename": "043_bwg_epr_invariants.sql"
+    },
+    {
+      "version": "044",
+      "filename": "044_bwg_reporting_requires_applicability.sql"
+    },
+    {
+      "version": "045",
+      "filename": "045_guardian_mrv_registry_provenance_integrity.sql"
+    },
+    {
+      "version": "046",
+      "filename": "046_epr_credit_allocation_integrity.sql"
+    },
+    {
+      "version": "047",
+      "filename": "047_settlement_party_integrity.sql"
+    },
+    {
+      "version": "048",
+      "filename": "048_settlement_party_integrity_compatibility.sql"
+    },
+    {
+      "version": "049",
+      "filename": "049_credential_geography_integrity.sql"
+    },
+    {
+      "version": "050",
+      "filename": "050_field_sync_conflict_audit.sql"
+    },
+    {
+      "version": "051",
+      "filename": "051_registry_transfer_recipient_integrity.sql"
+    },
+    {
+      "version": "052",
+      "filename": "052_stakeholder_approval_guard.sql"
+    },
+    {
+      "version": "053",
+      "filename": "053_authoritative_regulatory_baseline.sql"
+    },
+    {
+      "version": "054",
+      "filename": "054_circular_economy_carbon_regulatory_baseline.sql"
+    },
+    {
+      "version": "055",
+      "filename": "055_carbon_market_mechanisms.sql"
+    },
+    {
+      "version": "056",
+      "filename": "056_environmental_attribute_claim_controls.sql"
+    },
+    {
+      "version": "057",
+      "filename": "057_environmental_attribute_allocation_api.sql"
+    },
+    {
+      "version": "058",
+      "filename": "058_environmental_attribute_reporting_references.sql"
+    },
+    {
+      "version": "059",
+      "filename": "059_epr_credit_environmental_claims.sql"
+    },
+    {
+      "version": "060",
+      "filename": "060_brsr_structured_reporting.sql"
+    },
+    {
+      "version": "061",
+      "filename": "061_brsr_metadata_projection.sql"
+    },
+    {
+      "version": "062",
+      "filename": "062_stakeholder_onboarding_governance.sql"
+    },
+    {
+      "version": "063",
+      "filename": "063_organization_legal_verification.sql"
+    },
+    {
+      "version": "064",
+      "filename": "064_statutory_applicability_controls.sql"
+    },
+    {
+      "version": "065",
+      "filename": "065_governance_integrity_and_profile_seeding.sql"
+    },
+    {
+      "version": "066",
+      "filename": "066_organization_governance_cleanup.sql"
+    },
+    {
+      "version": "067",
+      "filename": "067_epr_scheme_catalog.sql"
+    },
+    {
+      "version": "068",
+      "filename": "068_epr_lifecycle_controls.sql"
+    },
+    {
+      "version": "069",
+      "filename": "069_epr_evidence_guards.sql"
+    },
+    {
+      "version": "070",
+      "filename": "070_epr_obligations_returns.sql"
+    },
+    {
+      "version": "071",
+      "filename": "071_epr_return_obligation_binding.sql"
+    },
+    {
+      "version": "072",
+      "filename": "072_epr_external_reference_uniqueness.sql"
+    },
+    {
+      "version": "073",
+      "filename": "073_settlement_integrity.sql"
+    },
+    {
+      "version": "074",
+      "filename": "074_settlement_party_integrity.sql"
+    },
+    {
+      "version": "075",
+      "filename": "075_settlement_registry_owner_integrity.sql"
+    },
+    {
+      "version": "076",
+      "filename": "076_settlement_reconciliation_reference_uniqueness.sql"
+    },
+    {
+      "version": "077",
+      "filename": "077_hierarchical_stakeholder_onboarding.sql"
+    },
+    {
+      "version": "078",
+      "filename": "078_stakeholder_approval_separation.sql"
+    },
+    {
+      "version": "079",
+      "filename": "079_native_password_auth.sql"
+    },
+    {
+      "version": "080",
+      "filename": "080_geography_created_at.sql"
+    },
+    {
+      "version": "081",
+      "filename": "081_acceptance_fixture_geography.sql"
+    },
+    {
+      "version": "082",
+      "filename": "082_super_admin_identity_governance.sql"
+    },
+    {
+      "version": "083",
+      "filename": "083_mrv_mirror_node_registry_gate.sql"
+    },
+    {
+      "version": "084",
+      "filename": "084_platform_audit_chain_head.sql"
+    },
+    {
+      "version": "085",
+      "filename": "085_platform_access_dual_control.sql"
+    },
+    {
+      "version": "086",
+      "filename": "086_reserved_role_restoration_db_guard.sql"
+    },
+    {
+      "version": "087",
+      "filename": "087_acceptance_fixture_registry_exclusion.sql"
+    },
+    {
+      "version": "20261018",
+      "filename": "20261018_cpcb_swm_stakeholder_workspaces.sql"
+    },
+    {
+      "version": "20261019",
+      "filename": "20261019_cpcb_bwg_workflow_tracking.sql"
+    },
+    {
+      "version": "20261020",
+      "filename": "20261020_ccts_methodology_registry.sql"
+    },
+    {
+      "version": "20261021",
+      "filename": "20261021_evidence_artifact_vault.sql"
+    },
+    {
+      "version": "096",
+      "filename": "096_verification_authorization_provenance.sql"
+    }
+  ],
+  "migration_files": [
+    {
+      "version": "001",
+      "filename": "001_core.sql",
+      "status": "exact_repository_sql",
+      "sha256": "c48ece7f2478267f3be4cb0049a067e3fc7e2d532e64a23e41281c7f0abc4be6",
+      "bytes": 6486
+    },
+    {
+      "version": "002",
+      "filename": "002_regulatory.sql",
+      "status": "exact_repository_sql",
+      "sha256": "7e146a6914fbd89ada1f28db1c01a178512417095d1131216c1c09aeb0f41e3d",
+      "bytes": 3711
+    },
+    {
+      "version": "003",
+      "filename": "003_identity_geography_operations.sql",
+      "status": "exact_repository_sql",
+      "sha256": "dbe4a38d2fc5a1c8d07aed1747e889bd4ab3741798a2f0fbb944b10fbc7192a6",
+      "bytes": 3521
+    },
+    {
+      "version": "004",
+      "filename": "004_security_auth.sql",
+      "status": "exact_repository_sql",
+      "sha256": "96950218a9fde1642b9c0748a31560c4f44039338985d16d188a30e9a644b16e",
+      "bytes": 1418
+    },
+    {
+      "version": "005",
+      "filename": "005_carbon_epr_esg.sql",
+      "status": "exact_repository_sql",
+      "sha256": "77115712324558501b016941b979c0a865996c7703cd22fb34eb9ca545f8b115",
+      "bytes": 3628
+    },
+    {
+      "version": "006",
+      "filename": "006_registry_settlement_guardrails.sql",
+      "status": "exact_repository_sql",
+      "sha256": "83c6ca5bb560553d33b09548d843f63a4bd9f635b61a184193290f5a23410f88",
+      "bytes": 2611
+    },
+    {
+      "version": "007",
+      "filename": "007_resource_flow_mrv.sql",
+      "status": "exact_repository_sql",
+      "sha256": "e558e4e1a103727b39a93f3c114145c33ee432695af087db8762a961979045b2",
+      "bytes": 2735
+    },
+    {
+      "version": "008",
+      "filename": "008_verification_integrity.sql",
+      "status": "exact_repository_sql",
+      "sha256": "cbdc4d138423694fdd92972d015040e196738068598e88e2925ceb7b75a11163",
+      "bytes": 3981
+    },
+    {
+      "version": "009",
+      "filename": "009_field_sync.sql",
+      "status": "exact_repository_sql",
+      "sha256": "986376b71605b013b528df55ec17142c1a6f9f3d48432c380cd5e5c578ece8b4",
+      "bytes": 2777
+    },
+    {
+      "version": "010",
+      "filename": "010_integrity_controls.sql",
+      "status": "exact_repository_sql",
+      "sha256": "2dc76520cbde58de22ee5b57baf4b12554320aebd292e367fc1466dcc5c3ca57",
+      "bytes": 3497
+    },
+    {
+      "version": "011",
+      "filename": "011_field_sync_application.sql",
+      "status": "exact_repository_sql",
+      "sha256": "2a60847f471fff119168efa722168c3b710ca83343117de02e09c4efa232f302",
+      "bytes": 465
+    },
+    {
+      "version": "012",
+      "filename": "012_geography_authorization.sql",
+      "status": "exact_repository_sql",
+      "sha256": "02dde21ee5567bf3e823c65e16044a30104ad1ce5ccb2668d2fe5d93b3fe27fa",
+      "bytes": 3249
+    },
+    {
+      "version": "013",
+      "filename": "013_settlement_external_confirmation.sql",
+      "status": "exact_repository_sql",
+      "sha256": "6463bd188561a4fc0d3537e6e8f4306e4e51804fb7d5a74738d16343061ad304",
+      "bytes": 2057
+    },
+    {
+      "version": "014",
+      "filename": "014_registry_settlement_idempotency.sql",
+      "status": "exact_repository_sql",
+      "sha256": "e24de2296a597a4c60842c7f71dad89760a3841a8b424914c21c4d7fe3f87538",
+      "bytes": 1353
+    },
+    {
+      "version": "015",
+      "filename": "015_guardian_hedera_mrv.sql",
+      "status": "exact_repository_sql",
+      "sha256": "febfc5d2827e76b22d4d3d4c8f8a7d203c3cfb6a8ae59c1b361d2398a5b5a298",
+      "bytes": 2250
+    },
+    {
+      "version": "016",
+      "filename": "016_field_device_enrollment.sql",
+      "status": "exact_repository_sql",
+      "sha256": "89f26c7d2bdf01a0cfdad46ff5c903f04f95e0860d3248b41ee6235b409fafd1",
+      "bytes": 1799
+    },
+    {
+      "version": "017",
+      "filename": "017_field_device_provenance.sql",
+      "status": "exact_repository_sql",
+      "sha256": "3a3a438bbea47ebc2e678362af609fdf2e2ca034e421241b348daa3963c04cc0",
+      "bytes": 764
+    },
+    {
+      "version": "018",
+      "filename": "018_value_mutation_permissions.sql",
+      "status": "exact_repository_sql",
+      "sha256": "23a616a661820c263cd6c96ef51fb6c71c0d8ea8a42006ce3bf952de61fdb4e5",
+      "bytes": 1598
+    },
+    {
+      "version": "019",
+      "filename": "019_settlement_reconciliation_immutability.sql",
+      "status": "exact_repository_sql",
+      "sha256": "8bfc65cb61d69de03916f62590a81e663ff6b2e7fd77dd82ca0a2af5c9ce1ada",
+      "bytes": 1505
+    },
+    {
+      "version": "020",
+      "filename": "020_carbon_calculation_provenance.sql",
+      "status": "exact_repository_sql",
+      "sha256": "8484aea4de9445be014ab4074c4d0ab8d4d2493edace0c844dc871acf625d10d",
+      "bytes": 2088
+    },
+    {
+      "version": "021",
+      "filename": "021_methodology_governance.sql",
+      "status": "exact_repository_sql",
+      "sha256": "63b2865a2bde3a8e3c715a9122ca707ae7c09ef21e2d70f04512b415e5022fa3",
+      "bytes": 4400
+    },
+    {
+      "version": "022",
+      "filename": "022_carbon_provenance_integrity.sql",
+      "status": "exact_repository_sql",
+      "sha256": "2da0132e73802c24958cf0c95bb35c8a563c33a5d4e2353f5a54ff3850c18304",
+      "bytes": 2033
+    },
+    {
+      "version": "023",
+      "filename": "023_lifecycle_state_guards.sql",
+      "status": "exact_repository_sql",
+      "sha256": "8c3ea62ba9ad1901f15b3851bcefd056207c567b3bc216443b06369ca6218d9f",
+      "bytes": 2469
+    },
+    {
+      "version": "024",
+      "filename": "024_methodology_governance_immutability.sql",
+      "status": "exact_repository_sql",
+      "sha256": "2268e88c01b8927ebd5848cf99bdd9f5f6b79f4ba151534d6c1ae84fa6dc3918",
+      "bytes": 2446
+    },
+    {
+      "version": "025",
+      "filename": "025_methodology_reconciliation_evidence.sql",
+      "status": "exact_repository_sql",
+      "sha256": "6f058b600322a182fb922d3c4b44a619a59b500573b342259c6eb84e9fd2b590",
+      "bytes": 4405
+    },
+    {
+      "version": "026",
+      "filename": "026_regulatory_source_provenance.sql",
+      "status": "exact_repository_sql",
+      "sha256": "869072e4036a4b47a99a35002598143672da93e08a95f3eb4de77da308728045",
+      "bytes": 1491
+    },
+    {
+      "version": "027",
+      "filename": "027_verification_permission_hardening.sql",
+      "status": "exact_repository_sql",
+      "sha256": "0c92e9191b3903bd2f569ddb9d17f513b942a87032c6df4ee097cc4a833ba822",
+      "bytes": 670
+    },
+    {
+      "version": "028",
+      "filename": "028_settlement_retired_credential_guard.sql",
+      "status": "exact_repository_sql",
+      "sha256": "1aedc0543a6dbf13efee0491f102ef6b698d5f4eaac6c73a229db02a818a506a",
+      "bytes": 1791
+    },
+    {
+      "version": "029",
+      "filename": "029_stakeholder_onboarding.sql",
+      "status": "exact_repository_sql",
+      "sha256": "d5bc3ad910a1f166ec25e4ed67004ecf4c5e97dfc3a50e6a8df70fc235315e3a",
+      "bytes": 1563
+    },
+    {
+      "version": "030",
+      "filename": "030_authorization_role_defaults.sql",
+      "status": "exact_repository_sql",
+      "sha256": "1aa4a7307f40be508fa189d49e71c32dd7e22cf42fef8c3debc0a0bb494922d6",
+      "bytes": 7042
+    },
+    {
+      "version": "031",
+      "filename": "031_settlement_credential_owner_authorization.sql",
+      "status": "exact_repository_sql",
+      "sha256": "28a39622f5b24fbfe7941a0bb0bddefb7af20c5e91f2e1543fcf0f02546b9dd6",
+      "bytes": 1695
+    },
+    {
+      "version": "032",
+      "filename": "032_authorization_lifecycle_hardening.sql",
+      "status": "exact_repository_sql",
+      "sha256": "f8727b40091970d34b04bb65ade3ee92d45803e6f9d630ae1b81c25f896b0c1f",
+      "bytes": 2018
+    },
+    {
+      "version": "033",
+      "filename": "033_field_sync_tenant_integrity.sql",
+      "status": "exact_repository_sql",
+      "sha256": "0ff03e9dd60c2778647adf121f250c92ed7a3a234d1d24c729bf45f2bafdeb5a",
+      "bytes": 1522
+    },
+    {
+      "version": "034",
+      "filename": "034_operation_sync_device_binding.sql",
+      "status": "exact_repository_sql",
+      "sha256": "f1543cc08df91a230c0b841c7077a66d3de92d4a1c85831db6089f6d42ddab0f",
+      "bytes": 1568
+    },
+    {
+      "version": "035",
+      "filename": "035_cpcb_epr_portal_baseline.sql",
+      "status": "exact_repository_sql",
+      "sha256": "f0ee1bc3c8c77d4940fafbd55aee018e5ed741a1e47c901f3d710df45bc88ae4",
+      "bytes": 1366
+    },
+    {
+      "version": "036",
+      "filename": "036_bwg_epr_esg_reporting.sql",
+      "status": "exact_repository_sql",
+      "sha256": "63eec559823b75183788349766d1e9d287e8da3d61e90442ac1a2de71e62059f",
+      "bytes": 4212
+    },
+    {
+      "version": "037",
+      "filename": "037_bwg_regulatory_registration_state.sql",
+      "status": "exact_repository_sql",
+      "sha256": "88f845cdc359320f4fbf51c5c0ff31f54f74d1ffb88576720518ab58532d9e4c",
+      "bytes": 851
+    },
+    {
+      "version": "038",
+      "filename": "038_bwg_registration_unknown_default.sql",
+      "status": "exact_repository_sql",
+      "sha256": "b526bcc75d8e7cb2681946da26d017839eb4b232e586c097fbbd108b9914daaf",
+      "bytes": 375
+    },
+    {
+      "version": "039",
+      "filename": "039_india_regulatory_requirements.sql",
+      "status": "exact_repository_sql",
+      "sha256": "fbfba3a9ab91a7f37fd6a98679124188d9904437e48bed67a518e2234a477694",
+      "bytes": 6675
+    },
+    {
+      "version": "040",
+      "filename": "040_india_regulatory_extensions.sql",
+      "status": "exact_repository_sql",
+      "sha256": "3260306095f613751cc2192200ae24c991adecfccceac0f44c5e0a4969fdd100",
+      "bytes": 4500
+    },
+    {
+      "version": "041",
+      "filename": "041_high_risk_action_permissions.sql",
+      "status": "exact_repository_sql",
+      "sha256": "cf9f917ec4ad6bf3ac534532a25950cd9a6f2f7c76d4c9fcb5a04b46bcd4a6eb",
+      "bytes": 2750
+    },
+    {
+      "version": "042",
+      "filename": "042_india_regulatory_requirement_catalog.sql",
+      "status": "exact_repository_sql",
+      "sha256": "5ac94ac843445811c24a7833ea8285e2c6247acd8212e52d6bb2fe1c8c7bb8cb",
+      "bytes": 6652
+    },
+    {
+      "version": "043",
+      "filename": "043_bwg_epr_invariants.sql",
+      "status": "exact_repository_sql",
+      "sha256": "f6662c1f91eb16323fedd373a7b440a366adbf6f59ec60a0e939ab28a98c7a6e",
+      "bytes": 488
+    },
+    {
+      "version": "044",
+      "filename": "044_bwg_reporting_requires_applicability.sql",
+      "status": "exact_repository_sql",
+      "sha256": "1139396c49af202389c66d3931eb3b6f213425e797446c283fc5c78d764ab931",
+      "bytes": 1076
+    },
+    {
+      "version": "045",
+      "filename": "045_guardian_mrv_registry_provenance_integrity.sql",
+      "status": "exact_repository_sql",
+      "sha256": "d3b035de78112d4e03aea11c6135f888b1fb68907f1d2d774ad52ad780c7851d",
+      "bytes": 1617
+    },
+    {
+      "version": "046",
+      "filename": "046_epr_credit_allocation_integrity.sql",
+      "status": "exact_repository_sql",
+      "sha256": "aa155b847e5661253f4a13be4082124e3fd86746825dddadcff863e3ceea73ca",
+      "bytes": 5067
+    },
+    {
+      "version": "047",
+      "filename": "047_settlement_party_integrity.sql",
+      "status": "exact_repository_sql",
+      "sha256": "654bb7fa3fd5cc9dad40168f38b1b63044842e7847eedbf5a2f0bf3592fda380",
+      "bytes": 1376
+    },
+    {
+      "version": "048",
+      "filename": "048_settlement_party_integrity_compatibility.sql",
+      "status": "exact_repository_sql",
+      "sha256": "b0c07dd07090b987b29e0ca5c921f7c65ba75b7abd6b1c5834491b508fd46d83",
+      "bytes": 1770
+    },
+    {
+      "version": "049",
+      "filename": "049_credential_geography_integrity.sql",
+      "status": "exact_repository_sql",
+      "sha256": "650ed3550787df9571d46648b5cacb4311336fd6ae1b8e01872dadda786840cd",
+      "bytes": 1395
+    },
+    {
+      "version": "050",
+      "filename": "050_field_sync_conflict_audit.sql",
+      "status": "exact_repository_sql",
+      "sha256": "297e312d059bd97ae977ec79e4c9c99c9a464dd3907b80223ce6728b0743fcee",
+      "bytes": 2070
+    },
+    {
+      "version": "051",
+      "filename": "051_registry_transfer_recipient_integrity.sql",
+      "status": "exact_repository_sql",
+      "sha256": "749d09af5a6b88d33002b9bc85f3492b778e75ef0c5ce9d7fecae9ccbd1c6384",
+      "bytes": 1224
+    },
+    {
+      "version": "052",
+      "filename": "052_stakeholder_approval_guard.sql",
+      "status": "exact_repository_sql",
+      "sha256": "ba1410478885cb15d68bfd06b7d9c0f23c0305bc829d88525a6e0acf2eca72d9",
+      "bytes": 1365
+    },
+    {
+      "version": "053",
+      "filename": "053_authoritative_regulatory_baseline.sql",
+      "status": "exact_repository_sql",
+      "sha256": "8de15cddb331e39f4054e9a5a7adf6c9d7ff3317ff7e618490cb7af69be274bb",
+      "bytes": 3315
+    },
+    {
+      "version": "054",
+      "filename": "054_circular_economy_carbon_regulatory_baseline.sql",
+      "status": "exact_repository_sql",
+      "sha256": "4b6ade2400623a76e44a7bb02fcb0826abaeed2b8a792fb0528a755b29a227fa",
+      "bytes": 2751
+    },
+    {
+      "version": "055",
+      "filename": "055_carbon_market_mechanisms.sql",
+      "status": "exact_repository_sql",
+      "sha256": "e60e7237c774452933b30c216d67d50680bf1614602e04ec3c4e83f9a3a27532",
+      "bytes": 3949
+    },
+    {
+      "version": "056",
+      "filename": "056_environmental_attribute_claim_controls.sql",
+      "status": "exact_repository_sql",
+      "sha256": "bf9fdea677baa0319d046328ac626195ffd9e40e34b36ed686e8b5ef13bd97ef",
+      "bytes": 3589
+    },
+    {
+      "version": "057",
+      "filename": "057_environmental_attribute_allocation_api.sql",
+      "status": "exact_repository_sql",
+      "sha256": "068ef5fedd4d87e97fa4b88cd5f3f6efa6b9a576d840b2e26fadbf278ddd4442",
+      "bytes": 3136
+    },
+    {
+      "version": "058",
+      "filename": "058_environmental_attribute_reporting_references.sql",
+      "status": "exact_repository_sql",
+      "sha256": "ddb6e4af974823232c9ed24a71ef030a67bf1e842def2c51aee72ca230cc55c1",
+      "bytes": 1646
+    },
+    {
+      "version": "059",
+      "filename": "059_epr_credit_environmental_claims.sql",
+      "status": "exact_repository_sql",
+      "sha256": "d0fc80179ff9bdd96381cf93aa0849369fa3506e7e45fcf46fded28eb385f08d",
+      "bytes": 1902
+    },
+    {
+      "version": "060",
+      "filename": "060_brsr_structured_reporting.sql",
+      "status": "exact_repository_sql",
+      "sha256": "daea34dbab84b89832dc1134d9713d46416fcc486d441d7e297de80690f81868",
+      "bytes": 3168
+    },
+    {
+      "version": "061",
+      "filename": "061_brsr_metadata_projection.sql",
+      "status": "exact_repository_sql",
+      "sha256": "1b87d67b9728cacdd564d67c4aaeb2001d80bdb352ff7b109db8e3a1826c462f",
+      "bytes": 1939
+    },
+    {
+      "version": "062",
+      "filename": "062_stakeholder_onboarding_governance.sql",
+      "status": "exact_repository_sql",
+      "sha256": "a70d962b71b588911ffb05d18fe31a02e937b5850bdd7c507d17ab83f53c002e",
+      "bytes": 447
+    },
+    {
+      "version": "063",
+      "filename": "063_organization_legal_verification.sql",
+      "status": "exact_repository_sql",
+      "sha256": "bd3c909579c887a7a33e3b6af2131663e231e068e25e7731ea8789632eaf5e77",
+      "bytes": 1729
+    },
+    {
+      "version": "064",
+      "filename": "064_statutory_applicability_controls.sql",
+      "status": "exact_repository_sql",
+      "sha256": "59fca4f4f4e02f6400b800c374ad629bd48b2bb4904575969efce7f0a9c578f8",
+      "bytes": 4863
+    },
+    {
+      "version": "065",
+      "filename": "065_governance_integrity_and_profile_seeding.sql",
+      "status": "exact_repository_sql",
+      "sha256": "e95adcc0e42a60e92ff235ec128219ac50250b19c3a8cc6fb7590d0fe5ff49c1",
+      "bytes": 5116
+    },
+    {
+      "version": "066",
+      "filename": "066_organization_governance_cleanup.sql",
+      "status": "exact_repository_sql",
+      "sha256": "dd647bf14bf01723c02d870810db13fe60f4a9aec0d3a8b62654a178efc04a7b",
+      "bytes": 1750
+    },
+    {
+      "version": "067",
+      "filename": "067_epr_scheme_catalog.sql",
+      "status": "exact_repository_sql",
+      "sha256": "61d8556cb995f701a8831160d0f7c832c23a6d6aab576e3bbf00bb5c28e63003",
+      "bytes": 2774
+    },
+    {
+      "version": "068",
+      "filename": "068_epr_lifecycle_controls.sql",
+      "status": "exact_repository_sql",
+      "sha256": "66e88305e15f16810a0b7969d8e2fe622801683aa57279d71b37d1b173b69b77",
+      "bytes": 2844
+    },
+    {
+      "version": "069",
+      "filename": "069_epr_evidence_guards.sql",
+      "status": "exact_repository_sql",
+      "sha256": "551f6f7f134f927a091ddbe7a9ee957b1776580e2a61f8c9bab52cbfb3fede58",
+      "bytes": 3272
+    },
+    {
+      "version": "070",
+      "filename": "070_epr_obligations_returns.sql",
+      "status": "exact_repository_sql",
+      "sha256": "37c845dfc42aa81a2195edd4d287c63606bd30edb763953b0d543b619cafbb32",
+      "bytes": 2992
+    },
+    {
+      "version": "071",
+      "filename": "071_epr_return_obligation_binding.sql",
+      "status": "exact_repository_sql",
+      "sha256": "448bd41c7077d2912fc1996b7a64466e59a9635dd1fdb588f3fec3a58321057c",
+      "bytes": 1782
+    },
+    {
+      "version": "072",
+      "filename": "072_epr_external_reference_uniqueness.sql",
+      "status": "exact_repository_sql",
+      "sha256": "be57f738bb142caecc57159806d510c2294a7c6c5788e405f22400703fbcb206",
+      "bytes": 332
+    },
+    {
+      "version": "073",
+      "filename": "073_settlement_integrity.sql",
+      "status": "exact_repository_sql",
+      "sha256": "b36ba83416b8e9de6f3524c743401aa59810dfa9b74319b932fa90c7263db57d",
+      "bytes": 552
+    },
+    {
+      "version": "074",
+      "filename": "074_settlement_party_integrity.sql",
+      "status": "exact_repository_sql",
+      "sha256": "6b0375da23281ef9acc74431e3b5413844314b10740b4b79204fed30391a882d",
+      "bytes": 1622
+    },
+    {
+      "version": "075",
+      "filename": "075_settlement_registry_owner_integrity.sql",
+      "status": "exact_repository_sql",
+      "sha256": "dd06d6f8ffe4b0ab4ba60b80fa3129af659ec902c131049898563e91eec51b62",
+      "bytes": 2678
+    },
+    {
+      "version": "076",
+      "filename": "076_settlement_reconciliation_reference_uniqueness.sql",
+      "status": "exact_repository_sql",
+      "sha256": "a515a8db44ec7bfa522064e24f716c4c5818babfe99f41284f82b22e8b17f640",
+      "bytes": 383
+    },
+    {
+      "version": "077",
+      "filename": "077_hierarchical_stakeholder_onboarding.sql",
+      "status": "exact_repository_sql",
+      "sha256": "01853d449a8c854c3b2a6d528027d0c26043c8c53e7d12af9369ba9b5c862020",
+      "bytes": 4608
+    },
+    {
+      "version": "078",
+      "filename": "078_stakeholder_approval_separation.sql",
+      "status": "exact_repository_sql",
+      "sha256": "8e2e737b9070908f831a4f61b95d1f7d62ffbb6f07e802df8c34df6c928182f8",
+      "bytes": 783
+    },
+    {
+      "version": "079",
+      "filename": "079_native_password_auth.sql",
+      "status": "exact_repository_sql",
+      "sha256": "d73b19960bb9d87c4a9cb25c6219a3dc580beaaff1e4ce6d51e91ae6423f4834",
+      "bytes": 677
+    },
+    {
+      "version": "080",
+      "filename": "080_geography_created_at.sql",
+      "status": "exact_repository_sql",
+      "sha256": "f459af0247e533b7ea6cb56ceecffc2261e216dd135bbe57ec7a03f097051d73",
+      "bytes": 254
+    },
+    {
+      "version": "081",
+      "filename": "081_acceptance_fixture_geography.sql",
+      "status": "exact_repository_sql",
+      "sha256": "28192da3ec6898da81c8ee4a5a0773ceda0f040cdccc1884c90870cc0fc744b2",
+      "bytes": 889
+    },
+    {
+      "version": "082",
+      "filename": "082_super_admin_identity_governance.sql",
+      "status": "exact_repository_sql",
+      "sha256": "d1c2af02d154abc1b21ff2866fe503b79524cb2560bba814f0d4d6648ae5719c",
+      "bytes": 878
+    },
+    {
+      "version": "083",
+      "filename": "083_mrv_mirror_node_registry_gate.sql",
+      "status": "exact_repository_sql",
+      "sha256": "70238930900c3037d69cf3c1def002f9b2d26488c4fa173756d19b922c269d9d",
+      "bytes": 3811
+    },
+    {
+      "version": "084",
+      "filename": "084_platform_audit_chain_head.sql",
+      "status": "exact_repository_sql",
+      "sha256": "44171e47ce67e254887e7098efb018130d0cdf27f7ffa86007ccbd568c2775a9",
+      "bytes": 1117
+    },
+    {
+      "version": "085",
+      "filename": "085_platform_access_dual_control.sql",
+      "status": "exact_repository_sql",
+      "sha256": "1ca99082488ad515051201e4b2b04d1e108bf5643e253156b93fed9a78722931",
+      "bytes": 2108
+    },
+    {
+      "version": "086",
+      "filename": "086_reserved_role_restoration_db_guard.sql",
+      "status": "exact_repository_sql",
+      "sha256": "25348d1ac6901176621e3562540c46df10cd1991c71e351f8110e4bce01ec4f8",
+      "bytes": 4180
+    },
+    {
+      "version": "087",
+      "filename": "087_acceptance_fixture_registry_exclusion.sql",
+      "status": "exact_repository_sql",
+      "sha256": "a6ac1df26ed7efa430d4fe6df1a22c236891e7562c4688327fc3b1eea60121fd",
+      "bytes": 3307
+    },
+    {
+      "version": "20261018",
+      "filename": "20261018_cpcb_swm_stakeholder_workspaces.sql",
+      "status": "exact_repository_sql",
+      "sha256": "e10f49d44788e14e04df0ea8e9e936dd5a47bfe65817f7ad9035d3ff63bd95f7",
+      "bytes": 1358
+    },
+    {
+      "version": "20261019",
+      "filename": "20261019_cpcb_bwg_workflow_tracking.sql",
+      "status": "exact_repository_sql",
+      "sha256": "abf8060f22419f0d143481fa5bd3fabc0bb799b7438b67a266e044e7768b8435",
+      "bytes": 1914
+    },
+    {
+      "version": "20261020",
+      "filename": "20261020_ccts_methodology_registry.sql",
+      "status": "exact_repository_sql",
+      "sha256": "dc56485617feb34ccc6410b2c619d912321d1dcf2abf76026b3ec8d89be6dece",
+      "bytes": 9127
+    },
+    {
+      "version": "20261021",
+      "filename": "20261021_evidence_artifact_vault.sql",
+      "status": "exact_repository_sql",
+      "sha256": "65dfdada27ede2553daf4a4b52421e2362a14158622f9152d70dadc17813f442",
+      "bytes": 4431
+    },
+    {
+      "version": "096",
+      "filename": "096_verification_authorization_provenance.sql",
+      "status": "exact_repository_sql",
+      "sha256": "5c03d82c7907498385862e4da927d099a879305749e56d99aa21b33d22dca749",
+      "bytes": 3877
+    }
+  ],
+  "classifications": [
+    {
+      "version": "001",
+      "filename": "001_core.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "002",
+      "filename": "002_regulatory.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "003",
+      "filename": "003_identity_geography_operations.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "004",
+      "filename": "004_security_auth.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "005",
+      "filename": "005_carbon_epr_esg.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "006",
+      "filename": "006_registry_settlement_guardrails.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "007",
+      "filename": "007_resource_flow_mrv.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "008",
+      "filename": "008_verification_integrity.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "009",
+      "filename": "009_field_sync.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "010",
+      "filename": "010_integrity_controls.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "011",
+      "filename": "011_field_sync_application.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "012",
+      "filename": "012_geography_authorization.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "013",
+      "filename": "013_settlement_external_confirmation.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "014",
+      "filename": "014_registry_settlement_idempotency.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "015",
+      "filename": "015_guardian_hedera_mrv.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "016",
+      "filename": "016_field_device_enrollment.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "017",
+      "filename": "017_field_device_provenance.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "018",
+      "filename": "018_value_mutation_permissions.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "019",
+      "filename": "019_settlement_reconciliation_immutability.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "020",
+      "filename": "020_carbon_calculation_provenance.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "021",
+      "filename": "021_methodology_governance.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "022",
+      "filename": "022_carbon_provenance_integrity.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "023",
+      "filename": "023_lifecycle_state_guards.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "024",
+      "filename": "024_methodology_governance_immutability.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "025",
+      "filename": "025_methodology_reconciliation_evidence.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "026",
+      "filename": "026_regulatory_source_provenance.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "027",
+      "filename": "027_verification_permission_hardening.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "028",
+      "filename": "028_settlement_retired_credential_guard.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "029",
+      "filename": "029_stakeholder_onboarding.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "030",
+      "filename": "030_authorization_role_defaults.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "031",
+      "filename": "031_settlement_credential_owner_authorization.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "032",
+      "filename": "032_authorization_lifecycle_hardening.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "033",
+      "filename": "033_field_sync_tenant_integrity.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "034",
+      "filename": "034_operation_sync_device_binding.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "035",
+      "filename": "035_cpcb_epr_portal_baseline.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "036",
+      "filename": "036_bwg_epr_esg_reporting.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "037",
+      "filename": "037_bwg_regulatory_registration_state.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "038",
+      "filename": "038_bwg_registration_unknown_default.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "039",
+      "filename": "039_india_regulatory_requirements.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "040",
+      "filename": "040_india_regulatory_extensions.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "041",
+      "filename": "041_high_risk_action_permissions.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "042",
+      "filename": "042_india_regulatory_requirement_catalog.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "043",
+      "filename": "043_bwg_epr_invariants.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "044",
+      "filename": "044_bwg_reporting_requires_applicability.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "045",
+      "filename": "045_guardian_mrv_registry_provenance_integrity.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "046",
+      "filename": "046_epr_credit_allocation_integrity.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "047",
+      "filename": "047_settlement_party_integrity.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "048",
+      "filename": "048_settlement_party_integrity_compatibility.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "049",
+      "filename": "049_credential_geography_integrity.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "050",
+      "filename": "050_field_sync_conflict_audit.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "051",
+      "filename": "051_registry_transfer_recipient_integrity.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "052",
+      "filename": "052_stakeholder_approval_guard.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "053",
+      "filename": "053_authoritative_regulatory_baseline.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "054",
+      "filename": "054_circular_economy_carbon_regulatory_baseline.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "055",
+      "filename": "055_carbon_market_mechanisms.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "056",
+      "filename": "056_environmental_attribute_claim_controls.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "057",
+      "filename": "057_environmental_attribute_allocation_api.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "058",
+      "filename": "058_environmental_attribute_reporting_references.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "059",
+      "filename": "059_epr_credit_environmental_claims.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "060",
+      "filename": "060_brsr_structured_reporting.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "061",
+      "filename": "061_brsr_metadata_projection.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "062",
+      "filename": "062_stakeholder_onboarding_governance.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "063",
+      "filename": "063_organization_legal_verification.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "064",
+      "filename": "064_statutory_applicability_controls.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "065",
+      "filename": "065_governance_integrity_and_profile_seeding.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "066",
+      "filename": "066_organization_governance_cleanup.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "067",
+      "filename": "067_epr_scheme_catalog.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "068",
+      "filename": "068_epr_lifecycle_controls.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "069",
+      "filename": "069_epr_evidence_guards.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "070",
+      "filename": "070_epr_obligations_returns.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "071",
+      "filename": "071_epr_return_obligation_binding.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "072",
+      "filename": "072_epr_external_reference_uniqueness.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "073",
+      "filename": "073_settlement_integrity.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "074",
+      "filename": "074_settlement_party_integrity.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "075",
+      "filename": "075_settlement_registry_owner_integrity.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "076",
+      "filename": "076_settlement_reconciliation_reference_uniqueness.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "077",
+      "filename": "077_hierarchical_stakeholder_onboarding.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "078",
+      "filename": "078_stakeholder_approval_separation.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "079",
+      "filename": "079_native_password_auth.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "080",
+      "filename": "080_geography_created_at.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "081",
+      "filename": "081_acceptance_fixture_geography.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "082",
+      "filename": "082_super_admin_identity_governance.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "083",
+      "filename": "083_mrv_mirror_node_registry_gate.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "084",
+      "filename": "084_platform_audit_chain_head.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "085",
+      "filename": "085_platform_access_dual_control.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "086",
+      "filename": "086_reserved_role_restoration_db_guard.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "087",
+      "filename": "087_acceptance_fixture_registry_exclusion.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "20261018",
+      "filename": "20261018_cpcb_swm_stakeholder_workspaces.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "20261019",
+      "filename": "20261019_cpcb_bwg_workflow_tracking.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "20261020",
+      "filename": "20261020_ccts_methodology_registry.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "20261021",
+      "filename": "20261021_evidence_artifact_vault.sql",
+      "classification": "exact_repository_match"
+    },
+    {
+      "version": "096",
+      "filename": "096_verification_authorization_provenance.sql",
+      "classification": "recovered_historical_sql_live_schema_effect_confirmed"
+    }
+  ],
+  "live_schema_structural_metadata_sha256": "fee94d42fd0a23fafe80236604084b0a07b0ad3721a66de6c4cae6dbcf227051",
+  "migration_096_provenance": {
+    "source_commit": "ca8f4100782e13f8d72106187fafc8e1e446214f",
+    "removal_commit": "54a7fe1ceb41b37a68720a71c10a1dd03af30dea",
+    "production_applied_at": "2026-10-27T13:46:14.262Z",
+    "determination": "RECOVERED HISTORICAL SQL + LIVE SCHEMA EFFECT CONFIRMED",
+    "do_not_reapply": true
+  },
+  "gate_status": {
+    "migration_history": "SUBSTANTIALLY_RESOLVED",
+    "g002_overall": "OPEN",
+    "remaining_blockers": [
+      "deployed runtime DB identity independently proven NOBYPASSRLS",
+      "production RLS and tenant isolation proven",
+      "two-organization runtime A/B isolation proven",
+      "independent review of this deterministic manifest"
+    ]
+  }
+}

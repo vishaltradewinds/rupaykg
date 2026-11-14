@@ -18,4 +18,7 @@ process.env.RUPAYKG_REQUIRE_RUNTIME_DB_ROLE = String(config.requireRuntimeDbRole
 
 console.info(JSON.stringify(buildRuntimeAttestation()));
 
+const { assertProductionRuntimeDbRole } = await import("./runtime-db-role-guard.js");
+await assertProductionRuntimeDbRole();
+
 await import("./server.js");
