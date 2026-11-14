@@ -9,8 +9,9 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "migrate": "tsx src/migrate.ts",
-    "test": "npm run build && node --test --test-concurrency=1 \"dist/**/*.test.js\"",
-    "runtime-db-preflight": "tsx src/runtime-db-preflight.ts"
+    "test": "npm run build && node --test \"dist/**/*.test.js\"",
+    "runtime-db-preflight": "tsx src/runtime-db-preflight.ts",
+    "migrate:shakti": "tsx src/migrate-shakti.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.0.0",

@@ -40,3 +40,18 @@ A passing unit test alone is insufficient.
 The canonical repository now contains the Shakti RLS policy foundation in `migrations/20261108_shakti_rls_policy_foundation.sql` and the activation/rollback procedure in `docs/SHAKTI_TENANT_ISOLATION_ACTIVATION_RUNBOOK.md`.
 
 The policy foundation is intentionally not the final production acceptance: RLS enablement remains behind the runtime-role and transaction-context deployment gate. This prevents the current application owner/BYPASSRLS path from being mistaken for tenant-isolated production security.
+
+
+## 2026-11-13 context-authenticity hardening
+
+A live read-only production test established that custom GUCs `app.identity_id` and `app.organization_id` are directly settable by the runtime database login. Membership-aware RLS rejects a mismatched identity/organization pair, but a caller that can set a known valid pair could impersonate that membership if the runtime SQL session is compromised.
+
+Migration `103_shakti_nonforgeable_request_context.sql` now introduces:
+- opaque, short-lived grants minted by the SECURITY DEFINER bearer-session bootstrap;
+- a three-argument `app.set_request_context(identity_id, organization_id, context_token)` that validates the grant against the live session and current verified membership;
+- SECURITY DEFINER RLS context readers that return NULL unless the transaction-local identity, organization and opaque grant match;
+- no direct runtime-role SELECT/INSERT/UPDATE/DELETE access to the private grant table.
+
+The API authentication path carries the grant internally and `withTenantTransaction` must pass it to the setter. A direct GUC pair without the opaque grant must see zero tenant rows. The rollback-only SQL and disposable PostgreSQL integration tests assert this negative case.
+
+**Important:** migration 103 and the associated code are repository candidate changes only until the current-head CI run passes and a controlled production change is separately authorized. Production Neon remains unchanged. The remaining 50 RLS-disabled tables still require per-table classification and policy/negative-test coverage; this migration does not complete full-platform tenant isolation.

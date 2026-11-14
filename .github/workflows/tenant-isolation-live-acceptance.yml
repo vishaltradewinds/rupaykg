@@ -35,7 +35,7 @@ jobs:
           mkdir -p tenant-isolation-evidence
           psql "$RUPAYKG_DDL_DATABASE_URL" \
             -v ON_ERROR_STOP=1 \
-            -f ops/tenant-isolation/VERIFY_DDL_ROLE_WRAPPER.sql \
+            -f ops/tenant-isolation/VERIFY_DDL_ROLE_PRE_RLS.sql \
             2>&1 | tee tenant-isolation-evidence/ddl-role-preflight.txt
 
       - name: Verify authentication bootstrap contract
@@ -52,8 +52,8 @@ jobs:
           set -euo pipefail
           mkdir -p tenant-isolation-evidence
           psql "$RUPAYKG_RUNTIME_DATABASE_URL" \
-            -v ON_ERROR_STOP=1 \\
-            -f ops/tenant-isolation/VERIFY_SECURITY_DEFINER_BOUNDARIES.sql \\
+            -v ON_ERROR_STOP=1 \
+            -f ops/tenant-isolation/VERIFY_SECURITY_DEFINER_BOUNDARIES.sql \
             2>&1 | tee tenant-isolation-evidence/security-definer-boundaries.txt
 
       - name: Verify runtime role and pre-RLS contract

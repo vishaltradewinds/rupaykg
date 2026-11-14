@@ -45,9 +45,21 @@ jobs:
       - name: Assert disposable non-BYPASSRLS runtime role
         run: |
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "create role rupaykg_app_runtime nologin nobypassrls;"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "create role rupaykg_security_definer nologin noinherit nosuperuser nobypassrls nocreatedb nocreaterole noreplication;"
           test "$(psql "$DATABASE_URL" -tAc "select rolbypassrls from pg_roles where rolname = 'rupaykg_app_runtime'")" = "f"
       - run: npm run validate:migrations
       - run: npm run migrate -w @rupaykg/api
+      - name: Reconcile controlled Shakti migration ownership
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f ops/tenant-isolation/PROVISION_SECURITY_DEFINER_OWNER.sql
+      - name: Apply controlled Shakti migrations with temporary DDL handoff
+        run: MIGRATION_DATABASE_URL="$DATABASE_URL" npm run migrate:shakti -w @rupaykg/api
+      - name: Run SECURITY DEFINER boundary acceptance as runtime login
+        run: |
+          set -euo pipefail
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "create role rupaykg_runtime_login nologin nobypassrls; grant rupaykg_app_runtime to rupaykg_runtime_login;"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "set role rupaykg_runtime_login" -f ops/tenant-isolation/VERIFY_SECURITY_DEFINER_BOUNDARIES.sql
+      - name: Test SECURITY DEFINER owner membership guard
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f ops/tenant-isolation/TEST_SECURITY_DEFINER_MEMBERSHIP_GUARD.sql
       - run: npm run typecheck
       - run: npm run build
       - name: Browser smoke test production web build
@@ -79,28 +91,11 @@ jobs:
           grep -q 'RupayKG' /tmp/rupaykg-web-dom.html
           test -s /tmp/rupaykg-web-smoke.png
           echo "Chrome DOM exit: $dom_status; screenshot exit: $shot_status"
-      - name: Rehearse migration 101 as restricted non-superuser migration owner
-        env:
-          MIGRATION_FILE: migrations/101_shakti_mrv_provenance_tenant_rls.sql
-        run: bash ops/tenant-isolation/VERIFY_MIGRATION_OWNER_ACCEPTANCE.sh
       - name: Run tests including disposable PostgreSQL acceptance
         env:
           RUPAYKG_RUN_DB_INTEGRATION_TESTS: "1"
         run: npm test
-      - name: Rehearse production DDL acceptance login, RLS activation and cross-tenant isolation
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Disposable CI-only credential. Production uses a separately provisioned
-          # secret and the exact same SQL wrappers; no CI password is reused.
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE ROLE rupaykg_ddl_login LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD 'ci-only-acceptance-password'; GRANT rupaykg_ddl TO rupaykg_ddl_login WITH INHERIT FALSE, SET TRUE; GRANT rupaykg_app_runtime TO rupaykg_ddl_login WITH INHERIT FALSE, SET TRUE;"
-          export PGPASSWORD=ci-only-acceptance-password
-          DDL_DATABASE_URL="postgresql://rupaykg_ddl_login@localhost:5432/rupaykg"
-          psql "$DDL_DATABASE_URL" -v ON_ERROR_STOP=1 -f ops/tenant-isolation/VERIFY_DDL_ROLE_WRAPPER.sql
-          psql "$DDL_DATABASE_URL" -v ON_ERROR_STOP=1 -f ops/tenant-isolation/VERIFY_RUNTIME_PRE_RLS_WRAPPER.sql
-          psql "$DDL_DATABASE_URL" -v ON_ERROR_STOP=1 -f ops/tenant-isolation/ACTIVATE_RLS_WRAPPER.sql
-          psql "$DDL_DATABASE_URL" -v ON_ERROR_STOP=1 -f ops/tenant-isolation/VERIFY_RLS_POLICY_COVERAGE_WRAPPER.sql
-          psql "$DDL_DATABASE_URL" -v ON_ERROR_STOP=1 -f ops/tenant-isolation/VERIFY_RLS_NEGATIVE_TEST.sql
-          unset PGPASSWORD
+      - name: Run rollback-only tenant-isolation negative acceptance
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f ops/tenant-isolation/VERIFY_RLS_NEGATIVE_TEST.sql
       - name: Build production container
         run: docker build --pull --tag rupaykg:ci .

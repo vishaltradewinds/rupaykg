@@ -21,7 +21,7 @@ function makePool() {
   const pool = {
     async query(sql: string, params?: unknown[]) {
       if (sql.includes("app.authenticate_bearer_session")) {
-        return { rows: params?.[0] ? [{ identity_id: IDENTITY_A, organization_id: ORG_A, role_id: ROLE_A, status: "VERIFIED" }] : [] };
+        return { rows: params?.[0] ? [{ identity_id: IDENTITY_A, organization_id: ORG_A, role_id: ROLE_A, status: "VERIFIED", context_token: "test-context-token" }] : [] };
       }
       if (sql.includes("from identity_sessions")) {
         return { rows: params?.[0] ? [{ identity_id: IDENTITY_A }] : [] };
@@ -35,7 +35,10 @@ function makePool() {
       let transactionOrganization = "";
       return {
         async query(sql: string, params?: unknown[]) {
-          if (sql === "begin" || sql === "commit" || sql === "rollback") return { rows: [] };
+          if (sql === "begin" || sql === "commit" || sql === "rollback" || sql === "set local role rupaykg_app_runtime") return { rows: [] };
+          if (sql.includes("app.authenticate_bearer_session")) {
+            return { rows: params?.[0] ? [{ identity_id: IDENTITY_A, organization_id: ORG_A, role_id: ROLE_A, status: "VERIFIED", context_token: "test-context-token" }] : [] };
+          }
           if (sql.includes("from organization_memberships om")) {
             return { rows: [{ ok: params?.[1] === ORG_A && params?.[0] === IDENTITY_A }] };
           }

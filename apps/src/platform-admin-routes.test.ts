@@ -9,13 +9,12 @@ const organizationId = "223e4567-e89b-42d3-a456-426614174000";
 const roleId = "323e4567-e89b-42d3-a456-426614174000";
 
 function fakePool(isSuperAdmin: boolean): Pool {
-  return {
-    query: async (sql: string) => {
-      if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
-      if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+  const query = async (sql: string, _params?: unknown[]) => {
+      if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }] };
+      if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }] };
       if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
       if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) {
-        return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+        return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }] };
       }
       if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: isSuperAdmin }] };
       if (sql.includes('as "verifiedIdentities"')) return { rows: [{
@@ -27,7 +26,16 @@ function fakePool(isSuperAdmin: boolean): Pool {
         anchoredMrvRecords: "4",
       }] };
       throw new Error(`Unexpected SQL in platform-admin test: ${sql}`);
-    },
+  };
+  return {
+    query,
+    connect: async () => ({
+      query: async (sql: string, params?: unknown[]) => {
+        if (["begin", "commit", "rollback", "set local role rupaykg_app_runtime"].includes(sql.trim().toLowerCase())) return { rows: [] };
+        return query(sql, params);
+      },
+      release: () => {},
+    }),
   } as unknown as Pool;
 }
 
@@ -145,15 +153,16 @@ test("membership grant cannot be used for self-escalation", async () => {
 test("dual-control access requests cannot be approved by their requester", async () => {
   const pool = {
     query: async (sql: string) => {
-      if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+      if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }] };
       if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
-      if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+      if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }] };
       if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: true }] };
       throw new Error("Unexpected pool SQL in dual-control self-approval test: " + sql);
     },
     connect: async () => ({
       query: async (sql: string) => {
-        if (/^(begin|commit|rollback)$/i.test(sql.trim())) return { rows: [], rowCount: 0 };
+        if (/^(begin|commit|rollback)$/i.test(sql.trim()) || sql.trim().toLowerCase() === "set local role rupaykg_app_runtime") return { rows: [], rowCount: 0 };
+        if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }], rowCount: 1 };
         if (sql.includes("from platform_access_change_requests where id=$1 for update")) return { rows: [{
           id: "423e4567-e89b-42d3-a456-426614174000",
           request_type: "GRANT_RESERVED_ROLE",
@@ -186,15 +195,16 @@ test("dual-control access requests cannot be approved by their requester", async
 test("dual-control access targets cannot approve their own reserved-role grant", async () => {
   const pool = {
     query: async (sql: string) => {
-      if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+      if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }] };
       if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
-      if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+      if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }] };
       if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: true }] };
       throw new Error("Unexpected pool SQL in dual-control self-approval test: " + sql);
     },
     connect: async () => ({
       query: async (sql: string) => {
-        if (/^(begin|commit|rollback)$/i.test(sql.trim())) return { rows: [], rowCount: 0 };
+        if (/^(begin|commit|rollback)$/i.test(sql.trim()) || sql.trim().toLowerCase() === "set local role rupaykg_app_runtime") return { rows: [], rowCount: 0 };
+        if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }], rowCount: 1 };
         if (sql.includes("from platform_access_change_requests where id=$1 for update")) return { rows: [{
           id: "423e4567-e89b-42d3-a456-426614174000",
           request_type: "GRANT_RESERVED_ROLE",
@@ -227,17 +237,18 @@ test("dual-control access targets cannot approve their own reserved-role grant",
 test("the last active Super Admin membership cannot be revoked", async () => {
   const pool = {
     query: async (sql: string) => {
-      if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+      if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }] };
       if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
       if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) {
-        return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+        return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }] };
       }
       if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: true }] };
       throw new Error(`Unexpected pool SQL in last-admin test: ${sql}`);
     },
     connect: async () => ({
       query: async (sql: string) => {
-        if (/^(begin|commit|rollback)$/i.test(sql.trim())) return { rows: [], rowCount: 0 };
+        if (/^(begin|commit|rollback)$/i.test(sql.trim()) || sql.trim().toLowerCase() === "set local role rupaykg_app_runtime") return { rows: [], rowCount: 0 };
+        if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }], rowCount: 1 };
         if (sql.includes("where om.id=$1 for update")) return { rows: [{
           id: "423e4567-e89b-42d3-a456-426614174000",
           identity_id: "523e4567-e89b-42d3-a456-426614174000",
@@ -274,10 +285,10 @@ test("identity suspension revokes active sessions and records an audit event tra
   const statements: string[] = [];
   const pool = {
     query: async (sql: string) => {
-      if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+      if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }] };
       if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
       if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) {
-        return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+        return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }] };
       }
       if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: true }] };
       throw new Error(`Unexpected pool SQL in identity-suspension test: ${sql}`);
@@ -285,7 +296,8 @@ test("identity suspension revokes active sessions and records an audit event tra
     connect: async () => ({
       query: async (sql: string) => {
         statements.push(sql);
-        if (/^(begin|commit|rollback)$/i.test(sql.trim())) return { rows: [], rowCount: 0 };
+        if (/^(begin|commit|rollback)$/i.test(sql.trim()) || sql.trim().toLowerCase() === "set local role rupaykg_app_runtime") return { rows: [], rowCount: 0 };
+        if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }], rowCount: 1 };
         if (sql.includes("select id,status,suspended_at from identities")) return { rows: [{
           id: "523e4567-e89b-42d3-a456-426614174000", status: "VERIFIED", suspended_at: null,
         }] };
@@ -309,7 +321,7 @@ test("identity suspension revokes active sessions and records an audit event tra
     headers: { authorization: "Bearer test-session", "x-rupaykg-organization-id": organizationId },
     payload: { reason: "Confirmed security incident review" },
   });
-  assert.equal(response.statusCode, 200);
+  assert.equal(response.statusCode, 200, JSON.stringify({ body: response.json(), statements }));
   assert.equal(response.json().suspended, true);
   assert.equal(response.json().revokedSessions, 2);
   assert.ok(statements.some(sql => sql.includes("update identities set suspended_at=now()")));
@@ -318,22 +330,23 @@ test("identity suspension revokes active sessions and records an audit event tra
   assert.ok(statements.some(sql => sql.includes("select last_event_hash from platform_audit_chain_head where singleton=true for update")), "audit append must lock the authoritative chain head");
   assert.ok(statements.some(sql => sql.includes("update platform_audit_chain_head set last_event_id=$1,last_event_hash=$2")), "audit append must atomically advance the chain head");
   assert.ok(statements.some(sql => sql.includes("returning id")), "audit append must capture the inserted event ID");
-  assert.equal(statements.filter(sql => sql.trim().toLowerCase() === "commit").length, 1);
+  assert.equal(statements.filter(sql => sql.trim().toLowerCase() === "commit").length, 2, "auth bootstrap and suspension each commit their own transaction");
   await app.close();
 });
 
 test("platform_admin membership cannot be restored through the generic membership endpoint", async () => {
   const pool = {
     query: async (sql: string) => {
-      if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+      if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }] };
       if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
-      if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+      if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }] };
       if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: true }] };
       throw new Error("Unexpected pool SQL in reserved-role restore test: " + sql);
     },
     connect: async () => ({
       query: async (sql: string) => {
-        if (/^(begin|commit|rollback)$/i.test(sql.trim())) return { rows: [], rowCount: 0 };
+        if (/^(begin|commit|rollback)$/i.test(sql.trim()) || sql.trim().toLowerCase() === "set local role rupaykg_app_runtime") return { rows: [], rowCount: 0 };
+        if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }], rowCount: 1 };
         if (sql.includes("where om.id=$1 for update")) return { rows: [{
           id: "423e4567-e89b-42d3-a456-426614174000",
           identity_id: "523e4567-e89b-42d3-a456-426614174000",
@@ -368,10 +381,10 @@ test("platform-reserved administrators cannot be suspended through the generic i
   const statements: string[] = [];
   const pool = {
     query: async (sql: string) => {
-      if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+      if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }] };
       if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
       if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) {
-        return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+        return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }] };
       }
       if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: true }] };
       throw new Error(`Unexpected pool SQL in reserved-admin test: ${sql}`);
@@ -379,7 +392,8 @@ test("platform-reserved administrators cannot be suspended through the generic i
     connect: async () => ({
       query: async (sql: string) => {
         statements.push(sql);
-        if (/^(begin|commit|rollback)$/i.test(sql.trim())) return { rows: [], rowCount: 0 };
+        if (/^(begin|commit|rollback)$/i.test(sql.trim()) || sql.trim().toLowerCase() === "set local role rupaykg_app_runtime") return { rows: [], rowCount: 0 };
+        if (sql.includes("app.authenticate_bearer_session")) return { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: roleId, status: "VERIFIED", context_token: "test-context-token" }], rowCount: 1 };
         if (sql.includes("select id,status,suspended_at from identities")) return { rows: [{
           id: "523e4567-e89b-42d3-a456-426614174000", status: "VERIFIED", suspended_at: null,
         }] };

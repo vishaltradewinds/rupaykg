@@ -22,6 +22,8 @@ let evidenceId = "";
 let verificationId = "";
 let credentialId = "";
 let settlementId = "";
+let serverStderr = "";
+let serverStdout = "";
 
 const token = () => randomBytes(32).toString("base64url");
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
@@ -35,14 +37,16 @@ before(async () => {
   try {
     await c.query("begin");
     ownerOrgId = (await c.query<{ id: string }>("insert into organizations(name,organization_type) values($1,'COLLECTOR') returning id", [`runtime-registry-owner-${suffix}`])).rows[0]!.id;
-    destinationOrgId = (await c.query<{ id: string }>("insert into organizations(name,organization_type) values($1,'PROCESSOR') returning id", [`runtime-registry-destination-${suffix}`])).rows[0]!.id;
+    destinationOrgId = (await c.query<{ id: string }>("insert into organizations(name,organization_type,status) values($1,'PROCESSOR','VERIFIED') returning id", [`runtime-registry-destination-${suffix}`])).rows[0]!.id;
     geographyId = (await c.query<{ id: string }>("insert into geography(kind,code,name) values('STATE_UT',$1,$2) returning id", [`REGISTRY-${suffix}`, `Registry Runtime ${suffix}`])).rows[0]!.id;
     await c.query("insert into organization_geography_scopes(organization_id,geography_id) values($1,$2)", [ownerOrgId, geographyId]);
     actorId = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`runtime-registry-actor-${suffix}`, "Registry Runtime Actor"])).rows[0]!.id;
     verifierId = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`runtime-registry-verifier-${suffix}`, "Registry Runtime Verifier"])).rows[0]!.id;
     const actorRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,$3::jsonb) returning id", [ownerOrgId, `REGISTRY-OPERATOR-${suffix}`, JSON.stringify(["ISSUE_CREDENTIAL","TRANSFER_CREDENTIAL","RETIRE_CREDENTIAL","AUTHORIZE_SETTLEMENT","SETTLE_FUNDS","settlement:authorize","settlement:settle","guardian:read"])] )).rows[0]!.id;
     const verifierRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,'[\"VERIFY_EVIDENCE\"]') returning id", [ownerOrgId, `REGISTRY-VERIFIER-${suffix}`])).rows[0]!.id;
-    await c.query("insert into roles(organization_id,name,permissions) values($1,$2,$3::jsonb)", [destinationOrgId, `SETTLEMENT-PARTY-${suffix}`, JSON.stringify(["settlement:authorize","settlement:settle"])]);
+    const destinationRoleId = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,$3::jsonb) returning id", [destinationOrgId, `SETTLEMENT-PARTY-${suffix}`, JSON.stringify(["settlement:authorize","settlement:settle"])] )).rows[0]!.id;
+    const destinationMemberId = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`runtime-registry-destination-member-${suffix}`, "Registry Destination Member"])).rows[0]!.id;
+    await c.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,$4)", [destinationMemberId, destinationOrgId, destinationRoleId, "VERIFIED"]);
     await c.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED'),($4,$2,$5,'VERIFIED')", [actorId, ownerOrgId, actorRole, verifierId, verifierRole]);
     actorToken = token(); verifierToken = token();
     await c.query("insert into identity_sessions(identity_id,expires_at,token_hash) values($1,now()+interval '1 hour',$2),($3,now()+interval '1 hour',$4)", [actorId, hash(actorToken), verifierId, hash(verifierToken)]);
@@ -53,7 +57,11 @@ before(async () => {
     await c.query("insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata,mirror_node_verified_at) values($1,$2,$3,'runtime-policy','runtime-guardian','VERIFIED','CONSENSUS_CONFIRMED','0.0.123',$4,$5,$6,'{\"testFixture\":true}',clock_timestamp())", [activityId, verificationId, evidenceId, `runtime-tx-${suffix}`, `runtime-consensus-${suffix}`, `runtime-hash-${suffix}`]);
     await c.query("commit");
   } catch (error) { await c.query("rollback"); throw error; } finally { c.release(); }
-  server = spawn(process.execPath, ["dist/src/server.js"], { cwd: process.cwd(), env: { ...process.env, PORT: String(port), HOST: "127.0.0.1", DATABASE_URL: databaseUrl, DATABASE_SSL: "false" }, stdio: ["ignore", "ignore", "pipe"] });
+  server = spawn(process.execPath, ["dist/src/server.js"], { cwd: process.cwd(), env: { ...process.env, PORT: String(port), HOST: "127.0.0.1", DATABASE_URL: databaseUrl, DATABASE_SSL: "false" }, stdio: ["ignore", "pipe", "pipe"] });
+  server.stdout?.setEncoding("utf8");
+  server.stdout?.on("data", (chunk: string) => { serverStdout = (serverStdout + chunk).slice(-100000); });
+  server.stderr?.setEncoding("utf8");
+  server.stderr?.on("data", (chunk: string) => { serverStderr = (serverStderr + chunk).slice(-20000); });
   await waitFor(`${baseUrl}/health`, 200);
 });
 
@@ -190,11 +198,11 @@ describe("registry and settlement runtime acceptance", () => {
   it("requires current-owner transfer permission and permits governed retirement", async () => {
     if (!pool) return;
     const denied = await request(`/api/v1/credentials/${credentialId}/transfer`, { method: "POST", body: JSON.stringify({ toOwnerId: destinationOrgId }) }, verifierToken, ownerOrgId); assert.equal(denied.status, 403); assert.equal((await body(denied)).code, "HIGH_RISK_PERMISSION_REQUIRED");
-    const transferred = await request(`/api/v1/credentials/${credentialId}/transfer`, { method: "POST", body: JSON.stringify({ toOwnerId: destinationOrgId }) }, actorToken, ownerOrgId); assert.equal(transferred.status, 200); assert.equal((await body(transferred)).registryEvent.event_type, "TRANSFERRED");
+    const credentialStateBeforeTransfer = await pool.query("select status from credentials where id=$1", [credentialId]); const destinationReadiness = await pool.query("select app.organization_has_verified_members($1) as ok", [destinationOrgId]); const transferGuard = await pool.query("select pg_get_functiondef(p.oid) as definition from pg_proc p where p.proname='prevent_unverified_registry_transfer_recipient'"); const transferred = await request(`/api/v1/credentials/${credentialId}/transfer`, { method: "POST", body: JSON.stringify({ toOwnerId: destinationOrgId }) }, actorToken, ownerOrgId); const transferredBody = await body(transferred); if (transferred.status !== 200) throw new Error("TRANSFER_DIAG " + JSON.stringify({ status: transferred.status, body: transferredBody, credentialState: credentialStateBeforeTransfer.rows, destinationReadiness: destinationReadiness.rows, transferGuard: transferGuard.rows })); assert.equal(transferred.status, 200); assert.equal(transferredBody.registryEvent.event_type, "TRANSFERRED");
     const staleOwnerTransfer = await request(`/api/v1/credentials/${credentialId}/transfer`, { method: "POST", body: JSON.stringify({ toOwnerId: ownerOrgId }) }, actorToken, ownerOrgId); assert.equal(staleOwnerTransfer.status, 403); assert.equal((await body(staleOwnerTransfer)).code, "ORG_FORBIDDEN");
     const destinationRole = (await pool.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,$3::jsonb) returning id", [destinationOrgId, `RETIRE-${suffix}`, JSON.stringify(["RETIRE_CREDENTIAL","settlement:authorize","settlement:settle"])] )).rows[0]!.id;
     await pool.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [actorId, destinationOrgId, destinationRole]);
-    const retired = await request(`/api/v1/credentials/${credentialId}/retire`, { method: "POST", body: "{}" }, actorToken, destinationOrgId); assert.equal(retired.status, 200); assert.equal((await body(retired)).registryEvent.event_type, "RETIRED");
+    const settlementStates = await pool.query("select id,status,payer_id,payee_id from settlements where credential_id=$1 order by created_at", [credentialId]); const retirementGuard = await pool.query("select pg_get_functiondef(p.oid) as definition from pg_proc p where p.proname='prevent_credential_out_of_scope_issue'"); const retired = await request(`/api/v1/credentials/${credentialId}/retire`, { method: "POST", body: "{}" }, actorToken, destinationOrgId); const retiredBody = await body(retired); if (retired.status !== 200) throw new Error("RETIRE_DIAG " + JSON.stringify({ retiredStatus: retired.status, retiredBody, settlementStates: settlementStates.rows, retirementGuard: retirementGuard.rows, serverStderr, serverStdout })); assert.equal(retired.status, 200, JSON.stringify({ retiredBody, settlementStates: settlementStates.rows })); assert.equal(retiredBody.registryEvent.event_type, "RETIRED");
     const retiredSettlement = await request("/api/v1/settlements", { method: "POST", body: JSON.stringify({ credentialId, payerId: destinationOrgId, payeeId: ownerOrgId, amount: 1, currency: "INR" }) }, actorToken, destinationOrgId); assert.equal(retiredSettlement.status, 409); assert.equal((await body(retiredSettlement)).code, "CREDENTIAL_RETIRED");
     const state = await pool.query<{ status: string }>("select status from credentials where id=$1", [credentialId]); assert.equal(state.rows[0]?.status, "RETIRED");
   });
