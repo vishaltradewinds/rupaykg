@@ -145,6 +145,7 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
       return {
         id: activity.id,
         stakeholder: stakeholderFromActivity(activity.activity_type),
+        stakeholderAttribution: "UNMAPPED",
         label: [activity.activity_type, activity.geography_name ?? "Unlabelled geography"].join(" — "),
         cells,
       };
@@ -154,6 +155,7 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
       rows.push({
         id: "resource-flow:" + flow.id,
         stakeholder: "OTHER",
+        stakeholderAttribution: "UNMAPPED",
         label: "Declared material flow — " + flow.material_code,
         cells: [{
           key: "declared_quantity",
