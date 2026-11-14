@@ -26,6 +26,7 @@ $preflight$;
 do $activate$
 declare
   t text;
+  policy_name text;
 begin
   foreach t in array array[
     'bwg_profiles',
@@ -43,10 +44,11 @@ begin
   ] loop
     execute format('alter table public.%I enable row level security', t);
     execute format('alter table public.%I force row level security', t);
-    execute format('drop policy if exists shakti_%I_tenant on public.%I', t, t);
+    policy_name := 'shakti_' || t || '_tenant';
+    execute format('drop policy if exists %I on public.%I', policy_name, t);
     execute format(
-      'create policy shakti_%I_tenant on public.%I for all to rupaykg_app_runtime using (organization_id = app.current_organization_id() and app.is_verified_org_member(organization_id)) with check (organization_id = app.current_organization_id() and app.is_verified_org_member(organization_id))',
-      t, t
+      'create policy %I on public.%I for all to rupaykg_app_runtime using (organization_id = app.current_organization_id() and app.is_verified_org_member(organization_id)) with check (organization_id = app.current_organization_id() and app.is_verified_org_member(organization_id))',
+      policy_name, t
     );
     execute format('grant select, insert, update on public.%I to rupaykg_app_runtime', t);
   end loop;
