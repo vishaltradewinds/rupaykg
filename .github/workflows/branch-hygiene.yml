@@ -1,0 +1,48 @@
+name: Weekly Branch Hygiene (Read Only)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 8 * * 1"
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: rupaykg-branch-hygiene
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: Inventory branches and release safety
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Fetch all branch refs
+        run: git fetch --no-tags origin '+refs/heads/*:refs/remotes/origin/*' --prune
+
+      - name: Generate read-only branch hygiene report
+        env:
+          GITHUB_TOKEN: \${{ github.token }}
+          GITHUB_REPOSITORY: \${{ github.repository }}
+          GITHUB_API_URL: \${{ github.api_url }}
+        run: node ops/github/branch-hygiene.mjs
+
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: rupaykg-branch-hygiene-\${{ github.run_number }}
+          path: branch-hygiene-report/
+          if-no-files-found: error
+          retention-days: 90
