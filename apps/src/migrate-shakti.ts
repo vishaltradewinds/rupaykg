@@ -88,9 +88,15 @@ try {
   const missing = controlledMigrationOrder.filter((name) => !availableFiles.has(name));
   if (missing.length) throw new Error(`Controlled Shakti migration set is incomplete: ${missing.join(", ")}`);
 
+  // The two date-prefixed files are logical migrations 105 and 109.
+  // Never derive ledger versions from their calendar-date filename prefix.
+  const logicalVersionByFilename: Record<string, string> = {
+    "20261113_shakti_field_sync_evidence_mrv_rls.sql": "105",
+    "20261114_shakti_platform_review_boundary.sql": "109",
+  };
   const versions = controlledMigrationOrder.map((filename) => ({
     filename,
-    version: filename.slice(0, filename.indexOf("_")),
+    version: logicalVersionByFilename[filename] ?? filename.slice(0, filename.indexOf("_")),
   }));
   const existingRows = await pool.query<{ version: string; filename: string }>(
     "select version, filename from public.schema_migrations where version = any($1::text[])",
