@@ -54,12 +54,15 @@ test("evidence verification establishes runtime role and tenant context before R
   });
 
   assert.equal(response.statusCode, 201, response.body);
+  const tenantTransactionBeginIndex = statements.lastIndexOf("begin");
+  const runtimeRoleIndex = statements.lastIndexOf("set local role rupaykg_app_runtime");
   const contextIndex = statements.findIndex(sql => sql.includes("app.set_request_context"));
   const evidenceReadIndex = statements.findIndex(sql => sql.includes("select e.activity_id, a.actor_identity_id, a.organization_id"));
   const permissionReadIndex = statements.findIndex(sql => sql.toLowerCase().includes("select exists") && sql.includes("from evidence e join activities a"));
-  assert.ok(contextIndex >= 0, "request context must be established");
+  assert.ok(tenantTransactionBeginIndex >= 0, "tenant transaction must begin");
+  assert.ok(runtimeRoleIndex > tenantTransactionBeginIndex, "runtime role must be set inside the tenant transaction");
+  assert.ok(contextIndex > runtimeRoleIndex, "tenant context must be established after the runtime role switch");
   assert.ok(evidenceReadIndex > contextIndex, "evidence must not be read before tenant context");
   assert.ok(permissionReadIndex > contextIndex, "verification authority must not be checked before tenant context");
-  assert.ok(statements.some(sql => sql.trim().toLowerCase() === "set local role rupaykg_app_runtime"));
   await app.close();
 });
