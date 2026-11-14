@@ -23,6 +23,7 @@ const controlledMigrationOrder = [
   "20261113_shakti_field_sync_evidence_mrv_rls.sql",
   "106_credential_lifecycle_verification_boundary.sql",
   "107_shakti_tenant_direct_domain_activation.sql",
+  "108_shakti_tenant_organization_domain_activation.sql",
 ];
 
 const pool = new Pool({
