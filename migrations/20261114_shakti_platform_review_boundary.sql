@@ -50,6 +50,10 @@ grant select (organization_id, geography_id, status)
 -- review-domain tables. The owner is not a runtime member and is NOLOGIN.
 do $$
 begin
+  drop policy if exists shakti_review_owner_read_roles on public.roles;
+  create policy shakti_review_owner_read_roles
+    on public.roles for select to rupaykg_security_definer using (true);
+
   drop policy if exists shakti_review_owner_read_applications on public.stakeholder_applications;
   create policy shakti_review_owner_read_applications
     on public.stakeholder_applications
@@ -104,6 +108,8 @@ end $$;
 
 grant execute on function organization_has_geography_scope(uuid,uuid)
   to rupaykg_security_definer;
+grant execute on function app.current_identity_id()
+  to rupaykg_security_definer;
 
 create or replace function app.review_authority_allowed(
   p_identity_id uuid,
@@ -114,7 +120,7 @@ create or replace function app.review_authority_allowed(
 language sql stable security definer
 set search_path = pg_catalog, public, app
 as $$
-  select exists (
+  select p_identity_id = app.current_identity_id() and exists (
     select 1
       from organization_memberships om
       join roles r on r.id=om.role_id
@@ -151,6 +157,9 @@ set search_path = pg_catalog, public, app
 as $$
 declare result jsonb;
 begin
+  if p_identity_id is distinct from app.current_identity_id() then
+    raise exception 'ONBOARDING_REVIEW_IDENTITY_INVALID';
+  end if;
   if not exists (
     select 1 from identities
      where id=p_identity_id and status='VERIFIED' and suspended_at is null
@@ -158,7 +167,14 @@ begin
     raise exception 'ONBOARDING_REVIEW_IDENTITY_INVALID';
   end if;
 
-  select coalesce(jsonb_agg(to_jsonb(q) order by q.created_at), '[]'::jsonb)
+  select coalesce(jsonb_agg(
+    to_jsonb(q) || jsonb_build_object(
+      'nextApproval', case when q.next_approval_level is null then null
+        else jsonb_build_object('approval_level',q.next_approval_level,'status',q.next_approval_status) end,
+      'canReview',q.can_review,
+      'canVerifyLegal',q.can_verify_legal
+    ) order by q.created_at
+  ), '[]'::jsonb)
     into result
     from (
       select sa.id,sa.organization_id,sa.identity_id as applicant_identity_id,
@@ -230,6 +246,9 @@ set search_path = pg_catalog, public, app
 as $$
 declare oid uuid; evidence_count integer;
 begin
+  if p_identity_id is distinct from app.current_identity_id() then
+    raise exception 'ONBOARDING_REVIEW_IDENTITY_INVALID';
+  end if;
   if p_status not in ('VERIFIED','REJECTED') or p_note is null or btrim(p_note)='' then
     raise exception 'LEGAL_REVIEW_INVALID';
   end if;
@@ -298,6 +317,9 @@ set search_path = pg_catalog, public, app
 as $$
 declare appn record; next_step record; remaining integer;
 begin
+  if p_identity_id is distinct from app.current_identity_id() then
+    raise exception 'ONBOARDING_REVIEW_IDENTITY_INVALID';
+  end if;
   if p_action not in ('approve','reject') then raise exception 'INVALID_DECISION'; end if;
   if p_action='reject' and (p_note is null or btrim(p_note)='') then raise exception 'REVIEW_NOTE_REQUIRED'; end if;
 
@@ -390,3 +412,14 @@ comment on function app.onboarding_verify_legal(uuid,uuid,text,text) is
 'Narrow platform legal-verification write boundary. Requires verified platform authority and persisted evidence.';
 comment on function app.onboarding_decide(uuid,uuid,text,text) is
 'Narrow hierarchical onboarding decision boundary. Enforces approval level and geography authority before cross-organization mutation.';
+
+-- All review SECURITY DEFINER entry points and their authorization helper
+-- execute as the isolated NOLOGIN/NOBYPASSRLS owner, never the DDL runner.
+alter function app.review_authority_allowed(uuid,text,uuid,geography_kind)
+  owner to rupaykg_security_definer;
+alter function app.onboarding_review_queue(uuid)
+  owner to rupaykg_security_definer;
+alter function app.onboarding_verify_legal(uuid,uuid,text,text)
+  owner to rupaykg_security_definer;
+alter function app.onboarding_decide(uuid,uuid,text,text)
+  owner to rupaykg_security_definer;
