@@ -31,7 +31,7 @@ try {
   const files = (await readdir(migrationDir))
     .filter((name) => /^\d+_.+\.sql$/.test(name))
     .sort();
-  // Tenant-isolation migrations 101-108 are deliberately excluded from this
+  // Controlled tenant/reporting migrations 101-109 and 112 are deliberately excluded from this
   // application/baseline runner. They require the separate privileged,
   // temporary-role handoff implemented by migrate-shakti.ts.
   const controlledTenantMigrations = new Set([
@@ -42,20 +42,26 @@ try {
     "20261113_shakti_field_sync_evidence_mrv_rls.sql",
     "106_credential_lifecycle_verification_boundary.sql",
     "107_shakti_tenant_direct_domain_activation.sql",
-    "108_reporting_run_history.sql",
+    "108_shakti_tenant_organization_domain_activation.sql",
+    "20261114_shakti_platform_review_boundary.sql",
+    "112_reporting_run_history.sql",
   ]);
   const baselineFiles = files.filter((name) => !controlledTenantMigrations.has(name));
 
-  const prefixCounts = new Map<string, number>();
-  for (const filename of baselineFiles) {
-    const prefix = filename.slice(0, filename.indexOf("_"));
-    prefixCounts.set(prefix, (prefixCounts.get(prefix) ?? 0) + 1);
-  }
-  const protectedMigrations = new Set([
+  // Numeric migration prefixes are immutable ledger identities. Reject
+  // duplicates across the full inventory rather than deriving alternate IDs.
+  const filenameByVersion = new Map<string, string>();
+  for (const filename of files) {
+    const version = filename.slice(0, filename.indexOf("_"));
+    const prior = filenameByVersion.get(version);
+    if (prior) throw new Error(`Duplicate migration version ${version}: ${prior} and ${filename}`);
+    filenameByVersion.set(version, filename);
+  }  const protectedMigrations = new Set([
     "097_shakti_tenant_isolation_runtime_contract.sql",
     "098_shakti_authentication_bootstrap.sql",
     "099_shakti_rls_policy_foundation.sql",
     "100_shakti_production_ddl_runtime_role_split.sql",
+    "111_shakti_mrv_provenance_tenant_rls.sql",
   ]);
   const allowProtected = process.env.RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS === "1";
   const protectedApplied = await pool.query<{ filename: string }>("select filename from schema_migrations where filename = any($1::text[])", [[...protectedMigrations]]);
@@ -64,9 +70,7 @@ try {
   if (pendingProtected.length && !allowProtected) throw new Error(`Protected Shakti migrations require RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS=1: ${pendingProtected.join(", ")}`);
 
   for (const filename of baselineFiles) {
-    const stem = filename.replace(/\.sql$/, "");
-    const prefix = filename.slice(0, filename.indexOf("_"));
-    const version = (prefixCounts.get(prefix) ?? 0) > 1 ? stem : prefix;
+    const version = filename.slice(0, filename.indexOf("_"));
     const existing = await pool.query<{ version: string; filename: string }>(
       "select version, filename from schema_migrations where version = $1",
       [version],
@@ -97,7 +101,7 @@ try {
     }
   }
 
-  console.log(`Baseline migrations are current (${baselineFiles.length} files). Run migrate:shakti separately for tenant-isolation migrations 101-108.`);
+  console.log(`Baseline migrations are current (${baselineFiles.length} files). Run migrate:shakti separately for tenant/reporting migrations 101-109 and 112.`);
 } finally {
   await pool.end();
 }

@@ -31,7 +31,7 @@ where n.nspname = 'public'
     'settlements','audit_events','resource_flows','field_devices',
     'organization_memberships','measurements','evidence','verifications',
     'carbon_calculations','mrv_observations',
-    'evidence_verification_requirements','chain_of_custody_links'
+    'evidence_verification_requirements','chain_of_custody_links','mrv_provenance_events'
   )
 order by c.relname;
 
@@ -50,11 +50,20 @@ select 1 / case
          'settlements','audit_events','resource_flows','field_devices',
          'organization_memberships','measurements','evidence','verifications',
          'carbon_calculations','mrv_observations',
-         'evidence_verification_requirements','chain_of_custody_links'
+         'evidence_verification_requirements','chain_of_custody_links','mrv_provenance_events'
        )
        and pg_get_userbyid(c.relowner) = current_user
    ) = 18
   then 1
   else 0
 end as tenant_ddl_role_preflight_assertion;
+
+-- The verifier integrity triggers need only these identity columns.
+-- This must be column-level access, not broad SELECT on identities.
+select 1 / case
+  when has_column_privilege(current_user, 'public.identities', 'id', 'SELECT')
+   and has_column_privilege(current_user, 'public.identities', 'status', 'SELECT')
+   and has_column_privilege(current_user, 'public.identities', 'suspended_at', 'SELECT')
+  then 1 else 0
+end as ddl_identity_lookup_privilege_assertion;
 

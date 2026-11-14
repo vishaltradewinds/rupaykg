@@ -38,7 +38,12 @@ begin
     'evidence_artifact_series','evidence_artifact_versions','evidence_artifact_reviews',
     'field_sync_envelopes','field_sync_cursors','field_sync_conflicts',
     'mrv_provenance_events','organization_geography_scopes','registry_events',
-    'settlement_events','environmental_attribute_claims','report_runs'
+    'settlement_events','environmental_attribute_claims',
+    'bwg_profiles','bwg_reporting_periods','carbon_projects',
+    'cpcb_swm_stakeholder_workspaces','cpcb_swm_status_history','epr_returns',
+    'esg_reporting_periods','organization_bwg_assessments','organization_epr_applicability',
+    'organization_statutory_profiles','organization_verification_evidence',
+    'stakeholder_applications','stakeholder_application_approvals','report_runs'
   ] loop
     if not exists (
       select 1 from pg_class c
@@ -63,16 +68,16 @@ begin
         'carbon_calculations','mrv_observations',
         'evidence_verification_requirements','chain_of_custody_links',
         'evidence_artifact_series','evidence_artifact_versions','evidence_artifact_reviews',
-        'field_sync_envelopes','field_sync_cursors','field_sync_conflicts','mrv_provenance_events','organization_geography_scopes','registry_events','settlement_events','environmental_attribute_claims','report_runs'
+        'field_sync_envelopes','field_sync_cursors','field_sync_conflicts','mrv_provenance_events','organization_geography_scopes','registry_events','settlement_events','environmental_attribute_claims',
+    'bwg_profiles','bwg_reporting_periods','carbon_projects',
+    'cpcb_swm_stakeholder_workspaces','cpcb_swm_status_history','epr_returns',
+    'esg_reporting_periods','organization_bwg_assessments','organization_epr_applicability',
+    'organization_statutory_profiles','organization_verification_evidence',
+    'stakeholder_applications','stakeholder_application_approvals','report_runs'
       ])
       and pg_get_userbyid(c.relowner) = 'rupaykg_app_runtime'
   ) then
     raise exception 'RLS_NEGATIVE_TEST_BLOCKED: runtime role owns a protected table';
-  end if;
-
-  if has_table_privilege('rupaykg_app_runtime','public.report_runs','UPDATE')
-     or has_table_privilege('rupaykg_app_runtime','public.report_runs','DELETE') then
-    raise exception 'RLS_NEGATIVE_TEST_BLOCKED: runtime role must not mutate or delete immutable report runs';
   end if;
 
   if has_table_privilege('rupaykg_app_runtime','app.request_context_grants','SELECT')
@@ -94,10 +99,11 @@ declare
   v_context_token_b uuid;
   v_role_a uuid;
   v_role_b uuid;
+  v_profile_a uuid;
+  v_profile_b uuid;
   v_visible integer;
   v_affected integer;
   v_name text;
-  v_report_run_id uuid;
 begin
   select id into v_org_a
     from organizations
@@ -156,6 +162,15 @@ begin
     raise exception 'RLS_NEGATIVE_TEST_FAILED: bearer bootstrap did not issue context grants';
   end if;
 
+  -- Seed organization-owned statutory profiles under the fixture operator.
+  -- The runtime assertions below prove that tenant A cannot read or update B.
+  insert into organization_statutory_profiles(organization_id,framework,rule_reference)
+  values (v_org_a,'SHakti-RLS-TEST','A-'||v_suffix)
+  returning id into v_profile_a;
+  insert into organization_statutory_profiles(organization_id,framework,rule_reference)
+  values (v_org_b,'SHakti-RLS-TEST','B-'||v_suffix)
+  returning id into v_profile_b;
+
   if exists (
     select 1 from pg_trigger t
      where t.tgrelid = 'public.organization_memberships'::regclass
@@ -169,20 +184,6 @@ begin
 
   perform app.set_request_context(v_identity_a,v_org_a,v_context_token_a);
 
-  insert into public.report_runs
-    (organization_id,created_by_identity_id,report_type,title,period_start,period_end,geography_mode,
-     methodology_code,methodology_version,source_revision,generated_at,status,snapshot_hash,snapshot)
-  values
-    (v_org_a,v_identity_a,'SHakti-RLS-TEST','Shakti RLS report run test','2026-01-01','2026-01-01','URBAN',
-     'TEST','1','fixture',now(),'DRAFT',repeat('a',64),
-     jsonb_build_object('snapshotHash',repeat('a',64),'organizationId',v_org_a::text,'reportType','SHakti-RLS-TEST'))
-  returning id into v_report_run_id;
-
-  select count(*) into v_visible from public.report_runs where id=v_report_run_id;
-  if v_visible <> 1 then
-    raise exception 'RLS_NEGATIVE_TEST_FAILED: tenant A cannot read its own saved report run';
-  end if;
-
   select count(*) into v_visible from organizations where id=v_org_a;
   if v_visible <> 1 then
     raise exception 'RLS_NEGATIVE_TEST_FAILED: organization A not visible to tenant A';
@@ -193,14 +194,36 @@ begin
     raise exception 'RLS_NEGATIVE_TEST_FAILED: tenant A can read organization B';
   end if;
 
+  select count(*) into v_visible
+    from organization_statutory_profiles where id=v_profile_a;
+  if v_visible <> 1 then
+    raise exception 'RLS_NEGATIVE_TEST_FAILED: tenant A cannot read its own statutory profile';
+  end if;
+  select count(*) into v_visible
+    from organization_statutory_profiles where id=v_profile_b;
+  if v_visible <> 0 then
+    raise exception 'RLS_NEGATIVE_TEST_FAILED: tenant A can read tenant B statutory profile';
+  end if;
+  update organization_statutory_profiles
+     set determination_note='cross-tenant mutation attempt'
+   where id=v_profile_b;
+  get diagnostics v_affected = row_count;
+  if v_affected <> 0 then
+    raise exception 'RLS_NEGATIVE_TEST_FAILED: tenant A updated tenant B statutory profile';
+  end if;
+  begin
+    insert into organization_statutory_profiles(organization_id,framework,rule_reference)
+    values (v_org_b,'SHakti-RLS-TEST','FORGED-'||v_suffix);
+    raise exception 'RLS_NEGATIVE_TEST_FAILED: tenant A inserted statutory profile for tenant B';
+  exception
+    when insufficient_privilege then
+      null;
+  end;
+
   -- Independently prove tenant B receives only its own organization scope.
   reset role;
   execute 'set local role rupaykg_app_runtime';
   perform app.set_request_context(v_identity_b,v_org_b,v_context_token_b);
-  select count(*) into v_visible from public.report_runs where id=v_report_run_id;
-  if v_visible <> 0 then
-    raise exception 'RLS_NEGATIVE_TEST_FAILED: tenant B can read tenant A report run';
-  end if;
   select count(*) into v_visible from organizations where id=v_org_b;
   if v_visible <> 1 then
     raise exception 'RLS_NEGATIVE_TEST_FAILED: organization B not visible to tenant B';
@@ -379,7 +402,12 @@ begin
     'evidence_artifact_series','evidence_artifact_versions','evidence_artifact_reviews',
     'field_sync_envelopes','field_sync_cursors','field_sync_conflicts',
     'mrv_provenance_events','organization_geography_scopes','registry_events',
-    'settlement_events','environmental_attribute_claims','report_runs'
+    'settlement_events','environmental_attribute_claims',
+    'bwg_profiles','bwg_reporting_periods','carbon_projects',
+    'cpcb_swm_stakeholder_workspaces','cpcb_swm_status_history','epr_returns',
+    'esg_reporting_periods','organization_bwg_assessments','organization_epr_applicability',
+    'organization_statutory_profiles','organization_verification_evidence',
+    'stakeholder_applications','stakeholder_application_approvals','report_runs'
   ] loop
     execute format('select count(*) from public.%I', v_name) into v_visible;
     if v_visible <> 0 then

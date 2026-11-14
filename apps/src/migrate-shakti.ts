@@ -5,7 +5,8 @@ import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 
 // This runner is deliberately separate from application startup. It requires
-// the database-owner migration connection and applies the ordered Shakti migration prefix and any pending suffix through 108
+// Date-prefixed controlled migrations stay outside the numeric baseline validator.
+// the database-owner migration connection and applies controlled migrations 101-109 and 112
 // as one atomic transaction so the application never sees a partial RLS state.
 const databaseUrl = process.env.MIGRATION_DATABASE_URL;
 if (!databaseUrl) throw new Error("MIGRATION_DATABASE_URL is required; do not use the application runtime connection for schema migrations");
@@ -13,6 +14,22 @@ if (!databaseUrl) throw new Error("MIGRATION_DATABASE_URL is required; do not us
 const ddlRole = process.env.RUPAYKG_MIGRATION_DDL_ROLE ?? "rupaykg_ddl";
 const securityDefinerRole = "rupaykg_security_definer";
 if (!/^[a-z_][a-z0-9_]*$/.test(ddlRole)) throw new Error("RUPAYKG_MIGRATION_DDL_ROLE must be a plain PostgreSQL role identifier");
+
+const tenantDomainTables = [
+  "bwg_profiles",
+  "bwg_reporting_periods",
+  "carbon_projects",
+  "cpcb_swm_stakeholder_workspaces",
+  "cpcb_swm_status_history",
+  "epr_returns",
+  "esg_reporting_periods",
+  "organization_bwg_assessments",
+  "organization_epr_applicability",
+  "organization_statutory_profiles",
+  "organization_verification_evidence",
+  "stakeholder_applications",
+  "stakeholder_application_approvals",
+] as const;
 
 const controlledMigrationOrder = [
   "101_shakti_tenant_isolation_activation.sql",
@@ -23,7 +40,9 @@ const controlledMigrationOrder = [
   "20261113_shakti_field_sync_evidence_mrv_rls.sql",
   "106_credential_lifecycle_verification_boundary.sql",
   "107_shakti_tenant_direct_domain_activation.sql",
-  "108_reporting_run_history.sql",
+  "108_shakti_tenant_organization_domain_activation.sql",
+  "20261114_shakti_platform_review_boundary.sql",
+  "112_reporting_run_history.sql",
 ];
 
 const pool = new Pool({
@@ -70,9 +89,15 @@ try {
   const missing = controlledMigrationOrder.filter((name) => !availableFiles.has(name));
   if (missing.length) throw new Error(`Controlled Shakti migration set is incomplete: ${missing.join(", ")}`);
 
+  // The two date-prefixed files are logical migrations 105 and 109.
+  // Never derive ledger versions from their calendar-date filename prefix.
+  const logicalVersionByFilename: Record<string, string> = {
+    "20261113_shakti_field_sync_evidence_mrv_rls.sql": "105",
+    "20261114_shakti_platform_review_boundary.sql": "109",
+  };
   const versions = controlledMigrationOrder.map((filename) => ({
     filename,
-    version: filename.slice(0, filename.indexOf("_")),
+    version: logicalVersionByFilename[filename] ?? filename.slice(0, filename.indexOf("_")),
   }));
   const existingRows = await pool.query<{ version: string; filename: string }>(
     "select version, filename from public.schema_migrations where version = any($1::text[])",
@@ -101,15 +126,37 @@ try {
 
       // These schema and catalogue grants belong to the database owner, not
       // the DDL role. They are in the same transaction as RLS activation.
-      await client.query("grant usage on schema app, public to " + securityDefinerRole);
-      await client.query("grant create on schema app to " + securityDefinerRole);
+      await client.query(`grant usage on schema app, public to ${securityDefinerRole}`);
+      await client.query(`grant create on schema app to ${securityDefinerRole}`);
       await client.query("grant select on public.geography, public.methodology_versions to rupaykg_app_runtime");
+      // Migration 112 evaluates policies that reference geography while running as the DDL role.
+      // Grant only for this atomic migration transaction; revoke before commit.
+      await client.query(`grant select on public.geography to ${ddlRole}`);
+
+      // The organization-owned domain tables were introduced after the
+      // original migration-100 ownership split. Transfer them to the controlled
+      // NOLOGIN DDL role in this same transaction, refusing unexpected owners.
+      for (const tableName of tenantDomainTables) {
+        const ownerResult = await client.query<{ owner: string | null }>(
+          `select pg_get_userbyid(c.relowner) as owner
+             from pg_class c join pg_namespace n on n.oid=c.relnamespace
+            where n.nspname='public' and c.relname=$1 and c.relkind='r'`,
+          [tableName],
+        );
+        const owner = ownerResult.rows[0]?.owner;
+        if (!owner) throw new Error(`Tenant domain table is missing: public.${tableName}`);
+        if (owner === identity.rows[0]?.session_user) {
+          await client.query(`alter table public.${tableName} owner to ${ddlRole}`);
+        } else if (owner !== ddlRole) {
+          throw new Error(`Unexpected owner for public.${tableName}: ${owner}`);
+        }
+      }
 
       // Temporarily inherit the isolated function-owner privileges so the DDL
       // role can replace its functions. Both changes are rolled back on failure.
-      await client.query("alter role " + ddlRole + " inherit");
-      await client.query("grant " + securityDefinerRole + " to " + ddlRole);
-      await client.query("set local role " + ddlRole);
+      await client.query(`alter role ${ddlRole} inherit`);
+      await client.query(`grant ${securityDefinerRole} to ${ddlRole}`);
+      await client.query(`set local role ${ddlRole}`);
 
       for (const entry of pending) {
         const sql = await readFile(path.join(migrationDir, entry.filename), "utf8");
@@ -118,10 +165,11 @@ try {
       }
 
       await client.query("reset role");
-      await client.query("revoke " + securityDefinerRole + " from " + ddlRole);
-      await client.query("alter role " + ddlRole + " noinherit");
-      await client.query("revoke create on schema app from " + securityDefinerRole);
-      await client.query("comment on role " + securityDefinerRole + " is 'NOLOGIN/NOBYPASSRLS isolated owner for narrowly scoped SECURITY DEFINER functions; no application runtime membership.'");
+      await client.query(`revoke select on public.geography from ${ddlRole}`);
+      await client.query(`revoke ${securityDefinerRole} from ${ddlRole}`);
+      await client.query(`alter role ${ddlRole} noinherit`);
+      await client.query(`revoke create on schema app from ${securityDefinerRole}`);
+      await client.query(`comment on role ${securityDefinerRole} is 'NOLOGIN/NOBYPASSRLS isolated owner for narrowly scoped SECURITY DEFINER functions; no application runtime membership.'`);
 
       for (const entry of pending) {
         await client.query(

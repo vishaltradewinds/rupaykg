@@ -87,9 +87,9 @@ The methodology code/version identifies an internal reporting template, not an o
 ## Immutable report-run history and migrations
 
 - `report_runs` stores the complete immutable snapshot and its hash.
-- Migration `108_reporting_run_history.sql` creates `report_runs` with forced RLS, organization/creator checks and runtime SELECT/INSERT privileges only. The runtime role has no UPDATE/DELETE grant.
-- Migration 108 is excluded from the baseline migration runner and applied by the controlled Shakti DDL runner. The runner supports a contiguous pending suffix, so deployments with 101-107 already recorded can apply 108 without replaying earlier migrations.
-- Migration `109_circular_stakeholder_role_defaults.sql` extends the baseline role-default function with least-privilege reporting/evidence permissions for Recycler, Transporter, Collector/Transporter, Generator, BWG, ULB and Gram Panchayat onboarding roles.
+- Migration `112_reporting_run_history.sql` creates `report_runs` with forced RLS, organization/creator checks and runtime SELECT/INSERT privileges only. The runtime role has no UPDATE/DELETE grant.
+- Migration 112 is excluded from the baseline migration runner and applied by the controlled Shakti DDL runner. Migration 113 remains on the baseline path because it only extends default role permissions. The runner supports a contiguous pending suffix, so deployments with controlled migrations 101-109 already recorded can apply 112 without replaying earlier migrations.
+- Migration `113_circular_stakeholder_role_defaults.sql` extends the baseline role-default function with least-privilege reporting/evidence permissions for Recycler, Transporter, Collector/Transporter, Generator, BWG, ULB and Gram Panchayat onboarding roles.
 - Custody-link reads are scoped to the verified owner of a resource flow while preserving the actor-organization policy.
 
 ## Not yet included

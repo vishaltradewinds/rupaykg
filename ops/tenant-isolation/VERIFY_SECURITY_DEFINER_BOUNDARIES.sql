@@ -16,7 +16,11 @@ with expected(function_name, identity_args) as (
     ('app.activity_belongs_to_organization', 'target_activity_id uuid, target_organization_id uuid'),
     ('app.activity_has_verified_geography_scope', 'target_activity_id uuid, target_organization_id uuid'),
     ('app.credential_has_verified_mrv_provenance', 'target_activity_id uuid, target_verification_id uuid'),
-    ('app.credential_is_acceptance_fixture', 'target_activity_id uuid, target_verification_id uuid')
+    ('app.credential_is_acceptance_fixture', 'target_activity_id uuid, target_verification_id uuid'),
+    ('app.review_authority_allowed', 'p_identity_id uuid, p_approval_level text, p_geography_id uuid, p_geography_kind geography_kind'),
+    ('app.onboarding_review_queue', 'p_identity_id uuid'),
+    ('app.onboarding_verify_legal', 'p_identity_id uuid, p_application_id uuid, p_status text, p_note text'),
+    ('app.onboarding_decide', 'p_identity_id uuid, p_application_id uuid, p_action text, p_note text')
 ),
 actual as (
   select
@@ -229,6 +233,86 @@ group by owner_role.oid, owner_role.rolcanlogin, owner_role.rolsuper,
          owner_role.rolinherit, owner_role.rolbypassrls, owner_role.rolcreatedb,
          owner_role.rolcreaterole, owner_role.rolreplication;
 
+-- Emit exact ownership coverage before the hard assertion so CI failures
+-- identify missing or unexpectedly owned functions instead of only dividing by zero.
+select expected.function_name,
+       coalesce(owner_role.rolname, '<missing-owner-role>') as isolated_owner_role,
+       coalesce(p.proowner = owner_role.oid, false) as owned_by_isolated_role
+  from unnest(array[
+    'set_request_context',
+    'is_verified_org_member',
+    'authenticate_bearer_session',
+    'current_identity_id',
+    'current_organization_id',
+    'current_credential_owner_id',
+    'organization_has_verified_members',
+    'is_verified_organization',
+    'activity_belongs_to_organization',
+    'activity_has_verified_geography_scope',
+    'credential_has_verified_mrv_provenance',
+    'credential_is_acceptance_fixture'
+  ]) as expected(function_name)
+  left join pg_roles owner_role on owner_role.rolname = 'rupaykg_security_definer'
+  left join pg_proc p
+    on p.pronamespace = 'app'::regnamespace
+   and p.proname = expected.function_name
+   and p.prosecdef
+   and p.proowner = owner_role.oid
+ order by expected.function_name;
+
+select count(*) as legacy_security_definer_functions_owned
+  from pg_proc p
+  join pg_roles owner_role on owner_role.rolname = 'rupaykg_security_definer'
+ where p.pronamespace = 'app'::regnamespace
+   and p.prosecdef
+   and p.proname = any(array[
+     'set_request_context',
+     'is_verified_org_member',
+     'authenticate_bearer_session',
+     'current_identity_id',
+     'current_organization_id',
+     'current_credential_owner_id',
+     'organization_has_verified_members',
+     'is_verified_organization',
+     'activity_belongs_to_organization',
+     'activity_has_verified_geography_scope',
+     'credential_has_verified_mrv_provenance',
+     'credential_is_acceptance_fixture'
+   ]);
+
+-- Diagnose each isolated-owner boundary independently for actionable CI output.
+select owner_role.rolname,
+       owner_role.rolcanlogin, owner_role.rolinherit, owner_role.rolsuper,
+       owner_role.rolbypassrls, owner_role.rolcreatedb, owner_role.rolcreaterole,
+       owner_role.rolreplication,
+       has_schema_privilege(owner_role.oid, 'app', 'CREATE') as app_create,
+       has_schema_privilege(owner_role.oid, 'public', 'CREATE') as public_create,
+       pg_has_role('rupaykg_app_runtime', owner_role.oid, 'MEMBER') as runtime_member,
+       pg_has_role(current_user, owner_role.oid, 'MEMBER') as invoking_member
+  from pg_roles owner_role
+ where owner_role.rolname = 'rupaykg_security_definer';
+
+select membership.roleid::regrole as granted_role,
+       membership.member::regrole as member_role,
+       pg_get_userbyid(membership.grantor) as grantor,
+       membership.admin_option, membership.inherit_option, membership.set_option
+  from pg_auth_members membership
+ where membership.member = 'rupaykg_security_definer'::regrole
+    or membership.roleid = 'rupaykg_security_definer'::regrole;
+
+select
+  has_table_privilege('rupaykg_security_definer','public.registry_events','SELECT') as registry_select,
+  has_table_privilege('rupaykg_security_definer','app.request_context_grants','DELETE') as request_context_delete,
+  has_table_privilege('rupaykg_security_definer','public.identities','SELECT') as identities_table_select,
+  has_table_privilege('rupaykg_security_definer','public.identity_sessions','SELECT') as sessions_table_select,
+  has_table_privilege('rupaykg_security_definer','public.organization_memberships','SELECT') as memberships_table_select,
+  has_table_privilege('rupaykg_security_definer','public.organizations','SELECT') as organizations_table_select,
+  has_table_privilege('rupaykg_security_definer','public.activities','SELECT') as activities_table_select,
+  has_table_privilege('rupaykg_security_definer','public.organization_geography_scopes','SELECT') as geography_scopes_table_select,
+  has_table_privilege('rupaykg_security_definer','public.mrv_provenance_events','SELECT') as provenance_table_select,
+  has_table_privilege('rupaykg_security_definer','public.verifications','SELECT') as verifications_table_select,
+  has_table_privilege('rupaykg_security_definer','public.evidence','SELECT') as evidence_table_select;
+
 select 1 / case
   when exists (
     select 1
@@ -319,13 +403,37 @@ select 1 / case
        and not has_any_column_privilege(owner_role.oid, 'public.identity_sessions', 'INSERT')
        and not has_any_column_privilege(owner_role.oid, 'public.identity_sessions', 'UPDATE')
        and not has_any_column_privilege(owner_role.oid, 'public.organization_memberships', 'INSERT')
-       and not has_any_column_privilege(owner_role.oid, 'public.organization_memberships', 'UPDATE')
+       and not has_table_privilege(owner_role.oid, 'public.organization_memberships', 'UPDATE')
+       and has_column_privilege(owner_role.oid, 'public.organization_memberships', 'status', 'UPDATE')
        and not has_any_column_privilege(owner_role.oid, 'public.organizations', 'INSERT')
-       and not has_any_column_privilege(owner_role.oid, 'public.organizations', 'UPDATE')
+       and not has_table_privilege(owner_role.oid, 'public.organizations', 'UPDATE')
+       and has_column_privilege(owner_role.oid, 'public.organizations', 'status', 'UPDATE')
+       and has_column_privilege(owner_role.oid, 'public.organizations', 'verification_status', 'UPDATE')
+       and has_column_privilege(owner_role.oid, 'public.organizations', 'verification_note', 'UPDATE')
+       and has_column_privilege(owner_role.oid, 'public.organizations', 'verified_by_identity_id', 'UPDATE')
+       and has_column_privilege(owner_role.oid, 'public.organizations', 'verified_at', 'UPDATE')
+       and not exists (
+         select 1
+           from information_schema.columns column_row
+          where (column_row.table_schema, column_row.table_name) in (
+            ('public','organization_memberships'), ('public','organizations')
+          )
+            and not (
+              (column_row.table_name = 'organization_memberships' and column_row.column_name = 'status')
+              or (column_row.table_name = 'organizations' and column_row.column_name = any(array[
+                'status','verification_status','verification_note','verified_by_identity_id','verified_at'
+              ]))
+            )
+            and has_column_privilege(owner_role.oid,
+              format('%I.%I', column_row.table_schema, column_row.table_name),
+              column_row.column_name, 'UPDATE')
+       )
        and not has_any_column_privilege(owner_role.oid, 'app.request_context_grants', 'UPDATE')
        and has_column_privilege(owner_role.oid, 'public.identities', 'id', 'SELECT')
        and has_column_privilege(owner_role.oid, 'public.identities', 'status', 'SELECT')
        and has_column_privilege(owner_role.oid, 'public.identities', 'suspended_at', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'public.identities', 'display_name', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'public.identities', 'email', 'SELECT')
        and has_column_privilege(owner_role.oid, 'public.identity_sessions', 'id', 'SELECT')
        and has_column_privilege(owner_role.oid, 'public.identity_sessions', 'identity_id', 'SELECT')
        and has_column_privilege(owner_role.oid, 'public.identity_sessions', 'token_hash', 'SELECT')
@@ -337,6 +445,13 @@ select 1 / case
        and has_column_privilege(owner_role.oid, 'public.organization_memberships', 'status', 'SELECT')
        and has_column_privilege(owner_role.oid, 'public.organizations', 'id', 'SELECT')
        and has_column_privilege(owner_role.oid, 'public.organizations', 'status', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'public.organizations', 'name', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'public.organizations', 'legal_name', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'public.organizations', 'legal_form', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'public.organizations', 'registration_identifier', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'public.organizations', 'registration_authority', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'public.organizations', 'verification_status', 'SELECT')
+       and has_column_privilege(owner_role.oid, 'public.organizations', 'verification_note', 'SELECT')
        and has_column_privilege(owner_role.oid, 'app.request_context_grants', 'id', 'SELECT')
        and has_column_privilege(owner_role.oid, 'app.request_context_grants', 'identity_id', 'SELECT')
        and has_column_privilege(owner_role.oid, 'app.request_context_grants', 'organization_id', 'SELECT')
@@ -356,10 +471,10 @@ select 1 / case
             ('public','organizations')
           )
             and not (
-              (column_row.table_name = 'identities' and column_row.column_name = any(array['id','status','suspended_at']))
+              (column_row.table_name = 'identities' and column_row.column_name = any(array['id','status','suspended_at','display_name','email']))
               or (column_row.table_name = 'identity_sessions' and column_row.column_name = any(array['id','identity_id','token_hash','expires_at','revoked_at']))
               or (column_row.table_name = 'organization_memberships' and column_row.column_name = any(array['identity_id','organization_id','role_id','status']))
-              or (column_row.table_name = 'organizations' and column_row.column_name = any(array['id','status']))
+              or (column_row.table_name = 'organizations' and column_row.column_name = any(array['id','status','name','legal_name','legal_form','registration_identifier','registration_authority','verification_status','verification_note']))
             )
             and has_column_privilege(owner_role.oid,
               format('%I.%I', column_row.table_schema, column_row.table_name),
