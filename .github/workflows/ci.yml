@@ -30,11 +30,8 @@ jobs:
         with:
           node-version: '22.x'
           package-manager-cache: false
-      - name: Verify npm lockfile is reconciled
-        run: |
-          set -euo pipefail
-          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-          git diff --exit-code -- package-lock.json
+      - name: Verify npm lockfile is installable without mutation
+        run: npm ci --ignore-scripts --no-audit --no-fund
 
   validate:
     runs-on: ubuntu-latest
