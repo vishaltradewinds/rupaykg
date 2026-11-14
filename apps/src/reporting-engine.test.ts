@@ -89,6 +89,15 @@ test("CSV adapter quotes delimiters and preserves provenance columns", () => {
 });
 
 
+test("unmapped stakeholder attribution cannot produce a review-ready report", () => {
+  const report = buildReportSnapshot({
+    ...base,
+    rows: [{ ...base.rows[0]!, stakeholder: "OTHER", stakeholderAttribution: "UNMAPPED" }],
+  });
+  assert.equal(report.status, "DRAFT");
+  assert.ok(report.issues.some(issue => issue.code === "UNMAPPED_STAKEHOLDER"));
+});
+
 test("declared material quantities remain drafts until independently evidenced", () => {
   const report = buildReportSnapshot({
     ...base,
