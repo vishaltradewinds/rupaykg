@@ -66,7 +66,7 @@ function canonical(value: unknown): string {
 }
 
 function validDate(value: string): boolean {
-  return /^\\d{4}-\\d{2}-\\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`)) &&
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value + "T00:00:00Z")) && new Date(value + "T00:00:00Z").toISOString().slice(0, 10) === value;
     new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value;
 }
 
@@ -121,7 +121,7 @@ export function buildReportSnapshot(input: ReportSnapshotInput): ReportSnapshot 
 
 function csv(value: unknown): string {
   const text = value === null || value === undefined ? "" : String(value);
-  return /[",\\r\\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  return /[",\r\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
 }
 
 /** A lossless, machine-readable long-form CSV adapter for a report snapshot. */
@@ -133,7 +133,8 @@ export function reportSnapshotToCsv(snapshot: ReportSnapshot): string {
     row.label, cell.key, cell.value, cell.unit ?? "", cell.quality, cell.sourceRecordId,
     (cell.evidence ?? []).map(item => item.evidenceId ?? "").join(";"),
     (cell.evidence ?? []).map(item => item.evidenceHash ?? "").join(";"),
+    (cell.evidence ?? []).map(item => item.verificationId ?? "").join(";"),
     (cell.evidence ?? []).map(item => item.verificationStatus ?? "NOT_REPORTED").join(";"), cell.note ?? "",
   ]));
-  return [header, ...rows].map(row => row.map(csv).join(",")).join("\\r\\n") + "\\r\\n";
+  return [header, ...rows].map(row => row.map(csv).join(",")).join("\r\n") + "\r\n";
 }
