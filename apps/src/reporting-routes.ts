@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
 import { authenticate, bearerChallenge, hasOrganizationPermission, type AuthContext } from "./auth.js";
 import { withTenantTransaction } from "./tenant-db.js";
-import { buildReportSnapshot, reportSnapshotToCsv, type ReportEvidence, type ReportQuality, type ReportRow, type ReportSnapshot } from "./reporting-engine.js";
+import { buildReportSnapshot, computeReportSnapshotHash, reportSnapshotToCsv, type ReportEvidence, type ReportQuality, type ReportRow, type ReportSnapshot } from "./reporting-engine.js";
 import { createReportPdf, createReportXlsx } from "./reporting-export.js";
 
 type Context = "urban" | "rural";
@@ -262,6 +262,7 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
     if (!rows.length) {
       throw Object.assign(new Error("No source activities, material flows or custody links found for the selected tenant, period and geography context"), { code: "REPORT_NO_SOURCE_DATA" });
     }
+    const snapshotTruncated = truncated || flowResult.rows.length > 500 || custodyResult.rows.length > 500;
     const sourceRevision = process.env.RENDER_GIT_COMMIT ?? process.env.GITHUB_SHA ?? "unavailable";
     const snapshot = buildReportSnapshot({
       reportType: "CPCB_SWMP_2026",
@@ -283,10 +284,10 @@ async function loadSwmReport(pool: Pool, auth: AuthContext, params: NonNullable<
         "Activity stakeholder categories are resolved only from exactly one recognized role attached to the activity actor through a VERIFIED organization membership; ambiguous and unknown roles remain OTHER/UNMAPPED.",
         "Custody-link actor organization references do not identify the acting identity, so custody stakeholder attribution remains OTHER/UNMAPPED.",
         "Only active-organization activities, measurements, linked evidence, declared material flows and recorded custody links are included; declared quantities remain separately identified.",
-        ...(activities.length > 500 || flowResult.rows.length > 500 || custodyResult.rows.length > 500 ? ["Preview capped at 500 activities, 500 declared material flows and 500 custody links; narrow the period or geography for a complete extract."] : []),
+        ...(snapshotTruncated ? ["Preview capped at 500 activities, 500 declared material flows and 500 custody links; narrow the period or geography for a complete extract."] : []),
       ],
     });
-    return { snapshot, truncated: truncated || flowResult.rows.length > 500 || custodyResult.rows.length > 500 };
+    return { snapshot, truncated: snapshotTruncated };
   });
 }
 
@@ -334,8 +335,13 @@ async function loadSavedReportRun(pool: Pool, auth: AuthContext, runId: string, 
       [runId, auth.activeOrganizationId],
     );
     const row = result.rows[0] ?? null;
-    if (row && row.snapshot?.snapshotHash !== row.snapshot_hash) {
-      throw Object.assign(new Error("Stored report snapshot hash does not match its immutable record"), { code: "REPORT_SNAPSHOT_INTEGRITY" });
+    if (row && (
+      !row.snapshot ||
+      typeof row.snapshot !== "object" ||
+      row.snapshot.snapshotHash !== row.snapshot_hash ||
+      computeReportSnapshotHash(row.snapshot) !== row.snapshot_hash
+    )) {
+      throw Object.assign(new Error("Stored report snapshot content does not match its canonical SHA-256 integrity hash"), { code: "REPORT_SNAPSHOT_INTEGRITY" });
     }
     return row;
   });
