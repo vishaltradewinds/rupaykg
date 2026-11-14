@@ -32,15 +32,20 @@ test("email verification rejects invalid or expired tokens without changing iden
   const response = await app.inject({ method: "POST", url: "/api/v1/auth/email/verify", payload: { token: "invalid-token" } });
   assert.equal(response.statusCode, 400);
   assert.equal(response.json().code, "TOKEN_INVALID_OR_EXPIRED");
+  const statements = (pool as unknown as { calls: string[] }).calls;
+  assert.ok(statements.indexOf("set local role rupaykg_app_runtime") > statements.indexOf("begin"));
   await app.close();
 });
 
 test("password reset rejects invalid or expired tokens", async () => {
   const app = Fastify();
-  await registerEmailRecoveryRoutes(app, fakePool());
+  const pool = fakePool();
+  await registerEmailRecoveryRoutes(app, pool);
   const response = await app.inject({ method: "POST", url: "/api/v1/auth/password/reset", payload: { token: "invalid-token", password: "a-strong-password" } });
   assert.equal(response.statusCode, 400);
   assert.equal(response.json().code, "TOKEN_INVALID_OR_EXPIRED");
+  const statements = (pool as unknown as { calls: string[] }).calls;
+  assert.ok(statements.indexOf("set local role rupaykg_app_runtime") > statements.indexOf("begin"));
   await app.close();
 });
 
