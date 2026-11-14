@@ -183,6 +183,18 @@ test("SWM report resolves verified stakeholder roles and persists immutable tena
     assert.equal(outsiderRead.statusCode, 404, outsiderRead.body);
     const outsiderPdf = await app.inject({ method: "GET", url: "/api/v1/reports/runs/" + runId + ".pdf", headers: headers(outsiderToken, organizationIds[1]!) });
     assert.equal(outsiderPdf.statusCode, 404, outsiderPdf.body);
+
+    // Simulate out-of-band tampering while leaving both duplicated hash fields unchanged.
+    await pool.query(
+      "update report_runs set snapshot=jsonb_set(snapshot,'{title}',to_jsonb('tampered snapshot'::text)) where id=$1::uuid",
+      [runId],
+    );
+    const tamperedRead = await app.inject({ method: "GET", url: "/api/v1/reports/runs/" + runId, headers: headers(ownerToken, organizationIds[0]!) });
+    assert.equal(tamperedRead.statusCode, 409, tamperedRead.body);
+    assert.equal(tamperedRead.json().code, "REPORT_SNAPSHOT_INTEGRITY");
+    const tamperedCsv = await app.inject({ method: "GET", url: "/api/v1/reports/runs/" + runId + ".csv", headers: headers(ownerToken, organizationIds[0]!) });
+    assert.equal(tamperedCsv.statusCode, 409, tamperedCsv.body);
+    assert.equal(tamperedCsv.json().code, "REPORT_SNAPSHOT_INTEGRITY");
   } finally {
     await app.close();
     if (organizationIds.length) {
