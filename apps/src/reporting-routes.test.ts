@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizeReportQuality, parseReportRunId, parseSwmReportQuery, stakeholderFromVerifiedRole } from "./reporting-routes.js";
+import { exactNumericText, normalizeReportQuality, parseReportRunId, parseSwmReportQuery, stakeholderFromVerifiedRole } from "./reporting-routes.js";
 
 test("SWM report query accepts explicit urban and rural periods", () => {
   assert.deepEqual(parseSwmReportQuery({ periodStart: "2026-04-01", periodEnd: "2026-04-30", context: "urban" }), {
@@ -38,6 +38,15 @@ test("saved report run IDs accept only canonical UUIDs", () => {
   assert.equal(parseReportRunId("not-a-uuid"), null);
   assert.equal(parseReportRunId(undefined), null);
 });
+test("database numeric values remain exact decimal strings without floating-point coercion", () => {
+  assert.equal(exactNumericText("99999999999999.999999"), "99999999999999.999999");
+  assert.equal(exactNumericText("-0.000001"), "-0.000001");
+  assert.equal(exactNumericText("1e3"), "1e3");
+  assert.equal(exactNumericText(""), null);
+  assert.equal(exactNumericText("NaN"), null);
+  assert.equal(exactNumericText(Number.POSITIVE_INFINITY), null);
+});
+
 test("stakeholder attribution requires exactly one verified canonical role", () => {
   assert.deepEqual(stakeholderFromVerifiedRole("aggregator", 1), { stakeholder: "AGGREGATOR", attribution: "VERIFIED" });
   assert.deepEqual(stakeholderFromVerifiedRole("industry_generator", 1), { stakeholder: "GENERATOR", attribution: "VERIFIED" });
