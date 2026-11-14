@@ -4,18 +4,30 @@
 --
 -- The test is transactional and rolls back all fixtures. It proves both
 -- visibility and mutation isolation for two independent organizations.
--- Execute with the controlled DDL role that owns the protected tables and
--- has SET ROLE permission to rupaykg_app_runtime. The fixture setup requires
--- owner-level trigger control; the actual tenant assertions execute as the
--- non-BYPASSRLS runtime role.
+-- Execute with the authenticated deployment operator, which can assume the
+-- NOLOGIN DDL role. Fixture setup runs as the operator; tenant assertions run
+-- as the non-BYPASSRLS runtime role.
 
 begin;
+
+-- The deployment operator is the authenticated login; the DDL role is
+-- intentionally NOLOGIN. Grant its runtime hand-off only inside this
+-- rollback-only test transaction. Fixture administration remains under the
+-- operator identity (which inherits DDL ownership privileges and has the
+-- controlled fixture bypass); tenant assertions use the runtime role.
+select 1 / case
+  when pg_has_role(current_user, 'rupaykg_ddl', 'set') then 1
+  else 0
+end as ddl_role_handoff_assertion;
+
+grant rupaykg_app_runtime to rupaykg_ddl with inherit false, set true;
 
 select 1 / case
   when pg_has_role(current_user, 'rupaykg_app_runtime', 'member') then 1
   else 0
 end as runtime_role_membership_assertion;
 
+set local role rupaykg_ddl;
 set local role rupaykg_app_runtime;
 select 1 / case
   when current_user = 'rupaykg_app_runtime' then 1
@@ -139,12 +151,19 @@ begin
     (v_identity_a, now()+interval '5 minutes', 'shakti-rls-a:'||v_suffix),
     (v_identity_b, now()+interval '5 minutes', 'shakti-rls-b:'||v_suffix);
 
+  -- The bootstrap function is intentionally executable only by the
+  -- non-BYPASSRLS runtime role. Enter that role for the same authenticated
+  -- path used by the application; do not broaden function grants to the
+  -- DDL/operator role just to make this fixture run.
+  execute 'set local role rupaykg_ddl';
+  execute 'set local role rupaykg_app_runtime';
   select context_token into v_context_token_a
     from app.authenticate_bearer_session('shakti-rls-a:'||v_suffix)
    where organization_id=v_org_a;
   select context_token into v_context_token_b
     from app.authenticate_bearer_session('shakti-rls-b:'||v_suffix)
    where organization_id=v_org_b;
+  reset role;
 
   if v_context_token_a is null or v_context_token_b is null then
     raise exception 'RLS_NEGATIVE_TEST_FAILED: bearer bootstrap did not issue context grants';
@@ -159,6 +178,7 @@ begin
     alter table organization_memberships enable trigger stakeholder_membership_application_guard;
   end if;
 
+  execute 'set local role rupaykg_ddl';
   execute 'set local role rupaykg_app_runtime';
 
   perform app.set_request_context(v_identity_a,v_org_a,v_context_token_a);
@@ -175,6 +195,7 @@ begin
 
   -- Independently prove tenant B receives only its own organization scope.
   reset role;
+  execute 'set local role rupaykg_ddl';
   execute 'set local role rupaykg_app_runtime';
   perform app.set_request_context(v_identity_b,v_org_b,v_context_token_b);
   select count(*) into v_visible from organizations where id=v_org_b;
@@ -186,6 +207,7 @@ begin
     raise exception 'RLS_NEGATIVE_TEST_FAILED: tenant B can read organization A';
   end if;
   reset role;
+  execute 'set local role rupaykg_ddl';
   execute 'set local role rupaykg_app_runtime';
   perform app.set_request_context(v_identity_a,v_org_a,v_context_token_a);
 
@@ -204,6 +226,7 @@ begin
   -- A caller-selected identity/organization pair without the opaque
   -- bearer-session grant must not satisfy RLS, even if both values are valid.
   reset role;
+  execute 'set local role rupaykg_ddl';
   execute 'set local role rupaykg_app_runtime';
   perform set_config('app.identity_id', v_identity_a::text, true);
   perform set_config('app.organization_id', v_org_a::text, true);
@@ -222,6 +245,7 @@ begin
   end if;
 
   reset role;
+  execute 'set local role rupaykg_ddl';
   execute 'set local role rupaykg_app_runtime';
   perform app.set_request_context(v_identity_a,v_org_a,v_context_token_a);
 
@@ -229,6 +253,7 @@ begin
   reset role;
   update identity_sessions set revoked_at=now()
    where token_hash='shakti-rls-a:'||v_suffix;
+  execute 'set local role rupaykg_ddl';
   execute 'set local role rupaykg_app_runtime';
   select count(*) into v_visible from organizations where id=v_org_a;
   if v_visible <> 0 then
@@ -241,6 +266,7 @@ begin
   -- Expiry invalidates a grant even while the underlying session remains live.
   update app.request_context_grants set expires_at=now()-interval '1 second'
    where id=v_context_token_a;
+  execute 'set local role rupaykg_ddl';
   execute 'set local role rupaykg_app_runtime';
   select count(*) into v_visible from organizations where id=v_org_a;
   if v_visible <> 0 then
@@ -271,6 +297,7 @@ begin
   ) then
     alter table organization_memberships enable trigger stakeholder_membership_application_guard;
   end if;
+  execute 'set local role rupaykg_ddl';
   execute 'set local role rupaykg_app_runtime';
   select count(*) into v_visible from organizations where id=v_org_a;
   if v_visible <> 0 then
@@ -295,12 +322,14 @@ begin
   ) then
     alter table organization_memberships enable trigger stakeholder_membership_application_guard;
   end if;
+  execute 'set local role rupaykg_ddl';
   execute 'set local role rupaykg_app_runtime';
   perform app.set_request_context(v_identity_a,v_org_a,v_context_token_a);
 
   -- Suspending an identity invalidates an already-issued context grant.
   reset role;
   update identities set suspended_at=now() where id=v_identity_a;
+  execute 'set local role rupaykg_ddl';
   execute 'set local role rupaykg_app_runtime';
   select count(*) into v_visible from organizations where id=v_org_a;
   if v_visible <> 0 then
@@ -308,6 +337,7 @@ begin
   end if;
   reset role;
   update identities set suspended_at=null where id=v_identity_a;
+  execute 'set local role rupaykg_ddl';
   execute 'set local role rupaykg_app_runtime';
   perform app.set_request_context(v_identity_a,v_org_a,v_context_token_a);
 
@@ -326,6 +356,7 @@ begin
   -- A caller must not obtain tenant visibility by setting only the
   -- organization GUC. The policy must also require a verified identity
   -- membership; custom PostgreSQL GUCs are directly settable by the runtime.
+  execute 'set local role rupaykg_ddl';
   execute 'set local role rupaykg_app_runtime';
   perform set_config('app.identity_id', '', true);
   perform set_config('app.organization_id', v_org_a::text, true);
@@ -338,6 +369,7 @@ begin
   -- Fail-closed check: with no tenant context, the runtime must see zero
   -- rows from every protected tenant table. This prevents accidental
   -- context omission from becoming cross-tenant visibility.
+  execute 'set local role rupaykg_ddl';
   execute 'set local role rupaykg_app_runtime';
   perform set_config('app.identity_id', '', true);
   perform set_config('app.organization_id', '', true);
