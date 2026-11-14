@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildReportSnapshot, reportSnapshotToCsv, type ReportSnapshotInput } from "./reporting-engine.js";
+import { buildReportSnapshot, computeReportSnapshotHash, reportSnapshotToCsv, type ReportSnapshotInput } from "./reporting-engine.js";
 
 const base: ReportSnapshotInput = {
   reportType: "SWM_2026",
@@ -88,6 +88,40 @@ test("CSV adapter quotes delimiters and preserves provenance columns", () => {
   assert.ok(formulaSafe.includes("\'=HYPERLINK"));
 });
 
+
+test("snapshot detaches and freezes nested input so its content cannot drift after hashing", () => {
+  const mutableInput = structuredClone(base);
+  const report = buildReportSnapshot(mutableInput);
+  mutableInput.rows[0]!.cells[0]!.evidence![0]!.evidenceHash = "sha256:mutated-input";
+  assert.equal(report.rows[0]!.cells[0]!.evidence![0]!.evidenceHash, "sha256:abc");
+  assert.equal(Reflect.set(report.rows[0]!.cells[0]!.evidence![0]!, "evidenceHash", "sha256:mutated-output"), false);
+  assert.equal(computeReportSnapshotHash(report), report.snapshotHash);
+});
+
+test("CSV preserves snapshot-level provenance and escapes minus-prefixed text but not numeric values", () => {
+  const report = buildReportSnapshot({
+    ...base,
+    geographyScopeId: "geography-123",
+    assumptions: ["Declared quantities are not independently measured."],
+    rows: [{
+      ...base.rows[0]!,
+      cells: [
+        { ...base.rows[0]!.cells[0]!, value: "-1+1" },
+        { ...base.rows[0]!.cells[0]!, key: "negative_numeric", value: -10 },
+      ],
+    }],
+  });
+  const csv = reportSnapshotToCsv(report);
+  assert.ok(csv.split("\r\n")[0]!.includes("source_revision"));
+  assert.ok(csv.split("\r\n")[0]!.includes("generated_at"));
+  assert.ok(csv.split("\r\n")[0]!.includes("assumptions"));
+  assert.ok(csv.includes("geography-123"));
+  assert.ok(csv.includes("repo:abc123"));
+  assert.ok(csv.includes("2026-11-14T08:00:00.000Z"));
+  assert.ok(csv.includes("Declared quantities are not independently measured."));
+  assert.ok(csv.includes(",'-1+1,"));
+  assert.ok(csv.includes(",-10,kg"));
+});
 
 test("verified evidence status without a verification record reference stays a draft", () => {
   const report = buildReportSnapshot({
