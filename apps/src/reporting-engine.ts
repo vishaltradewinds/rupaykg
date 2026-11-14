@@ -97,7 +97,7 @@ export function buildReportSnapshot(input: ReportSnapshotInput): ReportSnapshot 
           if (evidence.sourceRecordId !== cell.sourceRecordId) throw new Error("Evidence source record must match its report cell");
           if (!evidence.evidenceId || !evidence.evidenceHash) issues.push({ code: "MISSING_EVIDENCE", rowId: row.id, cellKey: cell.key, detail: "Evidence reference or content hash is missing." });
           else evidenceHashes.add(evidence.evidenceHash);
-          if (evidence.verificationStatus && !["VERIFIED", "APPROVED", "ASSURED"].includes(evidence.verificationStatus)) {
+          if (!evidence.verificationStatus || !["VERIFIED", "APPROVED", "ASSURED"].includes(evidence.verificationStatus)) {
             issues.push({ code: "UNVERIFIED_EVIDENCE", rowId: row.id, cellKey: cell.key, detail: `Evidence status is ${evidence.verificationStatus}; it is not treated as verified.` });
           }
         }
@@ -126,7 +126,7 @@ function csv(value: unknown): string {
 
 /** A lossless, machine-readable long-form CSV adapter for a report snapshot. */
 export function reportSnapshotToCsv(snapshot: ReportSnapshot): string {
-  const header = ["report_type", "report_title", "organization_id", "period_start", "period_end", "geography_mode", "methodology_code", "methodology_version", "snapshot_hash", "report_status", "row_id", "stakeholder", "row_label", "field", "value", "unit", "quality", "source_record_id", "evidence_ids", "evidence_hashes", "verification_status", "note"];
+  const header = ["report_type", "report_title", "organization_id", "period_start", "period_end", "geography_mode", "methodology_code", "methodology_version", "snapshot_hash", "report_status", "row_id", "stakeholder", "row_label", "field", "value", "unit", "quality", "source_record_id", "evidence_ids", "evidence_hashes", "verification_ids", "verification_status", "note"];
   const rows = snapshot.rows.flatMap(row => row.cells.map(cell => [
     snapshot.reportType, snapshot.title, snapshot.organizationId, snapshot.periodStart, snapshot.periodEnd, snapshot.geographyMode,
     snapshot.methodologyCode, snapshot.methodologyVersion, snapshot.snapshotHash, snapshot.status, row.id, row.stakeholder,
